@@ -54,7 +54,8 @@ fi
 log "2/6 数据库预发布备份"
 npm run db:backup:predeploy
 
-log "3/6 应用数据库迁移（含本次两条：consumer_account_closure、notification_business_status）"
+log "3/6 生成 Prisma Client 并应用数据库迁移"
+npx prisma generate
 npx prisma migrate deploy --schema prisma/schema.prisma
 
 log "4/6 构建"

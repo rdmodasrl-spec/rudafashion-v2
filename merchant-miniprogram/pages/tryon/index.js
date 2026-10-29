@@ -3,8 +3,6 @@ const { requireMerchantSession } = require('../../utils/page-auth');
 const { canAccessWorkspace } = require('../../utils/permissions');
 
 const maximumImageSize = 3 * 1024 * 1024;
-const taskPollInterval = 1500;
-const taskPollTimeout = 180000;
 const categories = [
   { label: '外套 / 上装', value: 'tops' },
   { label: '下装', value: 'bottoms' },
@@ -38,8 +36,6 @@ function createTaskKey() {
   return `tryon-${Date.now()}-${Math.random().toString(16).slice(2)}-${Math.random().toString(16).slice(2)}`;
 }
 
-const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
-
 Page({
   data: {
     categories,
@@ -51,7 +47,6 @@ Page({
     pendingTaskKey: '',
     privacyConsent: false,
     loading: false,
-    checking: false,
     error: '',
     status: ''
   },
@@ -72,8 +67,8 @@ Page({
       this.setData({ remaining: Number(entitlements.remaining && entitlements.remaining.tryOn) || 0 });
       const pendingKey = wx.getStorageSync(this.pendingStorageKey());
       if (typeof pendingKey === 'string' && pendingKey) {
+        // 仅用于「网络中断后用同一幂等键重试」，服务端为同步返回，不需要轮询。
         this.setData({ pendingTaskKey: pendingKey });
-        void this.checkTask();
       }
     } catch (error) {
       this.setData({ error: error.message || '试衣服务暂时无法加载。' });
@@ -87,7 +82,7 @@ Page({
   },
 
   chooseImage(event) {
-    if (this.data.loading || this.data.checking) return;
+    if (this.data.loading) return;
     const field = event.currentTarget.dataset.field;
     wx.chooseMedia({
       count: 1,
@@ -122,11 +117,7 @@ Page({
   },
 
   async startTryOn() {
-    if (this.data.loading || this.data.checking) return;
-    if (this.data.pendingTaskKey) {
-      this.setData({ error: '先查询上一次任务结果。' });
-      return;
-    }
+    if (this.data.loading) return;
     if (!this.data.personPath || !this.data.garmentPath || !this.data.privacyConsent) {
       this.setData({ error: '请上传两张图片并确认授权。' });
       return;
@@ -137,7 +128,8 @@ Page({
     }
 
     this.setData({ loading: true, error: '', status: '正在处理' });
-    const key = createTaskKey();
+    // 复用未完成的幂等键：网络中断后重试不会重复扣费。
+    const key = this.data.pendingTaskKey || createTaskKey();
     try {
       const images = await Promise.all([
         readImageDataUrl(this.data.personPath),
@@ -160,62 +152,35 @@ Page({
           privacyConsent: true
         }
       });
-      await this.finishOrPoll(task, key);
+      this.finishTask(task, key);
     } catch (error) {
       this.setData({
         status: '',
-        error: this.data.pendingTaskKey
-          ? '任务结果待确认，请查询状态，不要重复提交。'
-          : error.message || '试衣失败，请重试。'
+        error: error && error.message ? error.message : '试衣失败，请重试。'
       });
     } finally {
       this.setData({ loading: false });
     }
   },
 
-  async checkTask() {
-    const key = this.data.pendingTaskKey;
-    if (!key || this.data.checking || this.data.loading) return;
-    this.setData({ checking: true, error: '', status: '查询中' });
-    try {
-      const task = await request(`/api/merchant/modagpt/images/tasks/${encodeURIComponent(key)}`);
-      await this.finishOrPoll(task, key);
-    } catch (error) {
-      if (error.code === 'MODAGPT_IMAGE_TASK_NOT_FOUND' || error.status === 404) {
-        this.clearPendingTask(key);
-        this.setData({ error: '未找到任务，请重新试衣。', status: '' });
-      } else {
-        this.setData({ error: '暂时无法确认任务结果，请稍后再查。', status: '' });
-      }
-    } finally {
-      this.setData({ checking: false });
-    }
-  },
-
-  async finishOrPoll(task, key) {
-    const deadline = Date.now() + taskPollTimeout;
-    let current = task;
-    while (current && !['completed', 'failed', 'unknown'].includes(current.status) && Date.now() < deadline) {
-      this.setData({ status: '正在处理' });
-      await wait(taskPollInterval);
-      current = await request(`/api/merchant/modagpt/images/tasks/${encodeURIComponent(key)}`);
-    }
-    if (current && current.status === 'completed' && current.imageDataUrl) {
+  finishTask(task, key) {
+    if (task && task.status === 'completed' && task.imageDataUrl) {
       this.clearPendingTask(key);
       this.setData({
-        resultUrl: current.imageDataUrl,
-        remaining: current.quota ? current.quota.remaining : Math.max(0, (this.data.remaining || 0) - 1),
+        resultUrl: task.imageDataUrl,
+        remaining: task.quota ? task.quota.remaining : Math.max(0, (this.data.remaining || 0) - 1),
         status: '',
         error: ''
       });
       return;
     }
-    if (current && current.status === 'failed') {
+    if (task && task.status === 'failed') {
       this.clearPendingTask(key);
-      this.setData({ status: '', error: current.error || '试衣失败，请重试。' });
+      this.setData({ status: '', error: task.error || '试衣失败，请重试。' });
       return;
     }
-    this.setData({ status: '', error: '任务结果待确认，请查询状态，不要重复提交。' });
+    // 服务端为同步接口：拿到非完成态说明响应异常，保留幂等键以便安全重试。
+    this.setData({ status: '', error: '结果异常，请重试（不会重复扣费）。' });
   },
 
   clearPendingTask(key) {

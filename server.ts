@@ -30095,6 +30095,22 @@ async function startServer() {
     }
   });
 
+  // 业务处理状态（待处理 → 已处理）。与 readAt 解耦，幂等：重复调用仍返回 resolved。
+  app.post('/api/merchant/notifications/:id/resolve', requireMerchantTenant, async (req: AuthRequest, res) => {
+    try {
+      const merchantEmail = String((req.merchant as any)?.contactEmail || '');
+      if (!merchantEmail) return res.status(403).json({ success: false, error: 'MERCHANT_EMAIL_REQUIRED' });
+      const result = await prisma.notificationEvent.updateMany({
+        where: { id: req.params.id, recipient: merchantEmail, channel: 'in_app' },
+        data: { businessStatus: 'resolved', readAt: new Date() }
+      });
+      if (!result.count) return res.status(404).json({ success: false, error: 'NOTIFICATION_NOT_FOUND' });
+      return res.json({ success: true, businessStatus: 'resolved' });
+    } catch (error) {
+      sendInternalError(res, error, 'merchant-notification-resolve');
+    }
+  });
+
   app.post('/api/appointments', async (req: AuthRequest, res) => {
     try {
       const input = req.body || {};
@@ -31465,6 +31481,137 @@ async function startServer() {
       res.json({ success: true });
     } catch (error) {
       sendInternalError(res, error, 'merchant-supplier-status');
+    }
+  });
+
+  // 商家往来单位：Supplier 与 MerchantCustomerLink 都通过 counterpartyId 关联到这张表，
+  // 因此它是「同一个供应商/客户档案」的唯一载体，不允许在别处再建一套。
+  const normalizeCounterpartyBody = (body: any) => ({
+    companyName: typeof body?.companyName === 'string' ? body.companyName.trim().slice(0, 200) : '',
+    contactName: typeof body?.contactName === 'string' ? body.contactName.trim().slice(0, 120) || null : null,
+    phone: typeof body?.phone === 'string' ? body.phone.trim().slice(0, 80) || null : null,
+    email: typeof body?.email === 'string' ? body.email.trim().slice(0, 254).toLowerCase() || null : null,
+    country: typeof body?.country === 'string' ? body.country.trim().slice(0, 80) || null : null,
+    city: typeof body?.city === 'string' ? body.city.trim().slice(0, 120) || null : null,
+    address: typeof body?.address === 'string' ? body.address.trim().slice(0, 300) || null : null,
+    vatNumber: typeof body?.vatNumber === 'string' ? body.vatNumber.trim().toUpperCase().slice(0, 40) || null : null,
+    notes: typeof body?.notes === 'string' ? body.notes.trim().slice(0, 2000) || null : null
+  });
+
+  app.get('/api/merchant/counterparties', requireMerchantTenant, requireAnyEmployeePermission('sales.order.create', 'purchase.manage', 'store_manager'), async (req: AuthRequest, res) => {
+    try {
+      const counterparties = await prisma.merchantCounterparty.findMany({
+        where: { merchantId: req.merchant!.merchantId },
+        orderBy: [{ companyName: 'asc' }],
+        take: 500,
+        select: {
+          id: true, companyName: true, contactName: true, phone: true, email: true,
+          country: true, city: true, address: true, vatNumber: true, notes: true, createdAt: true, updatedAt: true,
+          supplier: { select: { id: true, name: true, status: true } },
+          merchantCustomerLink: { select: { customerId: true, status: true } }
+        }
+      });
+      return res.json({
+        success: true,
+        counterparties: counterparties.map(item => ({
+          ...item,
+          supplier: item.supplier[0] ? { id: item.supplier[0].id, name: item.supplier[0].name, status: item.supplier[0].status } : null,
+          customerLink: item.merchantCustomerLink[0] ? { customerId: item.merchantCustomerLink[0].customerId, status: item.merchantCustomerLink[0].status } : null
+        }))
+      });
+    } catch (error) {
+      return sendInternalError(res, error, 'merchant-counterparties-list');
+    }
+  });
+
+  app.post('/api/merchant/counterparties', requireMerchantTenant, requireAnyEmployeePermission('sales.order.create', 'purchase.manage', 'store_manager'), async (req: AuthRequest, res) => {
+    const merchantId = req.merchant!.merchantId;
+    const input = normalizeCounterpartyBody(req.body);
+    if (!input.companyName) return res.status(400).json({ success: false, error: 'COUNTERPARTY_NAME_REQUIRED' });
+    try {
+      const duplicate = await prisma.merchantCounterparty.findFirst({
+        where: { merchantId, companyName: { equals: input.companyName, mode: 'insensitive' } },
+        select: { id: true }
+      });
+      if (duplicate) return res.status(409).json({ success: false, error: 'COUNTERPARTY_NAME_ALREADY_EXISTS' });
+      const counterparty = await prisma.merchantCounterparty.create({
+        data: { merchantId, ...input },
+        select: { id: true, companyName: true, contactName: true, phone: true, email: true, country: true, city: true, address: true, vatNumber: true, notes: true }
+      });
+      return res.status(201).json({ success: true, counterparty });
+    } catch (error) {
+      return sendInternalError(res, error, 'merchant-counterparty-create');
+    }
+  });
+
+  app.patch('/api/merchant/counterparties/:id', requireMerchantTenant, requireAnyEmployeePermission('sales.order.create', 'purchase.manage', 'store_manager'), async (req: AuthRequest, res) => {
+    const merchantId = req.merchant!.merchantId;
+    const counterpartyId = String(req.params.id);
+    const input = normalizeCounterpartyBody(req.body);
+    if (!input.companyName) return res.status(400).json({ success: false, error: 'COUNTERPARTY_NAME_REQUIRED' });
+    try {
+      const existing = await prisma.merchantCounterparty.findFirst({ where: { id: counterpartyId, merchantId }, select: { id: true } });
+      if (!existing) return res.status(404).json({ success: false, error: 'COUNTERPARTY_NOT_FOUND' });
+      const duplicate = await prisma.merchantCounterparty.findFirst({
+        where: { merchantId, id: { not: counterpartyId }, companyName: { equals: input.companyName, mode: 'insensitive' } },
+        select: { id: true }
+      });
+      if (duplicate) return res.status(409).json({ success: false, error: 'COUNTERPARTY_NAME_ALREADY_EXISTS' });
+      const counterparty = await prisma.merchantCounterparty.update({
+        where: { id: counterpartyId },
+        data: input,
+        select: { id: true, companyName: true, contactName: true, phone: true, email: true, country: true, city: true, address: true, vatNumber: true, notes: true }
+      });
+      return res.json({ success: true, counterparty });
+    } catch (error) {
+      return sendInternalError(res, error, 'merchant-counterparty-update');
+    }
+  });
+
+  // 供应商通用编辑：字段白名单 + 租户校验；名称唯一冲突返回 409。
+  app.patch('/api/merchant/suppliers/:id', requireMerchantTenant, requireEmployeePermission('purchase.manage'), async (req: AuthRequest, res) => {
+    const merchantId = req.merchant!.merchantId;
+    const supplierId = String(req.params.id);
+    const body = req.body || {};
+    const data: Record<string, unknown> = {};
+    if (body.name !== undefined) {
+      const name = typeof body.name === 'string' ? body.name.trim().slice(0, 160) : '';
+      if (!name) return res.status(400).json({ success: false, error: 'SUPPLIER_NAME_REQUIRED' });
+      data.name = name;
+    }
+    for (const field of ['contactName', 'phone', 'email', 'country', 'notes'] as const) {
+      if (body[field] === undefined) continue;
+      const value = typeof body[field] === 'string' ? body[field].trim() : '';
+      const max = field === 'notes' ? 2000 : field === 'email' ? 254 : field === 'phone' ? 80 : 120;
+      data[field] = value ? (field === 'email' ? value.toLowerCase() : value).slice(0, max) : null;
+    }
+    if (body.leadTimeDays !== undefined) {
+      data.leadTimeDays = Math.min(3650, Math.max(0, Math.trunc(Number(body.leadTimeDays) || 0)));
+    }
+    if (body.counterpartyId !== undefined) {
+      const counterpartyId = typeof body.counterpartyId === 'string' ? body.counterpartyId.trim() : '';
+      if (counterpartyId) {
+        const counterparty = await prisma.merchantCounterparty.findFirst({ where: { id: counterpartyId, merchantId }, select: { id: true } });
+        if (!counterparty) return res.status(404).json({ success: false, error: 'COUNTERPARTY_NOT_FOUND' });
+        data.counterpartyId = counterpartyId;
+      } else {
+        data.counterpartyId = null;
+      }
+    }
+    if (Object.keys(data).length === 0) return res.status(400).json({ success: false, error: 'SUPPLIER_PATCH_EMPTY' });
+    try {
+      const result = await prisma.supplier.updateMany({ where: { id: supplierId, merchantId }, data });
+      if (!result.count) return res.status(404).json({ success: false, error: 'SUPPLIER_NOT_FOUND' });
+      const supplier = await prisma.supplier.findFirst({
+        where: { id: supplierId, merchantId },
+        select: { id: true, name: true, contactName: true, phone: true, email: true, country: true, leadTimeDays: true, status: true, notes: true, counterpartyId: true }
+      });
+      return res.json({ success: true, supplier });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        return res.status(409).json({ success: false, error: 'SUPPLIER_NAME_ALREADY_EXISTS' });
+      }
+      return sendInternalError(res, error, 'merchant-supplier-update');
     }
   });
 
@@ -38070,6 +38217,27 @@ async function startServer() {
     }
   });
 
+  // 商家租户内的客户停用/启用：只改 MerchantCustomerLink.status，
+  // 绝不修改平台级 Customer.status（那是 KYC 审核状态，决定买家能否下单）。
+  app.patch('/api/merchant/customers/:id/status', requireMerchantTenant, requireEmployeePermission('sales.order.create', 'sales', 'store_manager'), async (req: AuthRequest, res) => {
+    const merchantId = req.merchant!.merchantId;
+    const status = String(req.body?.status || '').trim();
+    if (!['active', 'suspended'].includes(status)) {
+      return res.status(400).json({ success: false, error: 'CUSTOMER_STATUS_INVALID' });
+    }
+    try {
+      const result = await prisma.merchantCustomerLink.updateMany({
+        where: { merchantId, customerId: String(req.params.id) },
+        data: { status }
+      });
+      if (!result.count) return res.status(404).json({ success: false, error: 'CUSTOMER_NOT_FOUND' });
+      logAudit(merchantId, 'merchant', 'MERCHANT_CUSTOMER_STATUS_UPDATED', 'MerchantCustomerLink', String(req.params.id), '', status);
+      return res.json({ success: true, status });
+    } catch (error) {
+      return sendInternalError(res, error, 'merchant-customer-status');
+    }
+  });
+
   app.put('/api/merchant/customers/batch/tags', requireMerchantTenant, requireEmployeePermission('sales.order.create', 'sales', 'store_manager'), async (req: AuthRequest, res) => {
     const merchantId = req.merchant!.merchantId;
     const customerIds: string[] = Array.isArray(req.body?.customerIds)
@@ -38771,6 +38939,44 @@ async function startServer() {
       res.json({ success: true, movements });
     } catch (error) {
       sendInternalError(res, error, 'merchant-inventory-movements');
+    }
+  });
+
+  // 商家推荐奖励：只读。当前没有任何签发入口（无推荐码生成、无归因写入），
+  // 因此返回真实记录（可能为空）+ 明确的「未开放」标记，不伪造奖励数据。
+  app.get('/api/merchant/growth/referrals', requireMerchantTenant, async (req: AuthRequest, res) => {
+    try {
+      const merchantId = req.merchant!.merchantId;
+      const rows = await prisma.merchantGrowthReferral.findMany({
+        where: { referrerMerchantId: merchantId },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+        select: {
+          id: true, referralCodeSnapshot: true, status: true, qualificationDeadline: true,
+          qualifiedAt: true, createdAt: true,
+          referred: { select: { id: true, name: true, storeSlug: true } }
+        }
+      });
+      return res.json({
+        success: true,
+        referrals: rows.map(row => ({
+          id: row.id,
+          code: row.referralCodeSnapshot,
+          name: row.referred?.name || row.referred?.storeSlug || row.referralCodeSnapshot,
+          status: row.status,
+          reward: '',
+          qualifiedAt: row.qualifiedAt,
+          qualificationDeadline: row.qualificationDeadline,
+          createdAt: row.createdAt
+        })),
+        referralProgram: {
+          enabled: false,
+          reason: 'REFERRAL_PROGRAM_NOT_LAUNCHED',
+          message: '推荐码签发与奖励结算尚未开放，当前仅展示已有记录。'
+        }
+      });
+    } catch (error) {
+      return sendInternalError(res, error, 'merchant-growth-referrals');
     }
   });
 

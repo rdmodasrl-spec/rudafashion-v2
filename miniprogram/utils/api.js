@@ -156,10 +156,6 @@ function getFashionMerchants() {
   return apiRequest('/api/fashion/merchants', { auth: false });
 }
 
-function redeemStoreAccessCode(code) {
-  return apiRequest('/api/vault/store-access/redeem', { method: 'POST', data: { code } });
-}
-
 function getFashionSocial(ids) {
   return apiRequest(`/api/fashion/social${toQuery({ ids: ids.join(',') })}`);
 }
@@ -617,7 +613,6 @@ module.exports = {
   getFashionPosts,
   getFashionCreatorProfile,
   getFashionMerchants,
-  redeemStoreAccessCode,
   getFashionSocial,
   reactFashionPost,
   recordFashionPostView,

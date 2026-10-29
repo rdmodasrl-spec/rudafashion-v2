@@ -1,4 +1,4 @@
-const { getAssetUrl, getMerchants, getStoreByLookupCode, getStoreLookupQrUrl, redeemStoreAccessCode } = require('../../utils/api');
+const { getAssetUrl, getMerchants, getStoreByLookupCode, getStoreLookupQrUrl } = require('../../utils/api');
 const { getAuthSession, getVerifiedAuthProfile } = require('../../utils/auth');
 
 function decodeValue(value) {
@@ -190,12 +190,8 @@ Page({
         return;
       }
       if (/^RUDA-[A-F0-9]{32}$/i.test(code)) {
-        const result = await redeemStoreAccessCode(code.toUpperCase());
-        if (!result.storeSlug) {
-          this.setData({ message: '授权验证失败，请确认代码有效' });
-          return;
-        }
-        wx.navigateTo({ url: '/pages/store/index?storeSlug=' + encodeURIComponent(result.storeSlug) });
+        // 访问码目前没有任何签发方（无模型、无发放入口），不做假成功。
+        this.setData({ message: '访问码兑换暂未开放，请使用六位商家编号或商家名称搜索。' });
         return;
       }
       const result = await getMerchants(code);

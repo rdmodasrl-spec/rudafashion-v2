@@ -2625,7 +2625,10 @@ model NotificationEvent {
   channel        String
   recipient      String
   payload        String
+  /// 投递状态（pending/sent/failed），与业务处理状态无关。
   status         String    @default("pending")
+  /// 业务处理状态：商家侧「待处理 open / 已处理 resolved」。仅影响通知中心展示。
+  businessStatus String    @default("open") @db.VarChar(24)
   attempts       Int       @default(0)
   lastError      String?
   nextAttemptAt  DateTime?
@@ -2636,6 +2639,7 @@ model NotificationEvent {
 
   @@index([eventType])
   @@index([recipient, channel, status])
+  @@index([recipient, businessStatus])
   @@index([recipient])
   @@index([status, nextAttemptAt])
 }

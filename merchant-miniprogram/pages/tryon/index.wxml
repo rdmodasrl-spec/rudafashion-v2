@@ -39,6 +39,5 @@
   <text wx:if="{{status}}" class="task-status">{{status}}</text>
   <text wx:if="{{error}}" class="tryon-error">{{error}}</text>
 
-  <button wx:if="{{pendingTaskKey}}" class="primary-button tryon-submit" loading="{{checking}}" disabled="{{loading || checking}}" bindtap="checkTask">查询任务</button>
-  <button wx:else class="primary-button tryon-submit" loading="{{loading}}" disabled="{{loading || checking || remaining === 0}}" bindtap="startTryOn">开始试衣</button>
+  <button class="primary-button tryon-submit" loading="{{loading}}" disabled="{{loading || remaining === 0}}" bindtap="startTryOn">{{pendingTaskKey ? '重试试衣' : '开始试衣'}}</button>
 </view>

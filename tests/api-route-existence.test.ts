@@ -21,24 +21,10 @@ const KNOWN_UNIMPLEMENTED = [
   '/api/buyer/rfq/*/accept/*',
   '/api/merchant/rfq',
   '/api/merchant/rfq/*/quote',
-  // 商家往来单位（客户/供应商聚合视图）：页面未挂载且接口缺失。
-  '/api/merchant/counterparties',
-  // 商家小程序：客户停用/启用接口缺失（服务端只有 PUT /customers/:id）。
-  '/api/merchant/customers/*/status',
-  // 商家推广奖励：组件未挂载且接口缺失；小程序增长面板在 Promise.all 中调用导致整块失败。
-  '/api/merchant/growth/referrals',
-  // 图片任务异步轮询：服务端 /api/merchant/modagpt/images 为同步返回，无 tasks/:id 路由。
-  '/api/merchant/modagpt/images/tasks/*',
-  // 商家小程序：通知「标记已处理」接口缺失（服务端只有 /read）。
-  '/api/merchant/notifications/*/resolve',
-  // 商家小程序：供应商编辑走 PATCH /suppliers/:id，服务端只有 PATCH /:id/status。
-  '/api/merchant/suppliers/*',
   // 站内消息线程：服务端只有订单维度 orders/:id/messages，无全局线程接口。
   '/api/messages/threads',
   '/api/messages/threads/*',
   '/api/messages/threads/*/messages',
-  // 买家小程序：门店访问码兑换接口缺失。
-  '/api/vault/store-access/redeem',
   // 解析歧义（非真实断链）：PWA 用 `/api/${cond ? 'merchant/' : ''}notifications/...` 拼接，
   // 具体路径 /api/notifications/:id/read 与 /api/merchant/notifications/:id/read 均已存在。
   '/api/*notifications/*/read'

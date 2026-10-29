@@ -159,7 +159,9 @@ test('workbench only executes real endpoints and never fabricates progress', () 
   assert.match(workbench, /privacyConsent: true/);
   assert.match(workbench, /\/api\/merchant\/modagpt\/designs/);
   assert.match(workbench, /\/api\/merchant\/modagpt\/entitlements/);
-  assert.match(workbench, /recoverModaGptImageTask/);
+  // 图片生成是同步接口：工作台不得再轮询不存在的异步任务路由，也不得伪造恢复。
+  assert.doesNotMatch(workbench, /images\/tasks\//);
+  assert.doesNotMatch(workbench, /recoverModaGptImageTask/);
   assert.doesNotMatch(workbench, /Math\.random\(\)\s*\*\s*100/, '不得用随机数伪造进度');
   assert.doesNotMatch(workbench, /progress:\s*\d+\s*,/, '不得写死百分比');
   assert.match(workbench, /<ModaCoreAnchor kind="hero"/);

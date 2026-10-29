@@ -22,11 +22,7 @@ import {
 } from 'lucide-react';
 
 import { apiGet, apiPost, ApiError } from '../../../../../api/client';
-import {
-  getPendingModaGptImageTaskKeys,
-  recoverModaGptImageTask,
-  requestModaGptImage
-} from '../../../../../api/modagptImageTasks';
+import { requestModaGptImage } from '../../../../../api/modagptImageTasks';
 import { useB2B } from '../../../../../context/B2BContext';
 import { buildFashionDesignConceptPrompt, buildModelStudioPrompt } from '../../../../../shared/modagptImageContract';
 import { ModaCoreAnchor, ModaCoreStageProvider } from './ModaCoreStage';
@@ -207,7 +203,6 @@ export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
   const streamRef = useRef<HTMLDivElement>(null);
   const successTimerRef = useRef<number | null>(null);
   const saveRequestIdsRef = useRef<Map<string, string>>(new Map());
-  const recoveryStartedRef = useRef(false);
   const coreLife = useMemo(() => createModaCoreLife(), []);
 
   const snapshot = useMemo(() => entitlementSnapshot(entitlements), [entitlements]);
@@ -313,59 +308,6 @@ export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
 
   useEffect(() => { void loadDesigns(); }, [loadDesigns]);
 
-
-  // 刷新恢复：读取与服务端一致的待办键，恢复真实任务结果；恢复失败如实显示，不伪造成功。
-  useEffect(() => {
-    // 每个挂载周期只恢复一次，避免译文/上下文刷新导致重复追加同一条真实任务结果。
-    if (recoveryStartedRef.current) return;
-    recoveryStartedRef.current = true;
-    let active = true;
-    const recover = async () => {
-      let keys: string[] = [];
-      try {
-        keys = getPendingModaGptImageTaskKeys(merchantId);
-      } catch {
-        return;
-      }
-      for (const key of keys.slice(0, 3)) {
-        try {
-          const recovered = await recoverModaGptImageTask(key, merchantId);
-          if (!active) return;
-          if (!recovered) continue;
-          const measured = await measureImage(recovered.imageDataUrl);
-          if (!active) return;
-          const capabilityId: WorkbenchCapabilityId = recovered.task === 'tryOn' ? 'tryon' : 'design';
-          const result: WorkbenchResult = {
-            id: newId('result'),
-            capability: capabilityId,
-            imageDataUrl: recovered.imageDataUrl,
-            prompt: localizeCopy('刷新后恢复的任务结果', 'Risultato ripristinato dopo il refresh'),
-            taskId: recovered.taskId,
-            createdAt: new Date().toISOString(),
-            engine: localizeCopy('服务端任务', 'Attività server'),
-            parentId: null,
-            savedDesignId: null,
-            width: measured?.width ?? null,
-            height: measured?.height ?? null,
-            recolor: false
-          };
-          setEntries(current => [...current, { id: newId('entry'), kind: 'result', result, at: Date.now() }]);
-          setSelectedResultId(result.id);
-        } catch (error) {
-          if (!active) return;
-          setEntries(current => [...current, {
-            id: newId('entry'),
-            kind: 'status',
-            tone: 'failed',
-            text: `${localizeCopy('恢复任务失败：', 'Ripristino non riuscito: ')}${workbenchErrorCopy(error, isIt)}`,
-            at: Date.now()
-          }]);
-        }
-      }
-    };
-    void recover();
-    return () => { active = false; };
-  }, [merchantId, isIt, localizeCopy]);
 
   const acceptAsset = useCallback(async (slot: 'person' | 'garment', file: File | undefined) => {
     if (!file) return;

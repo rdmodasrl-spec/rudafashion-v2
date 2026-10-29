@@ -31,11 +31,7 @@ function createFindStoreHarness(storeResult: { storeSlug: string } | ((code: str
             calls.push({ name: 'getStoreByLookupCode', value: code });
             return typeof storeResult === 'function' ? storeResult(code) : storeResult;
           },
-          getStoreLookupQrUrl: (code: string) => `/api/merchants/code/${code}/qr.png`,
-          redeemStoreAccessCode: async (code: string) => {
-            calls.push({ name: 'redeemStoreAccessCode', value: code });
-            return { storeSlug: 'private-example' };
-          }
+          getStoreLookupQrUrl: (code: string) => `/api/merchants/code/${code}/qr.png`
         };
       }
       if (specifier === '../../utils/auth') {
@@ -92,13 +88,16 @@ test('merchant names are searched through the public merchant API', async () => 
   assert.equal(page.data.searchResults[0].storeSlug, 'atelier-example');
 });
 
-test('existing private store authorization codes still use the redemption flow', async () => {
+test('legacy private store access codes are refused explicitly instead of calling a missing endpoint', async () => {
   const code = `RUDA-${'A'.repeat(32)}`;
   const { page, calls, navigations } = createFindStoreHarness();
   await page.redeemCode(code);
-  assert.deepEqual(calls, [{ name: 'redeemStoreAccessCode', value: code }]);
-  assert.deepEqual(navigations, ['/pages/store/index?storeSlug=private-example']);
+  // 该能力没有任何签发方与后端实现：不得调用接口，也不得伪造跳转。
+  assert.deepEqual(calls, []);
+  assert.deepEqual(navigations, []);
+  assert.match(page.data.message, /访问码兑换暂未开放/);
   assert.match(findStoreTemplate, /六位商家代码或搜索商家名称/);
+  assert.doesNotMatch(findStoreSource, /store-access\/redeem/);
 });
 
 test('all merchant records receive a unique six-digit string lookup code', () => {

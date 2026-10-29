@@ -367,13 +367,21 @@ Page({
         `${item.iban || ''} · ${item.status}`);
       this.setData({ metrics, items: payouts.concat(bankAccounts) });
     } else if (id === 'growth') {
-      const growthResults = await Promise.all([
+      // 两个接口互不阻塞：推荐奖励尚未开放时，经营看板仍必须可用。
+      const [operationsResult, referralsResult] = await Promise.allSettled([
         request('/api/merchant/operations/intelligence'),
         request('/api/merchant/growth/referrals')
       ]);
-      const operations = growthResults[0];
-      const referrals = growthResults[1];
+      if (operationsResult.status === 'rejected') throw operationsResult.reason;
+      const operations = operationsResult.value || {};
+      const referrals = referralsResult.status === 'fulfilled' ? (referralsResult.value || {}) : {};
       const summary = operations.summary || {};
+      const referralItems = fromList(referrals.referrals, item => item.code || item.name || '增长计划', item => `${item.status || ''} · ${item.reward || ''}`);
+      const referralNotice = referralsResult.status === 'rejected'
+        ? [{ id: 'referrals-unavailable', title: '推荐奖励暂不可用', detail: referralsResult.reason && referralsResult.reason.message ? referralsResult.reason.message : '请稍后重试' }]
+        : (referrals.referralProgram && referrals.referralProgram.enabled === false
+          ? [{ id: 'referrals-not-launched', title: '推荐奖励未开放', detail: referrals.referralProgram.message || '推荐码签发与奖励结算尚未开放' }]
+          : []);
       this.setData({
         metrics: [
           { label: '近 30 日成交', value: `€${Number(summary.gmv30d || 0).toFixed(2)}` },
@@ -382,7 +390,8 @@ Page({
           { label: '待处理退货', value: String(summary.pendingReturns || 0) }
         ],
         items: fromList(operations.alerts, item => item.severity === 'critical' ? '紧急提醒' : '经营提醒', item => item.message)
-          .concat(fromList(referrals.referrals, item => item.code || item.name || '增长计划', item => `${item.status || ''} · ${item.reward || ''}`))
+          .concat(referralItems)
+          .concat(referralNotice.map(item => record(item.title, item.detail, { id: item.id, notice: true })))
       });
     } else if (id === 'materials') {
       const result = await request('/api/merchant/materials');

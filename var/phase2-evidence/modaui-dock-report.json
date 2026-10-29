@@ -1,0 +1,247 @@
+{
+  "base": "http://localhost:3000",
+  "startedAt": "2026-10-26T17:37:21.870Z",
+  "checks": {
+    "defaultDock": {
+      "pillLabels": [
+        "服装设计",
+        "图片生成",
+        "虚拟试衣",
+        "设计灵感"
+      ],
+      "pillPressed": [
+        "false",
+        "false",
+        "false",
+        "false"
+      ],
+      "gearCount": 0,
+      "footerTaskPill": false,
+      "textareaHeight": 44,
+      "textareaResize": "none",
+      "composer": {
+        "top": 728,
+        "bottom": 794,
+        "height": 66
+      },
+      "handle": {
+        "top": 796,
+        "bottom": 836,
+        "height": 40
+      },
+      "nav": {
+        "top": 844,
+        "bottom": 907,
+        "height": 63
+      },
+      "navAriaHidden": "true",
+      "panelOpen": false,
+      "horizontalOverflow": false
+    },
+    "navAfterDragUp": {
+      "ariaHidden": "false",
+      "top": 781
+    },
+    "navAfterDragDown": {
+      "ariaHidden": "true",
+      "top": 844
+    },
+    "modeSheet": {
+      "open": true,
+      "label": "创作设置",
+      "hasUpload": true,
+      "gearExpanded": "true",
+      "sheetBottom": 844,
+      "sheetPaddingBottom": "12px",
+      "lastButtonGap": 12
+    },
+    "afterSheetClose": {
+      "pillLabels": [
+        "服装设计",
+        "图片生成",
+        "虚拟试衣",
+        "设计灵感",
+        ""
+      ],
+      "pillPressed": [
+        "false",
+        "false",
+        "true",
+        "false",
+        null
+      ],
+      "gearCount": 1,
+      "footerTaskPill": false,
+      "textareaHeight": 44,
+      "textareaResize": "none",
+      "composer": {
+        "top": 728,
+        "bottom": 794,
+        "height": 66
+      },
+      "handle": {
+        "top": 796,
+        "bottom": 836,
+        "height": 40
+      },
+      "nav": {
+        "top": 844,
+        "bottom": 907,
+        "height": 63
+      },
+      "navAriaHidden": "true",
+      "panelOpen": false,
+      "horizontalOverflow": false
+    },
+    "menu": {
+      "groups": [
+        "对话",
+        "创作工具",
+        "其他"
+      ],
+      "items": [
+        "新建对话",
+        "历史对话",
+        "执行任务",
+        "创作中心",
+        "我的作品",
+        "服装换色",
+        "商业模特",
+        "店铺知识库",
+        "套餐与额度",
+        "退出登录"
+      ]
+    },
+    "taskModeOn": {
+      "pillLabels": [
+        "服装设计",
+        "图片生成",
+        "虚拟试衣",
+        "设计灵感"
+      ],
+      "pillPressed": [
+        "false",
+        "false",
+        "false",
+        "false"
+      ],
+      "gearCount": 0,
+      "footerTaskPill": false,
+      "textareaHeight": 44,
+      "textareaResize": "none",
+      "composer": {
+        "top": 728,
+        "bottom": 794,
+        "height": 66
+      },
+      "handle": {
+        "top": 796,
+        "bottom": 836,
+        "height": 40
+      },
+      "nav": {
+        "top": 844,
+        "bottom": 907,
+        "height": 63
+      },
+      "navAriaHidden": "true",
+      "panelOpen": false,
+      "horizontalOverflow": false,
+      "chip": "任务模式",
+      "placeholder": "描述要执行的任务…"
+    },
+    "taskModeOffAfterPill": {
+      "chipCount": 0,
+      "placeholder": "描述设计…",
+      "pressedPills": [
+        "服装设计"
+      ]
+    },
+    "narrowDock320": {
+      "rowScrollWidth": 296,
+      "rowClientWidth": 296,
+      "buttons": [
+        {
+          "left": 12,
+          "right": 72,
+          "width": 60
+        },
+        {
+          "left": 78,
+          "right": 138,
+          "width": 60
+        },
+        {
+          "left": 144,
+          "right": 204,
+          "width": 60
+        },
+        {
+          "left": 210,
+          "right": 270,
+          "width": 60
+        },
+        {
+          "left": 276,
+          "right": 308,
+          "width": 32
+        }
+      ],
+      "horizontalOverflow": false,
+      "composerBottom": 650
+    },
+    "desktopDock": {
+      "pillLabels": [
+        "服装设计",
+        "图片生成",
+        "虚拟试衣",
+        "设计灵感"
+      ],
+      "pillPressed": [
+        "false",
+        "false",
+        "false",
+        "false"
+      ],
+      "gearCount": 0,
+      "footerTaskPill": false,
+      "textareaHeight": 44,
+      "textareaResize": "none",
+      "composer": {
+        "top": 784,
+        "bottom": 850,
+        "height": 66
+      },
+      "handle": {
+        "top": 852,
+        "bottom": 892,
+        "height": 40
+      },
+      "nav": {
+        "top": 900,
+        "bottom": 963,
+        "height": 63
+      },
+      "navAriaHidden": "true",
+      "panelOpen": false,
+      "horizontalOverflow": false
+    },
+    "desktopSheet": {
+      "open": true,
+      "width": 880,
+      "left": 280
+    }
+  },
+  "screenshots": [
+    "/www/wwwroot/ruda.fashion/var/phase2-evidence/modaui-dock-mobile-default.png",
+    "/www/wwwroot/ruda.fashion/var/phase2-evidence/modaui-nav-open-mobile.png",
+    "/www/wwwroot/ruda.fashion/var/phase2-evidence/modaui-mode-sheet-mobile.png",
+    "/www/wwwroot/ruda.fashion/var/phase2-evidence/modaui-menu-mobile.png",
+    "/www/wwwroot/ruda.fashion/var/phase2-evidence/modaui-task-on-mobile.png",
+    "/www/wwwroot/ruda.fashion/var/phase2-evidence/modaui-task-off-pill-mobile.png",
+    "/www/wwwroot/ruda.fashion/var/phase2-evidence/modaui-narrow-320-mobile.png",
+    "/www/wwwroot/ruda.fashion/var/phase2-evidence/modaui-mode-sheet-desktop.png"
+  ],
+  "errors": [],
+  "finishedAt": "2026-10-26T17:37:32.016Z"
+}

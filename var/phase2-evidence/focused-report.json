@@ -1,0 +1,230 @@
+{
+  "startedAt": "2026-10-26T15:59:45.564Z",
+  "checks": {
+    "paneAndNav": {
+      "innerHeight": 844,
+      "visualHeight": 844,
+      "visualOffsetTop": 0,
+      "navHidden": "true",
+      "navClasses": "ruda-bottom-nav fixed inset-x-0 bottom-0 z-[70] border-t border-neutral-200/70 bg-white/95 px-2 pt-1.5 pb-[calc(0.5rem+env(safe-area-inset-bottom))] shadow-[0_-4px_20px_rgba(0,0,0,0.035)] backdrop-blur-2xl transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none pointer-events-none translate-y-full",
+      "navTranslate": "0px 100%",
+      "nav": {
+        "top": 844,
+        "bottom": 907,
+        "height": 63
+      },
+      "handle": {
+        "top": 796,
+        "bottom": 836,
+        "height": 40
+      },
+      "pane": {
+        "top": 0,
+        "bottom": 844,
+        "height": 844
+      },
+      "textarea": {
+        "top": 739,
+        "bottom": 783,
+        "height": 44
+      },
+      "paneClasses": "fixed inset-x-0 top-0 z-[60] bg-white pt-[env(safe-area-inset-top)] transition-[bottom] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
+      "paneInlineStyle": "bottom: 0px;",
+      "scrollWidth": 390
+    },
+    "dragUpAfter+50": {
+      "innerHeight": 844,
+      "visualHeight": 844,
+      "visualOffsetTop": 0,
+      "navHidden": "false",
+      "navClasses": "ruda-bottom-nav fixed inset-x-0 bottom-0 z-[70] border-t border-neutral-200/70 bg-white/95 px-2 pt-1.5 pb-[calc(0.5rem+env(safe-area-inset-bottom))] shadow-[0_-4px_20px_rgba(0,0,0,0.035)] backdrop-blur-2xl transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none translate-y-0",
+      "navTranslate": "0px 56.1684%",
+      "nav": {
+        "top": 816.4,
+        "bottom": 879.4,
+        "height": 63
+      },
+      "handle": {
+        "top": 769.3,
+        "bottom": 809.2,
+        "height": 39.9
+      },
+      "pane": {
+        "top": 0,
+        "bottom": 817.3,
+        "height": 817.3
+      },
+      "textarea": {
+        "top": 712.3,
+        "bottom": 756.3,
+        "height": 44
+      },
+      "paneClasses": "fixed inset-x-0 top-0 z-[60] bg-white pt-[env(safe-area-inset-top)] transition-[bottom] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
+      "paneInlineStyle": "bottom: calc(3.8125rem + env(safe-area-inset-bottom));",
+      "scrollWidth": 390
+    },
+    "dragUpAfter+150": {
+      "innerHeight": 844,
+      "visualHeight": 844,
+      "visualOffsetTop": 0,
+      "navHidden": "false",
+      "navClasses": "ruda-bottom-nav fixed inset-x-0 bottom-0 z-[70] border-t border-neutral-200/70 bg-white/95 px-2 pt-1.5 pb-[calc(0.5rem+env(safe-area-inset-bottom))] shadow-[0_-4px_20px_rgba(0,0,0,0.035)] backdrop-blur-2xl transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none translate-y-0",
+      "navTranslate": "0px 1.46784%",
+      "nav": {
+        "top": 781.9,
+        "bottom": 844.9,
+        "height": 63
+      },
+      "handle": {
+        "top": 735.9,
+        "bottom": 775.9,
+        "height": 40
+      },
+      "pane": {
+        "top": 0,
+        "bottom": 783.9,
+        "height": 783.9
+      },
+      "textarea": {
+        "top": 678.9,
+        "bottom": 722.9,
+        "height": 44
+      },
+      "paneClasses": "fixed inset-x-0 top-0 z-[60] bg-white pt-[env(safe-area-inset-top)] transition-[bottom] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
+      "paneInlineStyle": "bottom: calc(3.8125rem + env(safe-area-inset-bottom));",
+      "scrollWidth": 390
+    },
+    "dragUpAfter+350": {
+      "innerHeight": 844,
+      "visualHeight": 844,
+      "visualOffsetTop": 0,
+      "navHidden": "false",
+      "navClasses": "ruda-bottom-nav fixed inset-x-0 bottom-0 z-[70] border-t border-neutral-200/70 bg-white/95 px-2 pt-1.5 pb-[calc(0.5rem+env(safe-area-inset-bottom))] shadow-[0_-4px_20px_rgba(0,0,0,0.035)] backdrop-blur-2xl transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none translate-y-0",
+      "navTranslate": "0px",
+      "nav": {
+        "top": 781,
+        "bottom": 844,
+        "height": 63
+      },
+      "handle": {
+        "top": 735,
+        "bottom": 775,
+        "height": 40
+      },
+      "pane": {
+        "top": 0,
+        "bottom": 783,
+        "height": 783
+      },
+      "textarea": {
+        "top": 678,
+        "bottom": 722,
+        "height": 44
+      },
+      "paneClasses": "fixed inset-x-0 top-0 z-[60] bg-white pt-[env(safe-area-inset-top)] transition-[bottom] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
+      "paneInlineStyle": "bottom: calc(3.8125rem + env(safe-area-inset-bottom));",
+      "scrollWidth": 390
+    },
+    "dragUpAfter+800": {
+      "innerHeight": 844,
+      "visualHeight": 844,
+      "visualOffsetTop": 0,
+      "navHidden": "false",
+      "navClasses": "ruda-bottom-nav fixed inset-x-0 bottom-0 z-[70] border-t border-neutral-200/70 bg-white/95 px-2 pt-1.5 pb-[calc(0.5rem+env(safe-area-inset-bottom))] shadow-[0_-4px_20px_rgba(0,0,0,0.035)] backdrop-blur-2xl transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none translate-y-0",
+      "navTranslate": "0px",
+      "nav": {
+        "top": 781,
+        "bottom": 844,
+        "height": 63
+      },
+      "handle": {
+        "top": 735,
+        "bottom": 775,
+        "height": 40
+      },
+      "pane": {
+        "top": 0,
+        "bottom": 783,
+        "height": 783
+      },
+      "textarea": {
+        "top": 678,
+        "bottom": 722,
+        "height": 44
+      },
+      "paneClasses": "fixed inset-x-0 top-0 z-[60] bg-white pt-[env(safe-area-inset-top)] transition-[bottom] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
+      "paneInlineStyle": "bottom: calc(3.8125rem + env(safe-area-inset-bottom));",
+      "scrollWidth": 390
+    },
+    "historyDialog": {
+      "visible": true,
+      "text": "聊天历史 新聊天 最近 · 与 Web 商家端同步 Rispondi soltanto con OK. 2026/10/26 16:59 · 2 Rispondi soltanto con OK. 2026/10/26 16:57 · 2 Rispondi soltanto con OK. 2026/10/26 16:55 · 2 Rispondi soltanto con OK. 2026/10/26 16:51 · 2 Rispondi soltanto con OK. 2026/10/26 16:49 · 4 Rispondi soltanto con OK. 2026/10/26 16:35 · 2 当前商家：Atelier Alba"
+    },
+    "createSectionBody": {
+      "header": "创作中心",
+      "body": "首页 商品 ModaUI 订单 更多 创作中心 创作工具 服装设计 可使用 生成设计方案 虚拟试衣 需高级版 授权图片试穿 服装换色 可使用 手动选区换色 秀场视频 后续阶段 视频服务未接 商业模特 需高级版 生成模特图片 打开设计灵感助手 →"
+    },
+    "syntheticVisualViewportInset": {
+      "supported": true,
+      "innerHeight": 844,
+      "visualHeight": 500,
+      "paneBottom": 500,
+      "textareaBottom": 439,
+      "paneInlineStyle": "bottom: 344px;",
+      "navHidden": "true",
+      "paneAboveKeyboard": true,
+      "textareaAboveKeyboard": true
+    },
+    "desktop.portalShell": {
+      "sidebarWidth": 192,
+      "hasSidebarTab": true,
+      "horizontalOverflow": false
+    },
+    "desktop.fashionStudioLanding": {
+      "hasDesign": true,
+      "hasTryOn": true,
+      "hasModel": true,
+      "hasRecolor": true
+    },
+    "desktop.aiWorkspace": {
+      "mainWidth": 1440,
+      "mainHeight": 900,
+      "hasDragHandle": false,
+      "hasBack": true,
+      "hasMenu": true,
+      "textareaVisible": true,
+      "horizontalOverflow": false
+    },
+    "desktop.menuItems": [
+      "新建对话",
+      "历史对话",
+      "创作中心",
+      "我的作品",
+      "服装换色",
+      "商业模特",
+      "店铺知识库",
+      "套餐与额度",
+      "退出登录"
+    ],
+    "desktop.resized1024": {
+      "horizontalOverflow": false,
+      "textareaVisible": true,
+      "textareaBottom": 749,
+      "viewportHeight": 768
+    },
+    "desktop.backToStudio": {
+      "sidebarPresent": true,
+      "heading": "服装创作"
+    }
+  },
+  "screenshots": [
+    "/www/wwwroot/ruda.fashion/var/phase2-evidence/mobile-390-history.png",
+    "/www/wwwroot/ruda.fashion/var/phase2-evidence/mobile-390-visual-viewport-inset.png",
+    "/www/wwwroot/ruda.fashion/var/phase2-evidence/desktop-1440-portal.png",
+    "/www/wwwroot/ruda.fashion/var/phase2-evidence/desktop-1440-fashion-studio.png",
+    "/www/wwwroot/ruda.fashion/var/phase2-evidence/desktop-1440-modaui-menu.png",
+    "/www/wwwroot/ruda.fashion/var/phase2-evidence/desktop-1024-modaui.png"
+  ],
+  "errors": [],
+  "finishedAt": "2026-10-26T16:00:01.729Z"
+}

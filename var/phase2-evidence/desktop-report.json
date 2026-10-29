@@ -1,0 +1,51 @@
+{
+  "desktop.shell": {
+    "sidebarWidth": 192,
+    "overflow": false
+  },
+  "desktop.landing": {
+    "design": true,
+    "tryon": true,
+    "model": true,
+    "recolor": true
+  },
+  "desktop.createSection": {
+    "header": "创作中心",
+    "body": "创作中心 创作工具 服装设计 可使用 生成设计方案 用一句话描述你的设计 进入 ModaUI 工作区 虚拟试衣 需高级版 授权图片试穿 服装换色 可使用 手动选区换色 秀场视频 后续阶段 视频服务未接 商业模特 需高级版 生成模特图片 打开设计灵感助手 →"
+  },
+  "desktop.aiWorkspace": {
+    "headerText": "ModaUI",
+    "mainWidth": 1440,
+    "mainHeight": 900,
+    "hasDragHandle": false,
+    "hasBack": true,
+    "hasMenu": true,
+    "overflow": false
+  },
+  "desktop.menuItems": [
+    "新建对话",
+    "历史对话",
+    "创作中心",
+    "我的作品",
+    "服装换色",
+    "商业模特",
+    "店铺知识库",
+    "套餐与额度",
+    "退出登录"
+  ],
+  "desktop.resized1024": {
+    "overflow": false,
+    "textareaBottom": 749,
+    "viewportHeight": 768,
+    "menuVisible": true
+  },
+  "desktop.backToStudio": {
+    "sidebarPresent": true,
+    "heading": "服装创作"
+  },
+  "desktop.errors": [
+    "console:A bad HTTP response code (404) was received when fetching the script.",
+    "console:Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+    "console:Failed to load resource: net::ERR_BLOCKED_BY_RESPONSE.NotSameOrigin"
+  ]
+}

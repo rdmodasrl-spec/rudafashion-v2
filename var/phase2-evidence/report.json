@@ -1,0 +1,381 @@
+{
+  "startedAt": "2026-10-26T15:59:00.200Z",
+  "checks": {
+    "mobile.session": {
+      "title": "RUDA 商家管理",
+      "app": "merchant-admin-mobile",
+      "merchantSession": true,
+      "viewport": [
+        390,
+        844
+      ]
+    },
+    "mobile.initialNavigation": {
+      "innerHeight": 844,
+      "innerWidth": 390,
+      "visualHeight": 844,
+      "visualOffsetTop": 0,
+      "scrollWidth": 390,
+      "navHidden": "true",
+      "navPointerEvents": "none",
+      "navTransform": "none",
+      "nav": {
+        "top": 844,
+        "bottom": 907,
+        "left": 0,
+        "right": 390,
+        "width": 390,
+        "height": 63
+      },
+      "handle": {
+        "top": 796,
+        "bottom": 836,
+        "left": 147,
+        "right": 243,
+        "width": 96,
+        "height": 40
+      },
+      "pane": null,
+      "textarea": {
+        "top": 739,
+        "bottom": 783,
+        "left": 67,
+        "right": 279,
+        "width": 212,
+        "height": 44
+      },
+      "elementAtBottomCenter": "FOOTER.z-10 shrink-0 border-t border-neutral-100/80 bg-white px-3 p"
+    },
+    "mobile.initialNavigationHidden": {
+      "hidden": true,
+      "translated": true,
+      "paneFillsViewport": false,
+      "handleVisible": true,
+      "horizontalOverflow": false
+    },
+    "mobile.navigationAfterClickOpen": {
+      "innerHeight": 844,
+      "innerWidth": 390,
+      "visualHeight": 844,
+      "visualOffsetTop": 0,
+      "scrollWidth": 390,
+      "navHidden": "false",
+      "navPointerEvents": "auto",
+      "navTransform": "none",
+      "nav": {
+        "top": 781,
+        "bottom": 844,
+        "left": 0,
+        "right": 390,
+        "width": 390,
+        "height": 63
+      },
+      "handle": {
+        "top": 735,
+        "bottom": 775,
+        "left": 147,
+        "right": 243,
+        "width": 96,
+        "height": 40
+      },
+      "pane": null,
+      "textarea": {
+        "top": 678,
+        "bottom": 722,
+        "left": 67,
+        "right": 279,
+        "width": 212,
+        "height": 44
+      },
+      "elementAtBottomCenter": "NAV.ruda-bottom-nav fixed inset-x-0 bottom-0 z-[70] border-t bor"
+    },
+    "mobile.navigationOpenContract": {
+      "hidden": true,
+      "navAtBottom": true,
+      "paneMeetsNav": false,
+      "navAboveHandle": true
+    },
+    "mobile.navigationAfterClickClose": {
+      "hidden": true,
+      "translated": true
+    },
+    "mobile.navigationAfterDragUp": {
+      "hidden": true,
+      "navTop": 781
+    },
+    "mobile.navigationAfterDragDown": {
+      "hidden": true,
+      "navTop": 844
+    },
+    "mobile.navigationClosesOnComposerFocus": {
+      "hidden": true,
+      "paneFillsViewport": false
+    },
+    "mobile.keyboardInsetSimulation": {
+      "visualHeight": 844,
+      "paneBottom": null,
+      "textareaBottom": 783,
+      "navHidden": "true",
+      "paneAboveKeyboard": false,
+      "textareaAboveKeyboard": true
+    },
+    "mobile.responsiveWidths": [
+      {
+        "width": 320,
+        "overflow": false,
+        "navHidden": true,
+        "handleWidth": 96,
+        "handleInside": true,
+        "paneFills": false
+      },
+      {
+        "width": 360,
+        "overflow": false,
+        "navHidden": true,
+        "handleWidth": 96,
+        "handleInside": true,
+        "paneFills": false
+      },
+      {
+        "width": 390,
+        "overflow": false,
+        "navHidden": true,
+        "handleWidth": 96,
+        "handleInside": true,
+        "paneFills": false
+      },
+      {
+        "width": 430,
+        "overflow": false,
+        "navHidden": true,
+        "handleWidth": 96,
+        "handleInside": true,
+        "paneFills": false
+      }
+    ],
+    "mobile.quickActions": [
+      {
+        "label": "服装设计",
+        "left": 12,
+        "right": 101,
+        "width": 89,
+        "complete": true
+      },
+      {
+        "label": "图片生成",
+        "left": 105,
+        "right": 193,
+        "width": 89,
+        "complete": true
+      },
+      {
+        "label": "虚拟试衣",
+        "left": 197,
+        "right": 286,
+        "width": 89,
+        "complete": true
+      },
+      {
+        "label": "设计灵感",
+        "left": 290,
+        "right": 378,
+        "width": 89,
+        "complete": true
+      }
+    ],
+    "mobile.quickActionDesign": {
+      "prompt": "帮我设计一款服装。先询问我还没有提供的关键信息，再整理成完整的设计方案。",
+      "hasDesignPanel": true,
+      "hasFashionMode": true
+    },
+    "mobile.menuPanel": {
+      "top": 59,
+      "bottom": 455,
+      "height": 396,
+      "width": 244,
+      "viewportHeight": 844,
+      "scrollHeight": 394,
+      "clientHeight": 394,
+      "innerScroll": false,
+      "lastItemVisible": true
+    },
+    "mobile.menuItems": [
+      "新建对话",
+      "历史对话",
+      "创作中心",
+      "我的作品",
+      "服装换色",
+      "商业模特",
+      "店铺知识库",
+      "套餐与额度",
+      "退出登录"
+    ],
+    "mobile.menuInventory": {
+      "count": 9,
+      "hasNewConversation": true,
+      "hasHistory": true,
+      "hasCreate": true,
+      "hasDesigns": true,
+      "hasRecolor": true,
+      "hasModel": true,
+      "hasKnowledge": true,
+      "hasPricing": true,
+      "hasLogout": true
+    },
+    "mobile.createSection": {
+      "header": "创作中心",
+      "hasDesign": true,
+      "hasGenerate": false,
+      "hasTryOn": true,
+      "hasRecolor": true,
+      "hasModel": true
+    },
+    "mobile.designsSection": {
+      "header": "我的作品",
+      "bodyMentionsPortfolio": true
+    },
+    "mobile.knowledgeSection": {
+      "header": "店铺知识库",
+      "bodyMentionsKnowledge": true
+    },
+    "mobile.pricingDialog": {
+      "visible": true,
+      "text": "MODAUI RUDA + ModaUI 套餐 欧元/月；最终价格和购买状态由服务端套餐目录提供。 订阅购买尚未开放。服务端会在支付、Webhook、自动税和测试开关均就绪后启用安全结账。 暂时无法读取套餐目录，请稍后重试。 暂时无法读取套餐目录，请稍后重试。 套餐功能受服务端权限、供应商配置、AI Credits 与使用限制共同控制。套餐说明不代表尚未上线的图片编辑、视频或批量生产能力已可用。"
+    },
+    "mobile.recolorFlow": {
+      "header": "ModaUI",
+      "mentionsRecolor": true,
+      "mentionsSelect": false
+    },
+    "mobile.commercialModelFlow": {
+      "header": "ModaUI",
+      "mentionsModel": true,
+      "mentionsScene": true
+    },
+    "mobile.newConversation": {
+      "greetingVisible": true,
+      "messagesCleared": true
+    },
+    "mobile.realChat": {
+      "prompt": "Rispondi soltanto con OK.",
+      "assistantText": "Rispondi soltanto con OK. ModaUI 我是您的商户全模块智能助手，可协助商品与 SKU、订单、库存和物料、生产、客户授权、增长营销、内容草稿、财务、店铺资料与设置。回答会结合当前工作区和账号可访问的本店数据；发布内容、发送营销、发货、调拨、报产、价格和资金操作仍需您在业务页面核对并确认。 回答依据：订单/成交数据：近30天 · 库存数据：查询时的当前库存快照 · 商品目录与 SKU 数据：当前商家 · 生产数据：当前未完成工单 · 客户/售后数据：当前待处理统计 · 财务数据：当前结算与收款账户状态 重新生成",
+      "error": "",
+      "elapsedMs": 1525
+    },
+    "mobile.historyAfterChat": {
+      "visible": true,
+      "hasConversation": true,
+      "text": "聊天历史 新聊天 最近 · 与 Web 商家端同步 Rispondi soltanto con OK. 2026/10/26 16:59 · 2 Rispondi soltanto con OK. 2026/10/26 16:57 · 2 Rispondi soltanto con OK. 2026/10/26 16:55 · 2 Rispondi soltanto con OK. 2026/10/26 16:51 · 2 Rispondi soltanto con OK. 2026/10/26 16:49 · 4 Rispondi soltanto con OK. 2026/10/26 16:35 · 2 当前商家：Atelier Alba"
+    },
+    "desktop.portalShell": {
+      "sidebarWidth": 192,
+      "hasSidebarTab": true,
+      "horizontalOverflow": false,
+      "viewportWidth": 1440
+    },
+    "desktop.fashionStudioLanding": {
+      "hasDesign": true,
+      "hasTryOn": true,
+      "hasModel": true,
+      "hasRecolor": true
+    },
+    "desktop.aiWorkspace": {
+      "mainWidth": 880,
+      "mainHeight": 900,
+      "stillOnCreateSection": false,
+      "quickActions": [],
+      "hasDragHandle": false,
+      "hasBack": true,
+      "hasMenu": true,
+      "textareaVisible": true,
+      "horizontalOverflow": false
+    },
+    "desktop.menuItems": [
+      "新建对话",
+      "历史对话",
+      "创作中心",
+      "我的作品",
+      "服装换色",
+      "商业模特",
+      "店铺知识库",
+      "套餐与额度",
+      "退出登录"
+    ],
+    "desktop.resized1024": {
+      "horizontalOverflow": false,
+      "textareaVisible": true,
+      "textareaBottom": 749,
+      "viewportHeight": 768
+    },
+    "desktop.backToStudio": {
+      "sidebarPresent": true,
+      "heading": "服装创作"
+    }
+  },
+  "screenshots": [
+    "/www/wwwroot/ruda.fashion/var/phase2-evidence/mobile-390-initial.png",
+    "/www/wwwroot/ruda.fashion/var/phase2-evidence/mobile-390-nav-open.png",
+    "/www/wwwroot/ruda.fashion/var/phase2-evidence/mobile-390-keyboard-inset.png",
+    "/www/wwwroot/ruda.fashion/var/phase2-evidence/mobile-320-initial.png",
+    "/www/wwwroot/ruda.fashion/var/phase2-evidence/mobile-390-quick-actions.png",
+    "/www/wwwroot/ruda.fashion/var/phase2-evidence/mobile-390-quick-design.png",
+    "/www/wwwroot/ruda.fashion/var/phase2-evidence/mobile-390-menu.png",
+    "/www/wwwroot/ruda.fashion/var/phase2-evidence/mobile-390-create.png",
+    "/www/wwwroot/ruda.fashion/var/phase2-evidence/mobile-390-pricing.png",
+    "/www/wwwroot/ruda.fashion/var/phase2-evidence/mobile-390-chat-result.png",
+    "/www/wwwroot/ruda.fashion/var/phase2-evidence/mobile-390-history.png",
+    "/www/wwwroot/ruda.fashion/var/phase2-evidence/desktop-1440-portal.png",
+    "/www/wwwroot/ruda.fashion/var/phase2-evidence/desktop-1440-fashion-studio.png",
+    "/www/wwwroot/ruda.fashion/var/phase2-evidence/desktop-1440-modaui-menu.png",
+    "/www/wwwroot/ruda.fashion/var/phase2-evidence/desktop-1024-modaui.png"
+  ],
+  "consoleErrors": [
+    "mobile:console:A bad HTTP response code (404) was received when fetching the script.",
+    "mobile:console:Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+    "desktop:console:A bad HTTP response code (404) was received when fetching the script.",
+    "desktop:console:Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+    "desktop:console:Failed to load resource: net::ERR_BLOCKED_BY_RESPONSE.NotSameOrigin"
+  ],
+  "failedResponses": [
+    "mobile:500:/api/merchant/modagpt/plans",
+    "desktop:429:/api/merchant/events"
+  ],
+  "keyboardSimulation": {
+    "method": "cdp-visual-viewport",
+    "innerHeight": 844,
+    "innerWidth": 390,
+    "visualHeight": 844,
+    "visualOffsetTop": 0,
+    "scrollWidth": 390,
+    "navHidden": "true",
+    "navPointerEvents": "none",
+    "navTransform": "none",
+    "nav": {
+      "top": 844,
+      "bottom": 907,
+      "left": 0,
+      "right": 390,
+      "width": 390,
+      "height": 63
+    },
+    "handle": {
+      "top": 796,
+      "bottom": 836,
+      "left": 147,
+      "right": 243,
+      "width": 96,
+      "height": 40
+    },
+    "pane": null,
+    "textarea": {
+      "top": 739,
+      "bottom": 783,
+      "left": 67,
+      "right": 279,
+      "width": 212,
+      "height": 44
+    },
+    "elementAtBottomCenter": "FOOTER.z-10 shrink-0 border-t border-neutral-100/80 bg-white px-3 p"
+  },
+  "finishedAt": "2026-10-26T15:59:41.531Z"
+}

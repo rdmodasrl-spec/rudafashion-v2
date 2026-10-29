@@ -34,8 +34,12 @@ HISTORY_DIR="release/deploy-history"
 mkdir -p "$HISTORY_DIR"
 
 log "0/6 同步权威仓库 rdmodasrl-spec/rudafashion-v2（main）"
+# index.html 与 public/sw.js 由构建过程改写（Service Worker 版本号），属于构建产物：
+# 若把它们算作“未提交改动”，每次发布后都会阻塞下一次发布。
 if [[ -d .git ]] && git remote get-url v2 >/dev/null 2>&1; then
-  if [[ -n "$(git status --porcelain)" ]]; then
+  dirty_output="$(git status --porcelain -- . ":!index.html" ":!public/sw.js")"
+  if [[ -n "$dirty_output" ]]; then
+    printf '%s\n' "$dirty_output" >&2
     die "生产目录存在未提交改动，请先处理后再发布（避免覆盖线上手工修改）"
   fi
   git fetch v2 --quiet

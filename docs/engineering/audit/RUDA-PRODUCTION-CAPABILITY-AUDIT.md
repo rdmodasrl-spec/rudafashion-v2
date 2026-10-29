@@ -15,8 +15,8 @@
 | **生产工单 (Production Order)** | **是** | **A** | [productionChain.ts](file:///www/wwwroot/ruda.fashion/src/server/productionChain.ts), [ProductionOrder 模型](file:///www/wwwroot/ruda.fashion/prisma/schema.prisma) |
 | **生产成本 (Production Cost)** | **是** | **A** | `plannedAmount`, `laborAmount`, `adjustmentAmount` |
 | **生产管理 (Workflow)** | **是** | **B** | 支持“取货-加工-送货-验收-结算”全流程记账。 |
-| **面料/辅料库 (Materials)** | **部分** | **C/E** | 通过通用商品模型的 `materials: true` 标识实现，无独立库管理。 |
-| **BOM (物料清单)** | **否** | **G/F** | **已由设计决策删除**。在 2026-10-26 的简化迁移中被移除。 |
+| **面料/辅料库 (Materials)** | **是** | **B/Design** | 独立 Material 模型已存在，架构方案见 [RUDA-FASHION-MATERIALS-ARCHITECTURE.md](file:///www/wwwroot/ruda.fashion/docs/engineering/architecture/RUDA-FASHION-MATERIALS-ARCHITECTURE.md) |
+| **BOM (物料清单)** | **否** | **F/Reserved** | 目前已删除，预留扩展接口与面辅料库衔接。 |
 
 ---
 

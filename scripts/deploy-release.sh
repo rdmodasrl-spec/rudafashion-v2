@@ -30,10 +30,15 @@ if [[ -z "$PM2_BIN" && -x node_modules/.bin/pm2 ]]; then PM2_BIN="node_modules/.
 [[ -n "$PM2_BIN" ]] || die "未找到 pm2（npm i -D pm2 或全局安装）"
 
 log "1/6 预检：工作区状态"
-git status --porcelain | head -20 || true
-pending="$(npx prisma migrate status --schema prisma/schema.prisma 2>/dev/null | sed -n 's/^\(20[0-9]\{12\}_[A-Za-z0-9_]*\)$/\1/p')"
+status_file="$(mktemp)"
+git status --porcelain >"$status_file" 2>/dev/null || true
+head -20 "$status_file" || true
+rm -f "$status_file"
+migrate_status="$(npx prisma migrate status --schema prisma/schema.prisma 2>&1 || true)"
+pending="$(printf '%s\n' "$migrate_status" | grep -E '^[0-9]{14}_[A-Za-z0-9_]+$' || true)"
 if [[ -n "$pending" ]]; then
-  log "待应用迁移："; printf '  - %s\n' $pending
+  log "待应用迁移："
+  printf '  - %s\n' $pending
 else
   log "数据库无待应用迁移"
 fi

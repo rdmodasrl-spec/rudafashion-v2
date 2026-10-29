@@ -121,6 +121,7 @@
 
 - **代码改动一律提交并推送到 `rdmodasrl-spec/rudafashion-v2` 的 `main`**，不允许只留在本地。
 - **每次代码改好并通过 `tsc` + `test:unit` + `build` 后，直接部署上线**，不再逐次询问。
+- 一条命令完成「校验 → 提交 → 推送 → 上线」：`npm run sync -- "改了什么" -- --deploy`（`scripts/sync-release.sh`）。
 - 必须走 `bash scripts/deploy-release.sh --confirm`：备份 → `prisma generate` → `migrate deploy` → `build` → `pm2 startOrRestart --only ruda-fashion` → `smoke:post-deploy`。
 - 只重启 `ruda-fashion`。`ecosystem.config.cjs` 里的 `openmontage-backlot` 依赖一个不存在的 Python venv，属既有问题，不得因它中断发布。
 - 发布后必须核对：`pm2 status` 显示 online、`/api/products` 返回 200、目标接口返回预期状态码、`smoke:post-deploy` 通过。

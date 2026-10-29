@@ -1,6 +1,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { useB2B } from '../../../../context/B2BContext';
+import { apiDelete, apiGet, apiPost, apiPut } from '../../../../api/client';
+import { describeAppStoreError } from '../../appStoreErrors';
 import { AdminPageHeader } from './AdminPageHeader';
 import {
   Plus,
@@ -100,6 +102,7 @@ export const AdminAppStoreMgmt: React.FC = () => {
   const [installationsApp, setInstallationsApp] = useState<App | null>(null);
   const [installations, setInstallations] = useState<AppInstallation[]>([]);
   const [installationsLoading, setInstallationsLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -108,22 +111,20 @@ export const AdminAppStoreMgmt: React.FC = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [appsRes, catsRes] = await Promise.all([
-        fetch('/api/admin/app-store/apps'),
-        fetch('/api/admin/app-store/categories')
+      setLoadError('');
+      const [appsData, catsData] = await Promise.all([
+        apiGet<{ success: true; apps: App[] }>('/api/admin/app-store/apps'),
+        apiGet<{ success: true; categories: Category[] }>('/api/admin/app-store/categories')
       ]);
-      const appsData = await appsRes.json() as { success?: boolean; error?: string; apps?: App[] };
-      const catsData = await catsRes.json() as { success?: boolean; error?: string; categories?: Category[] };
-      if (!appsRes.ok || !appsData.success || !appsData.apps) {
-        throw new Error(appsData.error || `应用列表读取失败（${appsRes.status}）`);
-      }
-      if (!catsRes.ok || !catsData.success || !catsData.categories) {
-        throw new Error(catsData.error || `应用分类读取失败（${catsRes.status}）`);
-      }
-      setApps(appsData.apps);
-      setCategories(catsData.categories);
+      setApps(Array.isArray(appsData.apps) ? appsData.apps : []);
+      setCategories(Array.isArray(catsData.categories) ? catsData.categories : []);
     } catch (error) {
-      addNotification('warning', '加载失败', error instanceof Error ? error.message : '应用数据读取失败');
+      // 统一走 API 客户端的错误解析：错误体是 { error: { code, message } }，直接拼字符串会得到 [object Object]。
+      const message = describeAppStoreError(error, '应用数据读取失败');
+      setApps([]);
+      setCategories([]);
+      setLoadError(message);
+      addNotification('warning', '加载失败', message);
     } finally {
       setLoading(false);
     }
@@ -154,26 +155,18 @@ export const AdminAppStoreMgmt: React.FC = () => {
     if (features === null || permissions === null) return;
 
     try {
-      const url = currentApp.id ? `/api/admin/app-store/apps/${currentApp.id}` : '/api/admin/app-store/apps';
-      const method = currentApp.id ? 'PUT' : 'POST';
-
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...currentApp, features, permissions })
-      });
-      const data = await res.json() as { success?: boolean; error?: string };
-      if (!res.ok || !data.success) {
-        throw new Error(data.error === 'APP_STORE_PAYMENTS_UNAVAILABLE'
-          ? '付费功能尚未开放；请将该应用设为草稿后保存。'
-          : data.error || `应用保存失败（${res.status}）`);
+      const payload = { ...currentApp, features, permissions };
+      if (currentApp.id) {
+        await apiPut<{ success: true }>(`/api/admin/app-store/apps/${currentApp.id}`, payload);
+      } else {
+        await apiPost<{ success: true }>('/api/admin/app-store/apps', payload);
       }
       addNotification('success', '保存成功', '应用信息已保存。');
       setIsEditing(false);
       setCurrentApp(null);
       void fetchData();
     } catch (error) {
-      addNotification('warning', '保存失败', error instanceof Error ? error.message : '应用保存失败，请重试。');
+      addNotification('warning', '保存失败', describeAppStoreError(error, '应用保存失败，请重试。'));
     }
   };
 
@@ -182,14 +175,10 @@ export const AdminAppStoreMgmt: React.FC = () => {
     setInstallations([]);
     setInstallationsLoading(true);
     try {
-      const response = await fetch(`/api/admin/app-store/apps/${encodeURIComponent(app.id)}/installations`);
-      const data = await response.json() as { success?: boolean; error?: string; installations?: AppInstallation[] };
-      if (!response.ok || !data.success || !data.installations) {
-        throw new Error(data.error || `安装企业读取失败（${response.status}）`);
-      }
-      setInstallations(data.installations);
+      const data = await apiGet<{ success: true; installations: AppInstallation[] }>(`/api/admin/app-store/apps/${encodeURIComponent(app.id)}/installations`);
+      setInstallations(Array.isArray(data.installations) ? data.installations : []);
     } catch (error) {
-      addNotification('warning', '读取失败', error instanceof Error ? error.message : '安装企业读取失败');
+      addNotification('warning', '读取失败', describeAppStoreError(error, '安装企业读取失败'));
       setInstallationsApp(null);
     } finally {
       setInstallationsLoading(false);
@@ -222,11 +211,27 @@ export const AdminAppStoreMgmt: React.FC = () => {
           <Plus className="w-4 h-4" /> 新增应用
         </button>} />
 
+      {loadError && (
+        <div role="alert" className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold">生态应用列表加载失败</p>
+            <p className="mt-1 break-words text-xs leading-5">{loadError}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void fetchData()}
+            className="shrink-0 rounded-lg bg-neutral-950 px-3 py-2 text-xs font-semibold text-white hover:bg-neutral-800"
+          >
+            重试
+          </button>
+        </div>
+      )}
+
       {loading ? (
         <div className="flex items-center justify-center py-20">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black" />
         </div>
-      ) : (
+      ) : loadError ? null : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {apps.map(app => (
             <div key={app.id} className="border border-neutral-200 bg-white p-4 transition-colors hover:border-neutral-400">

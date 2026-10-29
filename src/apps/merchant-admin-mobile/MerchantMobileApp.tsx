@@ -701,6 +701,10 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
       case 'notifications':
         setMessageCenterOpen(true);
         break;
+      case 'app_store':
+        setSettingsSection('apps');
+        setActiveTab('profile');
+        break;
       case 'settings':
         setSettingsSection(null);
         setActiveTab('profile');

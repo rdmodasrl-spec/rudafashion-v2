@@ -46,6 +46,7 @@ export const merchantMobileMoreGroups = [
     items: [
       { id: 'team', zh: '员工管理', it: 'Dipendenti', descriptionZh: '账号权限管理', descriptionIt: 'Account e permessi', icon: 'team' },
       { id: 'notifications', zh: '通知中心', it: 'Notifiche', descriptionZh: '业务消息待办', descriptionIt: 'Avvisi e attività', icon: 'notifications' },
+      { id: 'app_store', zh: '应用商店', it: 'App store', descriptionZh: '安装与管理应用', descriptionIt: 'Installa e gestisci le app', icon: 'store' },
       { id: 'settings', zh: '系统设置', it: 'Impostazioni', descriptionZh: '经营资料偏好', descriptionIt: 'Preferenze aziendali', icon: 'settings' },
       { id: 'support', zh: '帮助反馈', it: 'Assistenza', descriptionZh: '商家问题反馈', descriptionIt: 'Aiuto per i negozi', icon: 'support' }
     ]

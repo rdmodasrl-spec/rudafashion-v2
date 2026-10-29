@@ -230,7 +230,7 @@ export const MerchantPortal: React.FC<{
 
   // Active sub-tab inside Merchant Portal
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'pos' | 'products' | 'sku_matrix' | 'materials' | 'production' | 'inventory' | 'procurement' | 'orders' | 'vault_requests' | 'customers' | 'growth' | 'content' | 'finance' | 'profile' | 'settings' | 'gallery' | 'ai_employees' | 'fashion_studio' | 'modagpt'
+    'dashboard' | 'pos' | 'products' | 'sku_matrix' | 'materials' | 'production' | 'inventory' | 'procurement' | 'orders' | 'vault_requests' | 'customers' | 'growth' | 'content' | 'finance' | 'profile' | 'settings' | 'gallery' | 'ai_employees' | 'fashion_studio' | 'modagpt' | 'app_store'
   >('dashboard');
   const [industrySection, setIndustrySection] = useState<MerchantIndustryModuleKey>('dashboard');
   const pendingIndustrySectionRef = useRef<MerchantIndustryModuleKey | null>(null);
@@ -4650,6 +4650,14 @@ export const MerchantPortal: React.FC<{
               <button type="button" id="merchant-sidebar-storefront-settings" onClick={() => openSettingsSection('storefront')} className={settingsSubItemClass(activeTab === 'profile')}><Store className="h-3.5 w-3.5" />{localizeCopy('店铺设置', 'Impostazioni vetrina')}</button>
             </div>}
           </div>
+          <button
+            type="button"
+            id="merchant-sidebar-tab-app-store"
+            onClick={() => { setSidebarNavExpanded(null); setActiveTab('app_store'); }}
+            className={navItemClass(activeTab === 'app_store')}
+          >
+            <Boxes className="h-4 w-4" />{localizeCopy('应用商店', 'App store')}
+          </button>
           <button type="button" id="merchant-sidebar-tab-settings" onClick={openMerchantSettings} className={navItemClass(activeTab === 'settings')}><SlidersHorizontal className="h-4 w-4" />{localizeCopy('系统设置', 'Impostazioni')}</button>
         </nav>
         <div className="mt-3 space-y-2 border-t border-neutral-100 pt-3">
@@ -4772,6 +4780,11 @@ export const MerchantPortal: React.FC<{
         </section>
       )}
 
+      {activeTab === 'app_store' && (
+        <Suspense fallback={<div className="rounded-xl border border-neutral-200 bg-white p-6 text-sm text-neutral-500">应用商店正在加载…</div>}>
+          <MerchantAppStore onOpenApp={setActiveStoreAppId} />
+        </Suspense>
+      )}
       {activeTab === 'gallery' && <MerchantGallery onBack={() => setActiveTab('dashboard')} />}
       {activeTab === 'ai_employees' && <MerchantAiEmployees isIt={isIt} />}
       {/* ======================================================== */}

@@ -116,3 +116,11 @@
 - 两条迁移都是**只增结构**，旧代码可继续运行；回滚脚本末尾有逆向 SQL。
 - 发布前必须确认 `prisma migrate status` 只列出这两条，且已安排维护窗口。
 - 生产发布需要显式授权：脚本在无 `--confirm` 时不会改动任何数据。
+
+## 默认发布约定（2026-10-29 用户确认）
+
+- **每次代码改好并通过 `tsc` + `test:unit` + `build` 后，直接部署上线**，不再逐次询问。
+- 必须走 `bash scripts/deploy-release.sh --confirm`：备份 → `prisma generate` → `migrate deploy` → `build` → `pm2 startOrRestart --only ruda-fashion` → `smoke:post-deploy`。
+- 只重启 `ruda-fashion`。`ecosystem.config.cjs` 里的 `openmontage-backlot` 依赖一个不存在的 Python venv，属既有问题，不得因它中断发布。
+- 发布后必须核对：`pm2 status` 显示 online、`/api/products` 返回 200、目标接口返回预期状态码、`smoke:post-deploy` 通过。
+- 迁移若为破坏性（删列/改类型），仍必须先说明回滚方案再执行。

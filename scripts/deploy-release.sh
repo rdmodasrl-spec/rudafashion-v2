@@ -66,11 +66,16 @@ npx prisma migrate deploy --schema prisma/schema.prisma
 log "4/6 构建"
 npm run build
 
-log "5/6 重启服务"
-"$PM2_BIN" startOrRestart ecosystem.config.cjs --update-env
-"$PM2_BIN" save
+log "5/6 重启服务（只重启 ruda-fashion，避免被同文件里已停用的其它应用拖垮）"
+"$PM2_BIN" startOrRestart ecosystem.config.cjs --only ruda-fashion --update-env || true
+"$PM2_BIN" save || true
 sleep 5
-"$PM2_BIN" status | head -20 || true
+"$PM2_BIN" status || true
+if ! "$PM2_BIN" jlist 2>/dev/null | grep -q '"name":"ruda-fashion","namespace":"default","pm2_env":{"status":"online"'; then
+  if ! "$PM2_BIN" describe ruda-fashion 2>/dev/null | grep -q 'status.*online'; then
+    die "ruda-fashion 未处于 online 状态，已停止发布，请检查 logs/pm2-error.log"
+  fi
+fi
 
 log "6/6 冒烟"
 SMOKE_BASE_URL="${SMOKE_BASE_URL:-https://modaui.com}" npm run smoke:post-deploy

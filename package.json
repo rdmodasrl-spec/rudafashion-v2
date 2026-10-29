@@ -50,7 +50,8 @@
     "pm2:logs": "pm2 logs ruda-fashion",
     "test:e2e:industry": "bash scripts/test-industry-e2e-isolated.sh",
     "test:consumer:integration": "bash scripts/test-consumer-account-isolated.sh",
-    "test:merchant-miniprogram:integration": "bash scripts/test-merchant-miniprogram-isolated.sh"
+    "test:merchant-miniprogram:integration": "bash scripts/test-merchant-miniprogram-isolated.sh",
+    "sync": "bash scripts/sync-release.sh"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1136.0",

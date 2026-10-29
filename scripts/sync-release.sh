@@ -86,8 +86,10 @@ git push origin HEAD:main
 git --no-pager log --oneline -1
 
 if [[ "$deploy" == true ]]; then
-  log "开始发布上线"
-  bash scripts/deploy-release.sh --confirm
+  deploy_root="${RUDA_DEPLOY_DIR:-/www/wwwroot/ruda.fashion}"
+  [[ -f "$deploy_root/scripts/deploy-release.sh" ]] || die "发布目录不存在或缺少 deploy-release.sh：$deploy_root"
+  log "开始发布上线（目录：$deploy_root）"
+  ( cd "$deploy_root" && bash scripts/deploy-release.sh --confirm )
 else
   log "完成。需要上线请追加 --deploy，或手动执行 bash scripts/deploy-release.sh --confirm"
 fi

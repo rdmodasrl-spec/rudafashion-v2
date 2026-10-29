@@ -1,0 +1,21 @@
+{
+  "id": "/employee?ruda-app=merchant-admin-mobile",
+  "name": "RUDA Employee",
+  "short_name": "RUDA Employee",
+  "description": "RUDA Fashion sales, warehouse and production employee app.",
+  "start_url": "/employee?ruda-app=merchant-admin-mobile",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#0a0a0a",
+  "background_color": "#ffffff",
+  "categories": ["business", "shopping"],
+  "icons": [
+    { "src": "/pwa-192x192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/pwa-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    { "name": "New sales order", "short_name": "Sales", "url": "/employee?ruda-app=merchant-admin-mobile" },
+    { "name": "Orders", "short_name": "Orders", "url": "/employee?ruda-app=merchant-admin-mobile" }
+  ]
+}

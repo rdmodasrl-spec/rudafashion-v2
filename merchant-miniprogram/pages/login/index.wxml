@@ -1,0 +1,111 @@
+<view class="screen login-screen">
+  <view class="login-card card">
+    <view class="login-heading">
+      <text class="page-title">企业中心</text>
+    </view>
+
+    <view class="login-form">
+      <block wx:if="{{resetMode}}">
+        <text class="reset-title">找回密码</text>
+        <view class="field-group">
+          <text class="field-label">注册邮箱</text>
+          <input class="input login-input" value="{{resetEmail}}" disabled="{{resetCodeSent}}" type="text" placeholder="注册商家账号时使用的邮箱" bindinput="onResetInput" data-field="resetEmail" />
+        </view>
+        <checkbox-group class="login-consent-group" bindchange="onLegalConsentChange">
+          <label class="login-consent-row">
+            <checkbox value="terms" checked="{{acceptedTerms}}" color="#806c49" />
+            <view class="login-consent-copy">
+              <text>我已阅读并同意</text>
+              <text class="login-legal-link" data-document="terms" catchtap="openLegalDocument">《用户服务协议》</text>
+            </view>
+          </label>
+          <label class="login-consent-row">
+            <checkbox value="privacy" checked="{{acceptedPrivacy}}" color="#806c49" />
+            <view class="login-consent-copy">
+              <text>我已阅读并同意</text>
+              <text class="login-legal-link" data-document="privacy" catchtap="openLegalDocument">《隐私政策》</text>
+            </view>
+          </label>
+        </checkbox-group>
+        <button wx:if="{{!resetCodeSent}}" class="primary-button login-button" loading="{{loading}}" disabled="{{loading}}" bindtap="requestPasswordResetCode">
+          {{loading ? '发送中…' : '发送验证码'}}
+        </button>
+        <block wx:if="{{resetCodeSent}}">
+          <text class="reset-hint">如账号存在，验证码已发送。</text>
+          <view class="field-group">
+            <text class="field-label">邮箱验证码</text>
+            <input class="input login-input" value="{{resetCode}}" type="number" maxlength="6" placeholder="输入 6 位验证码" bindinput="onResetInput" data-field="resetCode" />
+          </view>
+          <view class="field-group">
+            <text class="field-label">新密码</text>
+            <view class="password-field">
+              <input class="input login-input password-input" value="{{resetPassword}}" password="{{!showResetPassword}}" placeholder="至少 8 位" bindinput="onResetInput" data-field="resetPassword" />
+              <text class="password-toggle" data-field="showResetPassword" bindtap="togglePasswordVisibility">{{showResetPassword ? '隐藏' : '显示'}}</text>
+            </view>
+          </view>
+          <button class="primary-button login-button" loading="{{loading}}" disabled="{{loading}}" bindtap="submitPasswordReset">
+            {{loading ? '正在重置…' : '重置密码'}}
+          </button>
+        </block>
+        <view wx:if="{{error}}" class="error-box">{{error}}</view>
+        <text class="text-button forgot-password-link" bindtap="closeForgotPassword">返回登录</text>
+      </block>
+      <block wx:else>
+        <view class="field-group">
+          <text class="field-label">登录账号</text>
+          <input class="input login-input" value="{{account}}" placeholder="邮箱、手机号或商家编码" bindinput="onAccountInput" />
+        </view>
+        <view class="field-group">
+          <text class="field-label">登录密码</text>
+          <view class="password-field">
+            <input class="input login-input password-input" value="{{password}}" password="{{!showPassword}}" placeholder="请输入密码" bindinput="onPasswordInput" />
+            <text class="password-toggle" data-field="showPassword" bindtap="togglePasswordVisibility">{{showPassword ? '隐藏' : '显示'}}</text>
+          </view>
+        </view>
+        <view class="login-links">
+          <text class="text-button forgot-password-link" bindtap="openForgotPassword">忘记密码？</text>
+        </view>
+        <view wx:if="{{error}}" class="error-box">{{error}}</view>
+        <view wx:for="{{merchantChoices}}" wx:key="id" class="choice-card" data-id="{{item.id}}" bindtap="selectMerchant">
+          <text class="item-title">{{item.name}}</text>
+          <text class="item-meta">选择此店铺继续登录 ›</text>
+        </view>
+        <checkbox-group class="login-consent-group" bindchange="onLegalConsentChange">
+          <label class="login-consent-row">
+            <checkbox value="terms" checked="{{acceptedTerms}}" color="#806c49" />
+            <view class="login-consent-copy">
+              <text>我已阅读并同意</text>
+              <text class="login-legal-link" data-document="terms" catchtap="openLegalDocument">《用户服务协议》</text>
+            </view>
+          </label>
+          <label class="login-consent-row">
+            <checkbox value="privacy" checked="{{acceptedPrivacy}}" color="#806c49" />
+            <view class="login-consent-copy">
+              <text>我已阅读并同意</text>
+              <text class="login-legal-link" data-document="privacy" catchtap="openLegalDocument">《隐私政策》</text>
+            </view>
+          </label>
+        </checkbox-group>
+        <button class="primary-button login-button" loading="{{loading}}" disabled="{{loading}}" bindtap="onSubmit">
+          {{loading ? '登录中…' : '登录'}}
+        </button>
+        <view wx:if="{{demoCredentials}}" class="choice-card demo-account">
+          <text class="item-title">测试账号</text>
+          <view wx:for="{{demoCredentials.accounts}}" wx:key="type" class="demo-account-row">
+            <text class="item-meta">{{item.label}}：{{item.email}}</text>
+            <button wx:if="{{item.type !== 'partner'}}" class="text-button" data-email="{{item.email}}" bindtap="useDemoCredentials">填入</button>
+          </view>
+          <text class="item-meta">统一密码：{{demoCredentials.password}}</text>
+          <view wx:for="{{demoCredentials.accounts}}" wx:for-item="demoAccount" wx:key="type">
+            <view wx:if="{{demoAccount.type === 'partner'}}" class="demo-partner-link">
+              <text class="item-meta">代理请在 RUDA Partner 工作台登录</text>
+              <button class="text-button" bindtap="openPartnerDemo">打开入口</button>
+            </view>
+          </view>
+        </view>
+        <text wx:if="{{demoError}}" class="item-meta">{{demoError}}</text>
+        <text class="text-button registration-button" bindtap="openEnterpriseRegistration">邮箱注册</text>
+      </block>
+    </view>
+  </view>
+</view>

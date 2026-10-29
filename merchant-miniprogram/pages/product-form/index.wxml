@@ -1,0 +1,223 @@
+<view class="screen product-form-screen" style="padding-top: {{statusBarHeight}}px;">
+  <view class="product-form-heading">
+    <text class="product-form-title">{{isEdit ? '编辑商品' : '商品上传'}}</text>
+  </view>
+  <view wx:if="{{!isEdit}}" class="mode-switch">
+    <button class="mode-button {{mode === 'quick' ? 'mode-selected' : ''}}" hover-class="ui-button-pressed" data-mode="quick" bindtap="onModeChange">快速</button>
+    <button class="mode-button {{mode === 'full' ? 'mode-selected' : ''}}" hover-class="ui-button-pressed" data-mode="full" bindtap="onModeChange">完整</button>
+  </view>
+  <view wx:if="{{!canManage && !error}}" class="empty">正在验证账号权限…</view>
+  <view wx:if="{{loading}}" class="empty">正在加载商品资料…</view>
+
+  <block wx:if="{{canManage && !loading}}">
+    <view class="form-card">
+      <input class="input" data-field="styleNo" value="{{styleNo}}" placeholder="款式编号 / 款号" bindinput="onInput" />
+      <input class="input form-input-primary" data-field="name" value="{{name}}" placeholder="商品名称" bindinput="onInput" />
+      <picker range="{{categories}}" range-key="label" value="{{categoryIndex}}" bindchange="onCategoryChange">
+        <view class="input picker-input">
+          <text class="picker-field-label">一级分类</text>
+          <text class="picker-field-value">{{categoryLabel || category}}</text>
+          <image class="picker-chevron" src="/assets/icons/chevron_right.png" mode="aspectFit" />
+        </view>
+      </picker>
+      <block wx:if="{{mode === 'full' || isEdit}}">
+        <input class="input" data-field="subCategory" value="{{subCategory}}" placeholder="二级分类" bindinput="onInput" />
+        <input class="input" data-field="brand" value="{{brand}}" placeholder="品牌" bindinput="onInput" />
+        <input class="input" data-field="season" value="{{season}}" placeholder="季节，例如 2026 秋冬" bindinput="onInput" />
+      </block>
+    </view>
+
+    <view class="form-card">
+      <view wx:if="{{!isEdit}}" class="option-group">
+        <view class="color-options">
+          <view wx:for="{{colorOptions}}" wx:key="value" class="{{item.selected ? 'color-option-chip color-option-chip-selected' : 'color-option-chip'}}" hover-class="ui-button-pressed" data-group="color" data-value="{{item.value}}" aria-label="选择{{item.value}}" bindtap="toggleMatrixOption">
+            <view class="color-option-swatch" style="background: {{item.swatch || '#d8d8d8'}};"></view>
+            <view wx:if="{{item.selected}}" class="color-selected-mark">✓</view>
+          </view>
+          <view class="more-colors-toggle {{showMoreColors ? 'more-colors-toggle-open' : ''}} {{hasSelectedOtherColors ? 'more-colors-toggle-selected' : ''}}" hover-class="ui-button-pressed" aria-label="更多颜色" bindtap="toggleMoreColors">
+            <image class="more-colors-icon" src="/assets/icons/plus.png" mode="aspectFit" />
+            <view wx:if="{{hasSelectedOtherColors}}" class="more-colors-selected-dot"></view>
+          </view>
+        </view>
+        <view wx:if="{{showMoreColors}}" class="more-colors-panel animate-fade-in">
+          <view class="color-options color-options-additional">
+            <view wx:for="{{otherColorOptions}}" wx:key="value" class="{{item.custom ? 'color-option-chip custom-color-chip' : 'color-option-chip'}} {{item.selected ? 'color-option-chip-selected' : ''}}" hover-class="ui-button-pressed" data-group="color" data-value="{{item.value}}" aria-label="选择{{item.value}}" bindtap="toggleMatrixOption">
+              <view class="color-option-swatch" style="background: {{item.swatch || '#d8d8d8'}};"></view>
+              <view wx:if="{{item.selected}}" class="color-selected-mark">✓</view>
+              <text wx:if="{{item.custom}}" class="custom-color-label">{{item.value}}</text>
+            </view>
+          </view>
+          <view class="custom-color-entry">
+            <input class="custom-color-input" value="{{customColorName}}" maxlength="24" placeholder="自定义颜色名称" bindinput="onCustomColorInput" confirm-type="done" bindconfirm="addCustomColor" />
+            <button class="custom-color-add" hover-class="ui-button-pressed" disabled="{{!customColorName}}" bindtap="addCustomColor">添加</button>
+          </view>
+        </view>
+      </view>
+      <view wx:if="{{!isEdit}}" class="option-group">
+        <view class="size-options">
+          <view wx:for="{{sizeOptions}}" wx:key="value" class="{{item.selected ? 'size-option-chip size-option-chip-selected' : 'size-option-chip'}}" hover-class="ui-button-pressed" data-group="size" data-value="{{item.value}}" bindtap="toggleMatrixOption">
+            <text>{{item.value}}</text>
+            <text wx:if="{{item.selected}}" class="size-option-check">✓</text>
+          </view>
+          <view class="other-size-toggle {{showOtherSizes ? 'other-size-toggle-open' : ''}} {{hasSelectedOtherSizes ? 'other-size-toggle-selected' : ''}}" hover-class="ui-button-pressed" aria-label="更多尺码" bindtap="toggleOtherSizes">
+            <image class="more-colors-icon" src="/assets/icons/plus.png" mode="aspectFit" />
+            <view wx:if="{{hasSelectedOtherSizes}}" class="more-colors-selected-dot"></view>
+          </view>
+        </view>
+        <view wx:if="{{showOtherSizes}}" class="more-sizes-panel animate-fade-in">
+          <view class="size-options size-options-additional">
+            <view wx:for="{{otherSizeOptions}}" wx:key="value" class="{{item.selected ? 'size-option-chip size-option-chip-selected' : 'size-option-chip'}}" hover-class="ui-button-pressed" data-group="size" data-value="{{item.value}}" bindtap="toggleMatrixOption">
+              <text>{{item.value}}</text>
+              <text wx:if="{{item.selected}}" class="size-option-check">✓</text>
+            </view>
+          </view>
+          <view class="custom-color-entry">
+            <input class="custom-color-input" value="{{customSizeName}}" maxlength="24" placeholder="自定义尺码" bindinput="onCustomSizeInput" confirm-type="done" bindconfirm="addCustomSize" />
+            <button class="custom-color-add" hover-class="ui-button-pressed" disabled="{{!customSizeName}}" bindtap="addCustomSize">添加</button>
+          </view>
+        </view>
+      </view>
+      <button wx:if="{{!isEdit}}" class="secondary-button form-button" bindtap="generateVariants">生成颜色 × 尺码组合</button>
+      <view wx:for="{{variants}}" wx:key="index" class="variant-card">
+        <button wx:if="{{!isEdit}}" class="text-button archive-action" data-index="{{index}}" bindtap="removeVariant">删除</button>
+        <input class="input" data-index="{{index}}" data-field="sku" value="{{item.sku}}" placeholder="SKU 编码" bindinput="onVariantInput" />
+        <view class="form-grid">
+          <input class="input" data-index="{{index}}" data-field="color" value="{{item.color}}" placeholder="{{variantColorLabel}}" bindinput="onVariantInput" />
+          <input class="input" data-index="{{index}}" data-field="colorCode" value="{{item.colorCode}}" placeholder="颜色代码，例如 #000000" bindinput="onVariantInput" />
+          <input class="input" data-index="{{index}}" data-field="size" value="{{item.size}}" placeholder="{{variantSizeLabel}}" bindinput="onVariantInput" />
+          <input class="input" data-index="{{index}}" data-field="barcode" value="{{item.barcode}}" placeholder="条码" bindinput="onVariantInput" />
+        </view>
+        <view wx:if="{{!isEdit}}" class="variant-stock-row">
+          <input class="input stock-input" data-index="{{index}}" type="number" value="{{item.stockCentral}}" placeholder="初始库存" bindinput="onVariantStockInput" />
+          <text class="item-meta">件</text>
+        </view>
+        <view class="preference-row">
+          <text>可售</text>
+          <switch checked="{{item.isActive}}" data-index="{{index}}" bindchange="onVariantActiveChange" color="#1d1b19" />
+        </view>
+      </view>
+      <button wx:if="{{!isEdit}}" class="secondary-button form-button" bindtap="addVariant">＋ 手动添加 SKU</button>
+    </view>
+
+    <view class="form-card">
+      <view class="price-pair">
+        <input class="input form-price-input" data-field="rrpPrice" value="{{rrpPrice}}" type="digit" placeholder="原价 (€)" bindinput="onInput" />
+        <input class="input form-price-input" data-field="wholesalePrice" value="{{wholesalePrice}}" type="digit" placeholder="批发价 (€ / 件)" bindinput="onInput" />
+      </view>
+      <view class="form-grid">
+        <input class="input" data-field="moq" value="{{moq}}" type="number" placeholder="最低起订量 MOQ" bindinput="onInput" />
+        <block wx:if="{{mode === 'full' || isEdit}}">
+          <input class="input" data-field="wholesalePrice100" value="{{wholesalePrice100}}" type="digit" placeholder="量大批发价 (€ / 件)" bindinput="onInput" />
+          <input class="input" data-field="bulkPriceMinimumQuantity" value="{{bulkPriceMinimumQuantity}}" type="number" placeholder="量大优惠门槛 (件)" bindinput="onInput" />
+          <input class="input" data-field="packSize" value="{{packSize}}" type="number" placeholder="箱规 (件/箱)" bindinput="onInput" />
+        </block>
+      </view>
+      <view wx:if="{{canManageCosts && (mode === 'full' || isEdit)}}" class="cost-field">
+        <input class="input" data-field="costPrice" value="{{costPrice}}" type="digit" placeholder="出厂成本 (€，仅内部)" bindinput="onInput" />
+      </view>
+      <view wx:if="{{mode === 'full' || isEdit}}" class="preference-row">
+        <text>启用整箱订货倍数校验</text>
+        <switch data-field="requiresFullCarton" checked="{{requiresFullCarton}}" bindchange="onCartonChange" color="#1d1b19" />
+      </view>
+    </view>
+
+    <view wx:if="{{mode === 'full' || isEdit}}" class="form-card">
+      <input class="input" data-field="origin" value="{{origin}}" placeholder="产地" bindinput="onInput" />
+      <input class="input" data-field="fabric" value="{{fabric}}" placeholder="面料" bindinput="onInput" />
+      <input class="input" data-field="composition" value="{{composition}}" placeholder="材质成分" bindinput="onInput" />
+      <input class="input" data-field="manufacturingProcess" value="{{manufacturingProcess}}" placeholder="工艺" bindinput="onInput" />
+      <input class="input" data-field="fit" value="{{fit}}" placeholder="版型" bindinput="onInput" />
+      <input class="input" data-field="weight" value="{{weight}}" placeholder="重量" bindinput="onInput" />
+      <input class="input" data-field="packaging" value="{{packaging}}" placeholder="包装说明" bindinput="onInput" />
+      <input class="input" data-field="washCare" value="{{washCare}}" placeholder="洗护说明" bindinput="onInput" />
+      <textarea class="textarea" data-field="description" value="{{description}}" maxlength="3000" placeholder="商品描述（最多 3000 字符）" bindinput="onInput" />
+      <text class="character-count">{{description.length}} / 3000</text>
+    </view>
+
+    <view wx:if="{{industryFields.length}}" class="form-card industry-attribute-card">
+      <text class="industry-attribute-title">{{industryLabel ? industryLabel + ' · ' : ''}}行业专属字段</text>
+      <block wx:for="{{industryFields}}" wx:key="key">
+        <picker
+          wx:if="{{item.type === 'select'}}"
+          range="{{item.options}}"
+          range-key="label"
+          value="{{item.selectedIndex}}"
+          data-key="{{item.key}}"
+          bindchange="onIndustrySelect"
+        >
+          <view class="industry-field-row" hover-class="ui-button-pressed">
+            <text class="industry-field-label">{{item.label}}{{item.required ? ' *' : ''}}</text>
+            <text class="industry-field-value">{{item.selectedLabel || '请选择'}}</text>
+            <image class="industry-field-chevron" src="/assets/icons/chevron_down.png" mode="aspectFit" />
+          </view>
+        </picker>
+        <textarea
+          wx:elif="{{item.type === 'textarea'}}"
+          class="textarea"
+          data-key="{{item.key}}"
+          value="{{item.value}}"
+          maxlength="300"
+          placeholder="{{item.placeholder || item.label}}"
+          bindinput="onIndustryInput"
+        />
+        <input
+          wx:else
+          class="input"
+          data-key="{{item.key}}"
+          value="{{item.value}}"
+          type="{{item.type === 'number' ? 'digit' : 'text'}}"
+          maxlength="{{item.maxLength || 300}}"
+          placeholder="{{item.placeholder || item.label}}{{item.required ? '（必填）' : ''}}"
+          bindinput="onIndustryInput"
+        />
+      </block>
+    </view>
+
+    <view class="form-card product-zone-card">
+      <text class="product-zone-title">商品展示区</text>
+      <picker range="{{productZones}}" range-key="label" value="{{zoneIndex}}" bindchange="onZoneChange">
+        <view class="product-zone-picker" hover-class="ui-button-pressed">
+          <text class="product-zone-value">{{zoneLabel}}</text>
+          <image class="product-zone-chevron" src="/assets/icons/chevron_down.png" mode="aspectFit" />
+        </view>
+      </picker>
+    </view>
+
+    <view class="form-card">
+      <view class="media-grid">
+        <view wx:for="{{media}}" wx:key="id" class="media-item {{item.role === 'main' ? 'media-item-main' : ''}}">
+          <image wx:if="{{item.type === 'image'}}" class="media-preview" src="{{item.localPath || item.url}}" mode="aspectFill" />
+          <video wx:else class="media-preview" src="{{item.localPath || item.url}}" controls="{{false}}" />
+          <text class="media-role">{{item.role === 'main' ? '主图' : item.type === 'video' ? '视频' : '详情图'}}</text>
+          <button class="media-remove" data-index="{{index}}" bindtap="removeMedia">×</button>
+          <view wx:if="{{uploadingMedia && mediaUploadingId === item.id}}" class="media-upload-progress">
+            <view class="media-upload-spinner"></view>
+            <text>正在上传 {{mediaUploadCurrent}} / {{mediaUploadTotal}}</text>
+          </view>
+          <view class="media-order">
+            <button data-index="{{index}}" data-direction="-1" disabled="{{index === 0}}" bindtap="moveMedia">↑</button>
+            <button wx:if="{{item.type === 'image' && item.role !== 'main'}}" data-index="{{index}}" bindtap="setMainMedia">设为主图</button>
+            <button data-index="{{index}}" data-direction="1" disabled="{{index === media.length - 1}}" bindtap="moveMedia">↓</button>
+          </view>
+        </view>
+        <view wx:if="{{media.length < mediaLimit}}" class="image-select {{media.length === 0 ? 'image-select-empty' : ''}}" hover-class="ui-button-pressed" bindtap="chooseImage">
+          <image class="image-plus-icon" src="/assets/icons/plus.png" mode="aspectFit" />
+          <text class="image-select-title">{{media.length === 0 ? '拍照 / 上传' : '继续添加'}}</text>
+          <text wx:if="{{media.length === 0}}" class="image-select-hint">最多 {{mediaLimit}} 项</text>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{error}}" class="error-box">{{error}}</view>
+    <view class="form-actions">
+      <button class="secondary-button save-button cancel-action" hover-class="ui-button-pressed" loading="{{saving}}" disabled="{{saving || loading}}" bindtap="onCancel">取消</button>
+      <button wx:if="{{isEdit}}" class="primary-button save-button" hover-class="ui-button-pressed" loading="{{saving}}" disabled="{{saving || loading}}" bindtap="save">
+        {{saving ? '保存中…' : '保存修改'}}
+      </button>
+      <block wx:else>
+        <button class="secondary-button save-button" hover-class="ui-button-pressed" data-action="draft" loading="{{saving}}" disabled="{{saving || loading}}" bindtap="save">草稿</button>
+        <button class="primary-button save-button" hover-class="ui-button-pressed" data-action="publish" loading="{{saving}}" disabled="{{saving || loading}}" bindtap="save">发布</button>
+      </block>
+    </view>
+  </block>
+</view>

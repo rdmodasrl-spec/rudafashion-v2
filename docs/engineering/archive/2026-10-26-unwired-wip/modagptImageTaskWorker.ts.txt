@@ -1,0 +1,256 @@
+import type { ModaGptTask, ModaGptTaskHandler } from './modagptTaskQueue';
+import {
+  ModaGptTaskPermanentError,
+  ModaGptTaskResultUnknownError
+} from './modagptTaskQueue';
+import {
+  getModaGptImageTaskRecoveryAction,
+  isModaGptImageTaskPayload,
+  removeModaGptImageTaskTemporaryInputReferences,
+  type ModaGptImageTaskPayload
+} from './modagptImageTask';
+import {
+  persistModaGptImageTaskExecutionState
+} from './modagptImageTaskService';
+import {
+  AiEmployeeFalImageTaskError,
+  pollAiEmployeeImageTask,
+  submitAiEmployeeImageTask
+} from './aiEmployeeProviders';
+
+export type ModaGptImageTaskWorkerDependencies = {
+  prisma: Parameters<typeof persistModaGptImageTaskExecutionState>[0];
+  generateLocalImage: (prompt: string) => Promise<Buffer>;
+  submitProvider: typeof submitAiEmployeeImageTask;
+  pollProvider: typeof pollAiEmployeeImageTask;
+  normalizeResult: (bytes: Buffer) => Promise<Buffer>;
+  storeResult: (task: ModaGptTask, bytes: Buffer) => Promise<void>;
+  loadStoredResult: (task: ModaGptTask) => Promise<Buffer>;
+  settleBilling: (taskId: string, action: 'CONSUME' | 'RELEASE', latencyMs: number) => Promise<void>;
+  now?: () => number;
+};
+
+const unknownResultCode = 'MODAGPT_IMAGE_TASK_RESULT_UNKNOWN';
+const falPollWindowMs = 90_000;
+const falPollIntervalMs = 1_500;
+
+function parseImagePayload(task: ModaGptTask): ModaGptImageTaskPayload {
+  let payload: unknown;
+  try {
+    payload = typeof task.payload === 'string' ? JSON.parse(task.payload) as unknown : task.payload;
+  } catch {
+    throw new ModaGptTaskPermanentError('MODAGPT_IMAGE_TASK_PAYLOAD_INVALID');
+  }
+  if (!isModaGptImageTaskPayload(payload)
+    || (task.taskType === 'ai.image.try_on' && payload.task !== 'tryOn')
+    || (task.taskType === 'ai.image.generate' && payload.task !== 'imageGeneration')) {
+    throw new ModaGptTaskPermanentError('MODAGPT_IMAGE_TASK_PAYLOAD_INVALID');
+  }
+  return payload;
+}
+
+function executionPhase(task: ModaGptTask) {
+  const phase = task.executionPhase || 'ready';
+  if (!['ready', 'provider_submitting', 'provider_accepted', 'result_stored', 'result_unknown'].includes(phase)) {
+    throw new ModaGptTaskPermanentError('MODAGPT_IMAGE_TASK_PHASE_INVALID');
+  }
+  return phase as 'ready' | 'provider_submitting' | 'provider_accepted' | 'result_stored' | 'result_unknown';
+}
+
+export function createModaGptImageTaskHandler(
+  dependencies: ModaGptImageTaskWorkerDependencies
+): ModaGptTaskHandler {
+  const now = dependencies.now ?? Date.now;
+  return async (task, execution) => {
+    const startedAt = now();
+    const failPermanently = async (code: string): Promise<never> => {
+      if (task.billingStatus === 'reserved') {
+        await dependencies.settleBilling(task.id, 'RELEASE', now() - startedAt);
+      }
+      throw new ModaGptTaskPermanentError(code);
+    };
+    if (!task.merchantId || task.tenantId !== task.merchantId
+      || !['ai.image.generate', 'ai.image.try_on'].includes(task.taskType)
+      || !task.lockedBy
+      || !task.resultStorageKey
+      || !task.resultStorageBucket
+      || !task.model
+      || !task.provider) {
+      await failPermanently('MODAGPT_IMAGE_TASK_CONTEXT_INVALID');
+    }
+    let payload: ModaGptImageTaskPayload;
+    try {
+      payload = parseImagePayload(task);
+    } catch (error) {
+      await failPermanently(error instanceof Error ? error.message : 'MODAGPT_IMAGE_TASK_PAYLOAD_INVALID');
+    }
+    let phase: ReturnType<typeof executionPhase>;
+    try {
+      phase = executionPhase(task);
+    } catch (error) {
+      await failPermanently(error instanceof Error ? error.message : 'MODAGPT_IMAGE_TASK_PHASE_INVALID');
+    }
+    const persistState = async (
+      nextPhase: string,
+      providerRequestId?: string,
+      resultExpiresAt?: Date,
+      updatedPayload?: string
+    ) => {
+      await execution.assertLease();
+      const persisted = await persistModaGptImageTaskExecutionState(dependencies.prisma, {
+        id: task.id,
+        workerId: task.lockedBy!,
+        executionPhase: nextPhase,
+        ...(providerRequestId ? { providerRequestId } : {}),
+        ...(resultExpiresAt ? { resultExpiresAt } : {}),
+        ...(updatedPayload === undefined ? {} : { payload: updatedPayload })
+      });
+      if (!persisted) throw new Error('MODAGPT_TASK_LEASE_LOST');
+    };
+
+    let result: Buffer | null = null;
+    try {
+      result = await dependencies.loadStoredResult(task);
+    } catch (error) {
+      if (!(error instanceof Error) || error.message !== 'MODAGPT_IMAGE_TASK_RESULT_NOT_FOUND') throw error;
+    }
+
+    if (!result && phase === 'result_stored') {
+      throw new ModaGptTaskResultUnknownError(unknownResultCode);
+    }
+
+    if (!result && task.provider === 'fal') {
+      const action = getModaGptImageTaskRecoveryAction({
+        executionPhase: phase,
+        providerRequestId: task.providerRequestId || null,
+        resultStorageKey: phase === 'result_stored' ? task.resultStorageKey : null
+      });
+      if (action === 'mark_result_unknown' || action === 'finalize_result') {
+        throw new ModaGptTaskResultUnknownError(unknownResultCode);
+      }
+
+      let providerRequestId = task.providerRequestId || null;
+      try {
+        if (action === 'submit_provider') {
+          if (payload.task === 'tryOn' && !payload.providerInput) {
+            await failPermanently('MODAGPT_IMAGE_TASK_PROVIDER_INPUT_INVALID');
+          }
+          await persistState('provider_submitting');
+          providerRequestId = await dependencies.submitProvider({
+            model: task.model,
+            task: payload.task,
+            prompt: payload.prompt,
+            ...(payload.task === 'tryOn' ? {
+              category: payload.category as 'tops' | 'bottoms' | 'one-pieces',
+              providerInput: payload.providerInput!
+            } : {})
+          });
+          await persistState(
+            'provider_accepted',
+            providerRequestId,
+            undefined,
+            JSON.stringify(removeModaGptImageTaskTemporaryInputReferences(payload))
+          );
+        }
+        if (!providerRequestId) throw new ModaGptTaskResultUnknownError(unknownResultCode);
+
+        const deadline = now() + falPollWindowMs;
+        while (now() < deadline) {
+          await execution.assertLease();
+          const polled = await dependencies.pollProvider({
+            model: task.model,
+            requestId: providerRequestId
+          });
+          if (polled.status === 'completed') {
+            result = polled.image;
+            break;
+          }
+          await new Promise(resolve => setTimeout(resolve, falPollIntervalMs));
+        }
+        if (!result) {
+          if (task.attempts >= task.maxAttempts) {
+            throw new ModaGptTaskResultUnknownError('AI_EMPLOYEE_FAL_TASK_STILL_PENDING');
+          }
+          throw new Error('AI_EMPLOYEE_FAL_TASK_PENDING');
+        }
+      } catch (error) {
+        if (error instanceof ModaGptTaskResultUnknownError) throw error;
+        if (error instanceof AiEmployeeFalImageTaskError) {
+          if (error.outcome === 'unknown') {
+            throw new ModaGptTaskResultUnknownError(error.message);
+          }
+          if (error.outcome === 'permanent') {
+            await failPermanently(error.message);
+          }
+          if (task.attempts >= task.maxAttempts) {
+            throw new ModaGptTaskResultUnknownError(error.message);
+          }
+        }
+        throw error;
+      }
+    } else if (!result && task.provider === 'automatic1111' && payload.task === 'imageGeneration') {
+      const action = getModaGptImageTaskRecoveryAction({
+        executionPhase: phase,
+        providerRequestId: task.providerRequestId || null,
+        resultStorageKey: null
+      });
+      if (action !== 'submit_provider') {
+        throw new ModaGptTaskResultUnknownError('MODAGPT_LOCAL_IMAGE_RESULT_UNKNOWN');
+      }
+      await persistState('provider_submitting');
+      try {
+        result = await dependencies.generateLocalImage(payload.prompt);
+      } catch {
+        throw new ModaGptTaskResultUnknownError('MODAGPT_LOCAL_IMAGE_RESULT_UNKNOWN');
+      }
+    } else if (!result) {
+      await failPermanently('MODAGPT_IMAGE_TASK_PROVIDER_INVALID');
+    }
+
+    let normalized: Buffer;
+    try {
+      normalized = await dependencies.normalizeResult(result);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'MODAGPT_IMAGE_RESULT_INVALID') {
+        await failPermanently(error.message);
+      }
+      throw error;
+    }
+    await execution.assertLease();
+    try {
+      await dependencies.storeResult(task, normalized);
+    } catch (error) {
+      if (task.attempts >= task.maxAttempts) {
+        throw new ModaGptTaskResultUnknownError('MODAGPT_IMAGE_TASK_RESULT_STORAGE_UNKNOWN');
+      }
+      throw error;
+    }
+    try {
+      await persistState(
+        'result_stored',
+        task.providerRequestId || undefined,
+        new Date(now() + 24 * 60 * 60 * 1000)
+      );
+    } catch (error) {
+      if (task.attempts >= task.maxAttempts) {
+        throw new ModaGptTaskResultUnknownError('MODAGPT_IMAGE_TASK_RESULT_FINALIZATION_UNKNOWN');
+      }
+      throw error;
+    }
+    try {
+      await dependencies.settleBilling(task.id, 'CONSUME', now() - startedAt);
+    } catch (error) {
+      if (task.attempts >= task.maxAttempts) {
+        throw new ModaGptTaskResultUnknownError('MODAGPT_IMAGE_TASK_BILLING_FINALIZATION_UNKNOWN');
+      }
+      throw error;
+    }
+    return {
+      version: 1,
+      task: payload.task,
+      resultStorageKey: task.resultStorageKey,
+      resultStorageBucket: task.resultStorageBucket,
+      expiresAt: new Date(now() + 24 * 60 * 60 * 1000).toISOString()
+    };
+  };
+}

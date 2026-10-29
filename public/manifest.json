@@ -1,0 +1,79 @@
+{
+  "id": "/",
+  "name": "RUDA Fashion B2B - 欧洲快时尚现货批发与展厅",
+  "short_name": "RUDA B2B",
+  "description": "RUDA 欧洲快时尚现货批发 B2B 多商户平台，支持多商户展厅、公开现货与独家首发防抄袭准入、智能配码下单与移动端采购。",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#0a0a0a",
+  "background_color": "#ffffff",
+  "categories": [
+    "shopping",
+    "business",
+    "lifestyle"
+  ],
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "采购商城 · 买手端",
+      "short_name": "买手商城",
+      "description": "进入买手端首页，选款订货",
+      "url": "/",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "采购单快速下单",
+      "short_name": "采购单",
+      "description": "拍照上传或手动录入采购单",
+      "url": "/#/purchase_order",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "我的订单 · 买手",
+      "short_name": "我的订单",
+      "description": "查看历史订单与物流追踪",
+      "url": "/#/orders",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "商户中心 · 工作台",
+      "short_name": "商家后台",
+      "description": "商家库存管理 · 订单履约 · 财务结算",
+      "url": "/merchant",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "平台总控 · 运营后台",
+      "short_name": "总控后台",
+      "description": "全网商家审核 · 财务 · 合规审计（仅授权IP）",
+      "url": "/super-admin",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+    }
+  ]
+}

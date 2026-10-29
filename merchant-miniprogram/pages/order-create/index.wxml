@@ -1,0 +1,168 @@
+<view class="screen order-create-screen">
+  <view wx:if="{{loading}}" class="state-panel">正在读取商品、客户和门店资料…</view>
+  <view wx:elif="{{error && !products.length}}" class="state-panel error-panel">
+    <text>{{error}}</text>
+    <button class="small-outline-button" bindtap="retryLoad">重试</button>
+  </view>
+  <block wx:else>
+    <view class="create-topbar">
+      <button wx:if="{{step === 'cart'}}" class="topbar-back" bindtap="exitCreate">‹ 返回</button>
+      <button wx:elif="{{step === 'products'}}" class="topbar-back" bindtap="backFromProducts">‹ 返回</button>
+      <button wx:elif="{{step === 'customer'}}" class="topbar-back" bindtap="backFromCustomer">‹ 返回</button>
+      <button wx:elif="{{step === 'sku'}}" class="topbar-back" bindtap="backToCart">‹ 商品</button>
+      <button wx:else class="topbar-back" bindtap="backFromReview">‹ 修改</button>
+      <text class="create-title">{{step === 'products' ? '添加商品' : step === 'customer' ? '选择客户' : step === 'sku' ? (selectedProduct.name || selectedProduct.styleNo) : step === 'review' ? '核对订单' : (mode === 'pos' ? 'POS 快速开单' : '批发开单')}}</text>
+      <text class="step-count">{{step === 'review' ? '核对' : mode === 'pos' ? 'POS' : '批发'}}</text>
+    </view>
+
+    <block wx:if="{{step === 'cart'}}">
+      <view class="section-card">
+        <view class="section-heading">
+          <text class="section-title">订货客户</text>
+          <text wx:if="{{mode === 'pos' && selectedCustomer}}" class="link-action" bindtap="removeCustomer">移除</text>
+        </view>
+        <view wx:if="{{selectedCustomer}}" class="customer-summary" bindtap="openCustomerPicker">
+          <view class="customer-copy">
+            <text class="customer-name">{{selectedCustomer.companyName}}</text>
+            <text class="meta">{{selectedCustomer.contactPerson || selectedCustomer.phone || '已认证客户'}} · 客户折扣 {{selectedCustomer.discountRate}}</text>
+          </view>
+          <text class="link-action">更换</text>
+        </view>
+        <view wx:else class="customer-empty">
+          <text class="meta">{{mode === 'pos' ? '可选客户；留空按门店零售价结算' : '请选择已认证批发客户'}}</text>
+          <button class="small-outline-button" bindtap="openCustomerPicker">选择客户</button>
+        </view>
+      </view>
+
+      <view wx:if="{{mode === 'pos' && requireOpenShift}}" class="section-card shift-card">
+        <view class="section-heading">
+          <text class="section-title">POS 收银班次</text>
+          <text wx:if="{{shift}}" class="shift-open">班次进行中</text>
+        </view>
+        <text wx:if="{{shift}}" class="meta">已开启 · {{shift.employee.name || '当前门店'}}</text>
+        <view wx:else class="shift-open-form">
+          <input class="compact-input cash-input" type="digit" value="{{openingCash}}" placeholder="备用金金额（可填 0）" bindinput="onOpeningCashInput" />
+          <button class="small-dark-button" loading="{{shiftBusy}}" disabled="{{shiftBusy}}" bindtap="openPosShift">开启班次</button>
+        </view>
+      </view>
+
+      <view class="section-card">
+        <view class="section-heading">
+          <text class="section-title">订单商品</text>
+          <button class="small-dark-button" bindtap="openProducts">＋ 添加商品</button>
+        </view>
+        <view wx:if="{{!lines.length}}" class="empty-lines">选择款式和 SKU</view>
+        <view wx:for="{{lines}}" wx:key="lineKey" class="cart-line">
+          <view class="cart-line-copy">
+            <text class="line-name">{{item.productName}}</text>
+            <text class="meta">{{item.styleNo}} · {{item.color}} {{item.size}} · {{item.sku}}</text>
+            <text class="meta">现货 {{item.inStockQuantity}} 件 · 订货 {{item.preorderQuantity}} 件</text>
+          </view>
+          <view class="line-price">
+            <text class="line-total">€{{item.lineAmount}}</text>
+            <text class="meta">{{item.quantity}} 件</text>
+            <text class="link-action" data-product-id="{{item.productId}}" data-sku="{{item.sku}}" bindtap="removeLine">移除</text>
+          </view>
+        </view>
+      </view>
+
+      <view wx:if="{{mode === 'pos'}}" class="section-card">
+        <text class="section-title">付款方式</text>
+        <view wx:for="{{posPaymentMethods}}" wx:key="id" class="payment-option" data-id="{{item.id}}" bindtap="selectPaymentMethod">
+          <view class="radio-dot {{paymentMethod === item.id ? 'radio-selected' : ''}}"></view>
+          <text>{{item.label}}</text>
+        </view>
+        <checkbox-group wx:if="{{paymentMethod === 'cash'}}" bindchange="onPaymentConfirmed">
+          <label class="confirm-payment"><checkbox value="confirmed" color="#B99A5D" />我已在线下实际收到现金</label>
+        </checkbox-group>
+        <text class="meta">银行转账不会将订单标记为已付款；现金仅在确认实际收款后登记。</text>
+      </view>
+      <view wx:else class="section-card">
+        <text class="section-title">付款条款</text>
+        <view class="payment-option" data-id="bank_transfer" bindtap="selectPaymentMethod"><view class="radio-dot {{paymentMethod === 'bank_transfer' ? 'radio-selected' : ''}}"></view><text>银行转账</text></view>
+        <view class="payment-option" data-id="net_30" bindtap="selectPaymentMethod"><view class="radio-dot {{paymentMethod === 'net_30' ? 'radio-selected' : ''}}"></view><text>客户账期（Net 30）</text></view>
+      </view>
+
+      <view class="section-card">
+        <text class="section-title">订单备注</text>
+        <textarea class="note-input" maxlength="500" placeholder="客户要求、包装或交货说明（可选）" value="{{note}}" bindinput="onNoteInput" />
+      </view>
+      <view class="bottom-summary">
+        <view><text class="summary-caption">{{totalQuantity}} 件</text><text class="summary-total">€{{totalAmount}}</text></view>
+        <button class="primary-button compact-primary" disabled="{{!lines.length || (mode === 'wholesale' && !selectedCustomer) || (mode === 'pos' && requireOpenShift && !shift)}}" bindtap="continueToReview">核对订单</button>
+      </view>
+    </block>
+
+    <block wx:elif="{{step === 'products'}}">
+      <input class="compact-input search-input" value="{{productQuery}}" placeholder="搜索商品名称、款号或 SKU" bindinput="onProductSearch" />
+      <view wx:if="{{!visibleProducts.length}}" class="state-panel">没有找到可售商品。</view>
+      <view wx:for="{{visibleProducts}}" wx:key="id" class="product-row" data-id="{{item.id}}" bindtap="selectProduct">
+        <image wx:if="{{item.images[0]}}" class="product-thumb" src="{{item.images[0]}}" mode="aspectFill" />
+        <view wx:else class="product-thumb product-placeholder">RUDA</view>
+        <view class="product-copy">
+          <text class="line-name">{{item.name}}</text>
+          <text class="meta">{{item.styleNo}} · {{item.skus.length}} 个规格</text>
+          <text class="product-price">€{{item.wholesalePriceLabel}}</text>
+        </view>
+        <text class="choose-label">选择规格 ›</text>
+      </view>
+    </block>
+
+    <block wx:elif="{{step === 'customer'}}">
+      <input class="compact-input search-input" value="{{customerQuery}}" placeholder="搜索客户名称、公司或电话" bindinput="onCustomerSearch" />
+      <view wx:if="{{mode === 'pos'}}" class="customer-row" bindtap="selectWalkInCustomer"><view><text class="line-name">门店散客</text><text class="meta">不绑定客户</text></view><text class="choose-label">选择 ›</text></view>
+      <view wx:if="{{!visibleCustomers.length}}" class="state-panel">没有找到已认证且可用于本店订单的客户。</view>
+      <view wx:for="{{visibleCustomers}}" wx:key="id" class="customer-row" data-id="{{item.id}}" bindtap="selectCustomer">
+        <view><text class="line-name">{{item.companyName}}</text><text class="meta">{{item.contactPerson || item.phone || '已认证客户'}}</text></view>
+        <text class="choose-label">选择 ›</text>
+      </view>
+    </block>
+
+    <block wx:elif="{{step === 'sku'}}">
+      <view class="selected-product">
+        <text class="line-name">{{selectedProduct.name}}</text>
+        <text class="meta">{{selectedProduct.styleNo}} · 批发价 €{{selectedProduct.wholesalePriceLabel}} · 起订 {{selectedProduct.moq || 1}} 件</text>
+      </view>
+      <view wx:for="{{skuDrafts}}" wx:key="sku" class="sku-row">
+        <view class="sku-copy">
+          <text class="line-name">{{item.color || '—'}} · {{item.size || '—'}}</text>
+          <text class="meta">{{item.sku}} · 可售 {{item.availableQuantity}}</text>
+        </view>
+        <view class="qty-fields">
+          <label class="qty-field"><text>数量</text><input class="quantity-input" type="number" value="{{item.quantityInput}}" data-index="{{index}}" data-field="quantityInput" bindinput="onSkuInput" /></label>
+          <label wx:if="{{mode === 'wholesale'}}" class="qty-field"><text>订货</text><input class="quantity-input preorder-input" type="number" value="{{item.preorderInput}}" data-index="{{index}}" data-field="preorderInput" bindinput="onSkuInput" /></label>
+        </view>
+      </view>
+      <view class="sku-help">{{mode === 'pos' ? 'POS 仅使用现货，库存将在提交时由服务器重新校验。' : '订货数量包含在总数量中；现货数量按总数减订货数计算。提交时服务器会重新校验库存、起订量及包装规格。'}}</view>
+      <view class="bottom-summary">
+        <text class="summary-caption">数量和现货由服务端最终校验</text>
+        <button class="primary-button compact-primary" bindtap="confirmSkuSelection">确认添加</button>
+      </view>
+    </block>
+
+    <block wx:elif="{{step === 'review'}}">
+      <view class="section-card">
+        <text class="section-title">订货客户</text>
+        <text class="line-name">{{selectedCustomer ? selectedCustomer.companyName : '门店散客'}}</text>
+      </view>
+      <view class="section-card">
+        <text class="section-title">商品明细</text>
+        <view wx:for="{{lines}}" wx:key="lineKey" class="review-line">
+          <view><text class="line-name">{{item.productName}}</text><text class="meta">{{item.styleNo}} · {{item.color}} {{item.size}} · {{item.sku}}</text></view>
+          <view class="review-amount"><text>{{item.quantity}} 件</text><text>€{{item.lineAmount}}</text><text class="meta">现货 {{item.inStockQuantity}} · 订货 {{item.preorderQuantity}}</text></view>
+        </view>
+      </view>
+      <view class="section-card amount-card">
+        <view class="amount-row"><text>现货件数</text><text>{{inStockQuantityTotal}}</text></view>
+        <view class="amount-row"><text>订货件数</text><text>{{preorderQuantityTotal}}</text></view>
+        <view class="amount-row amount-due"><text>应收总额</text><text>€{{totalAmount}}</text></view>
+        <text class="meta">{{paymentMethod === 'net_30' ? '客户账期，订单将保持待付款。' : paymentMethod === 'cash' ? '现金收款已由商家确认。' : '银行转账待到账，不会标记为已付款。'}}</text>
+      </view>
+      <view wx:if="{{error}}" class="error-box">{{error}}</view>
+      <view class="bottom-summary">
+        <view><text class="summary-caption">{{totalQuantity}} 件</text><text class="summary-total">€{{totalAmount}}</text></view>
+        <button class="primary-button compact-primary" loading="{{saving}}" disabled="{{saving}}" bindtap="submitOrder">提交订单</button>
+      </view>
+    </block>
+  </block>
+</view>

@@ -1,0 +1,167 @@
+<view class="screen home-screen">
+  <view class="home-header">
+    <view class="home-brand">
+      <view class="home-brand-copy" bindtap="openBusinessCard">
+        <text class="home-brand-title">{{merchantName}}</text>
+      </view>
+    </view>
+    <view class="home-header-actions">
+      <view wx:if="{{canViewMessages}}" class="home-icon-button ui-button ui-button--quiet" hover-class="ui-button-pressed" bindtap="openMessages">
+        <image class="home-notification-icon" src="/assets/icons/bell.png" mode="aspectFit" />
+        <view wx:if="{{unreadMessageCount}}" class="home-notification-badge">{{unreadMessageCount > 99 ? '99+' : unreadMessageCount}}</view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{canViewProducts}}" class="home-search-section">
+    <view class="home-search-bar">
+      <image class="home-search-icon" src="/assets/icons/search.png" mode="aspectFit" />
+      <input
+        class="input home-search-input"
+        value="{{productQuery}}"
+        placeholder="搜索款号、商品名称或 SKU"
+        placeholder-class="placeholder"
+        confirm-type="search"
+        bindinput="onHomeSearch"
+        bindconfirm="onSearchConfirm"
+      />
+      <view class="home-scan-button ui-button ui-button--quiet" hover-class="ui-button-pressed" bindtap="scanProduct">
+        <image class="home-scan-icon" src="/assets/icons/scan.png" mode="aspectFit" />
+      </view>
+      <view wx:if="{{searchOpen}}" class="home-search-results ui-card">
+        <view wx:if="{{searchLoading}}" class="home-search-state">正在查找商品…</view>
+        <view wx:elif="{{searchError}}" class="home-search-state home-search-error">{{searchError}}</view>
+        <view wx:elif="{{!searchResults.length}}" class="home-search-state">没有找到匹配商品</view>
+        <scroll-view wx:else class="home-search-list" scroll-y>
+          <view wx:for="{{searchResults}}" wx:key="id" class="home-search-result ui-list-row" data-index="{{index}}" bindtap="openSearchResult">
+            <image wx:if="{{item.imageUrl}}" class="home-search-image" src="{{item.imageUrl}}" mode="aspectFit" />
+            <view wx:else class="home-search-image home-image-empty"><image class="home-placeholder-icon" src="/assets/icons/no_image.png" mode="aspectFit" /></view>
+            <view class="home-search-info">
+              <text class="home-search-name">{{item.title}}</text>
+              <text class="home-search-code">款号：{{item.code}}</text>
+            </view>
+            <image class="home-result-arrow" src="/assets/icons/chevron_right.png" mode="aspectFit" />
+          </view>
+        </scroll-view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{canViewProducts}}" class="home-industry-entry" hover-class="ui-row-pressed" bindtap="openIndustryWorkbench">
+    <view class="home-industry-copy">
+      <text class="home-industry-title">{{industryWorkbenchLabel}}</text>
+      <text class="home-industry-desc">{{industryWorkbenchSummary}}</text>
+    </view>
+    <image class="home-result-arrow" src="/assets/icons/chevron_right.png" mode="aspectFit" />
+  </view>
+
+  <view wx:if="{{canViewProducts}}" class="home-shortcuts">
+    <view class="home-shortcut" hover-class="ui-button-pressed" data-action="updated" bindtap="openProductShortcut">
+      <view class="home-shortcut-icon"><image class="home-shortcut-glyph" src="/assets/icons/catalog.png" mode="aspectFit" /></view>
+      <text class="home-shortcut-label">全部商品</text>
+    </view>
+    <view class="home-shortcut" hover-class="ui-button-pressed" data-action="price" bindtap="openProductShortcut">
+      <view class="home-shortcut-icon"><image class="home-shortcut-glyph" src="/assets/icons/price.png" mode="aspectFit" /></view>
+      <text class="home-shortcut-label">查批发价</text>
+    </view>
+    <view wx:if="{{canViewStock}}" class="home-shortcut" hover-class="ui-button-pressed" data-action="stock" bindtap="openProductShortcut">
+      <view class="home-shortcut-icon"><image class="home-shortcut-glyph" src="/assets/icons/stock.png" mode="aspectFit" /></view>
+      <text class="home-shortcut-label">查可售件数</text>
+    </view>
+    <view wx:if="{{canManageProducts}}" class="home-shortcut" hover-class="ui-button-pressed" data-action="create" bindtap="openProductShortcut">
+      <view class="home-shortcut-icon home-shortcut-icon-add"><image class="home-shortcut-glyph" src="/assets/icons/plus_light.png" mode="aspectFit" /></view>
+      <text class="home-shortcut-label">添加商品</text>
+    </view>
+  </view>
+
+  <view wx:if="{{canViewProducts}}" class="home-section home-recent-section">
+    <view class="home-section-heading">
+      <text class="home-section-title">最近查看</text>
+      <view class="home-section-link" data-tab="products" bindtap="openTab">查看全部<image class="home-link-arrow" src="/assets/icons/chevron_right.png" mode="aspectFit" /></view>
+    </view>
+    <view wx:if="{{recentLoading && !recentProducts.length}}" class="home-recent-loading">
+      <view class="home-recent-skeleton"></view>
+      <view class="home-recent-skeleton-copy">
+        <view class="home-skeleton-line"></view>
+        <view class="home-skeleton-line short"></view>
+        <view class="home-skeleton-line"></view>
+      </view>
+    </view>
+    <view wx:elif="{{recentProducts.length}}">
+      <view wx:for="{{recentProducts}}" wx:key="id" class="home-product-card ui-card" hover-class="ruda-card--pressed" data-id="{{item.id}}" data-sku="{{item.defaultSku}}" bindtap="openRecentProduct">
+        <image wx:if="{{item.imageUrl}}" class="home-product-image" src="{{item.imageUrl}}" mode="aspectFit" />
+        <view wx:else class="home-product-image home-image-empty"><image class="home-placeholder-icon" src="/assets/icons/no_image.png" mode="aspectFit" /></view>
+        <view class="home-product-info">
+          <text class="home-product-name">{{item.name}}</text>
+          <text class="home-product-style">款号：{{item.styleNo}}</text>
+          <view class="home-product-price-row">
+            <text class="home-product-price">{{item.priceText}}</text>
+            <text wx:if="{{canViewStock}}" class="home-product-stock {{item.stockError ? 'is-unavailable' : ''}}">
+              {{item.stockText}}
+            </text>
+          </view>
+          <text class="home-product-summary">{{item.variantSummary}}</text>
+        </view>
+        <image class="home-product-arrow" src="/assets/icons/chevron_right.png" mode="aspectFit" />
+      </view>
+    </view>
+    <view wx:elif="{{recentProductsError}}" class="home-empty-state home-state-error">{{recentProductsError}}</view>
+    <view wx:else class="home-empty-state home-recent-empty ui-card">
+      <text class="home-empty-hint">暂无浏览记录</text>
+      <view class="home-empty-link" data-tab="products" bindtap="openTab">查看全部商品<image class="home-link-arrow" src="/assets/icons/chevron_right.png" mode="aspectFit" /></view>
+    </view>
+  </view>
+
+  <view wx:if="{{canViewOrders || canViewMaterials}}" class="home-section home-pending-section">
+    <view class="home-section-heading">
+      <text class="home-section-title">待处理事项</text>
+    </view>
+    <view class="home-task-list ui-card {{!hasPendingTasks && !loading && !materialsLoading ? 'home-task-list-empty' : ''}}">
+      <view wx:if="{{canViewOrders && pendingOrderCount > 0}}" class="home-task-row" hover-class="ui-row-pressed" data-tab="orders" bindtap="openTab">
+        <image class="home-task-icon" src="/assets/icons/clipboard.png" mode="aspectFit" />
+        <view class="home-task-copy">
+          <text class="home-task-title">订单待处理</text>
+          <text class="home-task-description">确认或发货</text>
+        </view>
+        <text class="home-task-count">{{pendingOrderCount}}</text>
+        <image class="home-task-arrow" src="/assets/icons/chevron_right.png" mode="aspectFit" />
+      </view>
+      <view wx:if="{{canViewMaterials && materialAlertCount > 0}}" class="home-task-row" hover-class="ui-row-pressed" bindtap="openMaterialAlerts">
+        <image class="home-task-icon" src="/assets/icons/materials.png" mode="aspectFit" />
+        <view class="home-task-copy">
+          <text class="home-task-title">面料与辅料库存预警</text>
+          <text class="home-task-description">{{materialAlertSummary}}</text>
+        </view>
+        <text class="home-task-count">{{materialAlertCount}}</text>
+        <image class="home-task-arrow" src="/assets/icons/chevron_right.png" mode="aspectFit" />
+      </view>
+      <view wx:if="{{canViewMaterials && materialsLoading}}" class="home-task-message">正在检查面料与辅料库存…</view>
+      <view wx:if="{{canViewMaterials && materialsError}}" class="home-task-message home-state-error">{{materialsError}}</view>
+      <view wx:if="{{ordersError}}" class="home-task-message home-state-error">{{ordersError}}</view>
+      <view wx:if="{{!hasPendingTasks && !loading && !materialsLoading}}" class="home-task-empty">暂无待办</view>
+    </view>
+  </view>
+
+  <view wx:if="{{canViewAnalytics}}" class="home-section home-overview-section">
+    <text class="home-section-title">经营概览</text>
+    <view wx:if="{{metrics.length}}" class="home-overview-stats">
+      <view class="home-overview-stat">
+        <text class="home-overview-label">今日金额</text>
+        <text class="home-overview-value">{{metrics[0].value}}</text>
+      </view>
+      <view class="home-overview-stat">
+        <text class="home-overview-label">今日订单</text>
+        <text class="home-overview-value">{{metrics[1].value}}</text>
+      </view>
+      <view class="home-overview-stat">
+        <text class="home-overview-label">本月金额</text>
+        <text class="home-overview-value">{{metrics[2].value}}</text>
+      </view>
+    </view>
+    <view wx:elif="{{metricsError}}" class="home-empty-state home-state-error">{{metricsError}}</view>
+  </view>
+
+  <view wx:if="{{error || notificationsError}}" class="home-error-notice">
+    {{error || notificationsError}}
+  </view>
+</view>

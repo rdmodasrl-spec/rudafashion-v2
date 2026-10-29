@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /super-admin
+Disallow: /merchant
+Disallow: /api/
+Disallow: /checkout
+Disallow: /account
+Disallow: /orders
+Disallow: /purchase-order
+
+Sitemap: https://ruda.fashion/sitemap.xml
+Agentmap: https://ruda.fashion/.well-known/ard.json

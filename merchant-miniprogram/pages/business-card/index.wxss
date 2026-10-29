@@ -1,0 +1,435 @@
+page {
+  background: transparent;
+}
+
+.card-overlay {
+  position: fixed;
+  z-index: 1000;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 32rpx;
+  background: rgba(23, 22, 20, .38);
+}
+
+.card-popup {
+  display: flex;
+  width: 680rpx;
+  max-width: calc(100vw - 64rpx);
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16rpx;
+}
+
+.business-card {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 400rpx;
+  max-height: 62vh;
+  box-sizing: border-box;
+  padding: 24rpx;
+  border: 1rpx solid #eeeae2;
+  border-radius: 16rpx;
+  background: #fff;
+  color: #171717;
+  box-shadow: 0 28rpx 100rpx rgba(0, 0, 0, .28);
+}
+
+.business-card {
+  overflow-y: auto;
+  height: 560rpx;
+  max-height: 78vh;
+  padding: 24rpx;
+  border-color: #e5e5e5;
+  border-radius: 22rpx;
+  background: #fff;
+  box-shadow: 0 28rpx 90rpx rgba(0, 0, 0, .28), inset 0 1rpx 0 #fff;
+}
+
+.contact-row {
+  transition: opacity var(--motion-fast), transform var(--motion-fast);
+}
+
+.contact-row:active {
+  transform: translateX(2rpx);
+  opacity: .68;
+}
+
+.card-actions .action-button {
+  box-shadow: 0 5rpx 12rpx rgba(25, 23, 20, .12), inset 0 1rpx 0 rgba(255, 255, 255, .18);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast), opacity var(--motion-fast);
+}
+
+.card-actions .action-button:active {
+  transform: translateY(2rpx) scale(.985);
+  box-shadow: inset 0 2rpx 5rpx rgba(25, 23, 20, .14);
+}
+
+.close-button {
+  position: absolute;
+  z-index: 2;
+  top: 4rpx;
+  right: 10rpx;
+  width: 36rpx;
+  height: 36rpx;
+  color: #8a8a8a;
+  font-size: 34rpx;
+  font-weight: 300;
+  line-height: 34rpx;
+  text-align: center;
+}
+
+.card-layout {
+  display: flex;
+  min-height: 100%;
+  height: 100%;
+  align-items: stretch;
+}
+
+.brand-panel {
+  display: flex;
+  width: 42%;
+  flex: 0 0 42%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 14rpx 12rpx;
+}
+
+.brand-name {
+  color: #111;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 58rpx;
+  font-weight: 500;
+  letter-spacing: 7rpx;
+  line-height: 1;
+  padding-left: 7rpx;
+}
+
+.brand-fashion {
+  margin-top: 8rpx;
+  color: #222;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 19rpx;
+  letter-spacing: 8rpx;
+  line-height: 1.2;
+  padding-left: 8rpx;
+}
+
+.brand-logo {
+  width: 200rpx;
+  height: 200rpx;
+  max-width: 100%;
+}
+
+.brand-rule {
+  width: 44rpx;
+  height: 2rpx;
+  margin: 20rpx 0 14rpx;
+  background: #222;
+}
+
+.brand-caption {
+  max-width: 100%;
+  color: #77736c;
+  font-size: 11rpx;
+  letter-spacing: 1.6rpx;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.card-divider {
+  width: 1rpx;
+  flex: 0 0 1rpx;
+  margin: 18rpx 0;
+  background: #e5e5e5;
+}
+
+.info-panel {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 18rpx 12rpx 14rpx 20rpx;
+}
+
+.company-name {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #171717;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 30rpx;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: left;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.contact-person {
+  display: block;
+  overflow: hidden;
+  margin-top: 5rpx;
+  color: #777;
+  color: #555;
+  font-size: 22rpx;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contact-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5rpx;
+  margin-top: 16rpx;
+}
+
+.contact-row {
+  display: flex;
+  min-width: 0;
+  min-height: 38rpx;
+  align-items: center;
+  gap: 8rpx;
+  box-sizing: border-box;
+  padding: 2rpx 0;
+}
+
+.contact-icon {
+  position: relative;
+  display: flex;
+  width: 22rpx;
+  height: 22rpx;
+  flex: 0 0 22rpx;
+  align-items: center;
+  justify-content: center;
+  color: #282828;
+  font-size: 16rpx;
+  line-height: 1;
+}
+
+.icon-address::before {
+  width: 11rpx;
+  height: 11rpx;
+  transform: rotate(-45deg);
+  border: 1.5rpx solid currentColor;
+  border-radius: 50% 50% 50% 0;
+  content: '';
+}
+
+.icon-address::after {
+  position: absolute;
+  top: 7rpx;
+  left: 9rpx;
+  width: 3rpx;
+  height: 3rpx;
+  border-radius: 50%;
+  background: currentColor;
+  content: '';
+}
+
+.icon-phone::before {
+  content: '☎';
+  font-size: 17rpx;
+}
+
+.icon-whatsapp {
+  border: 1.5rpx solid currentColor;
+  border-radius: 50%;
+}
+
+.icon-whatsapp text {
+  font-size: 13rpx;
+}
+
+.icon-wechat::before,
+.icon-wechat::after {
+  position: absolute;
+  width: 12rpx;
+  height: 9rpx;
+  border: 1rpx solid currentColor;
+  border-radius: 50%;
+  content: '';
+}
+
+.icon-wechat::before {
+  top: 3rpx;
+  left: 1rpx;
+}
+
+.icon-wechat::after {
+  right: 0;
+  bottom: 2rpx;
+  background: #fff;
+}
+
+.icon-wechat view {
+  position: absolute;
+  z-index: 1;
+  right: 3rpx;
+  bottom: 5rpx;
+  width: 2rpx;
+  height: 2rpx;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 4rpx 0 currentColor;
+}
+
+.icon-email::before {
+  width: 17rpx;
+  height: 12rpx;
+  border: 1.5rpx solid currentColor;
+  border-radius: 2rpx;
+  content: '';
+}
+
+.icon-email::after {
+  position: absolute;
+  top: 5rpx;
+  left: 6rpx;
+  width: 8rpx;
+  height: 8rpx;
+  transform: rotate(45deg);
+  border-right: 1rpx solid currentColor;
+  border-bottom: 1rpx solid currentColor;
+  content: '';
+}
+
+.icon-website::before {
+  width: 17rpx;
+  height: 17rpx;
+  border: 1.5rpx solid currentColor;
+  border-radius: 50%;
+  content: '';
+}
+
+.icon-website::after {
+  position: absolute;
+  top: 10rpx;
+  left: 3rpx;
+  width: 16rpx;
+  height: 1rpx;
+  background: currentColor;
+  box-shadow: 0 -5rpx 0 currentColor, 0 5rpx 0 currentColor;
+  content: '';
+}
+
+.icon-tax {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 14rpx;
+  font-weight: 600;
+}
+
+.icon-bank::before {
+  position: absolute;
+  top: 3rpx;
+  width: 0;
+  height: 0;
+  border-right: 7rpx solid transparent;
+  border-bottom: 5rpx solid currentColor;
+  border-left: 7rpx solid transparent;
+  content: '';
+}
+
+.icon-bank::after {
+  position: absolute;
+  top: 9rpx;
+  width: 13rpx;
+  height: 8rpx;
+  border-right: 1.5rpx solid currentColor;
+  border-left: 1.5rpx solid currentColor;
+  background: linear-gradient(90deg, transparent 28%, currentColor 30% 40%, transparent 42% 60%, currentColor 62% 72%, transparent 74%);
+  box-shadow: 0 9rpx 0 -3rpx currentColor;
+  content: '';
+}
+
+.contact-value {
+  display: -webkit-box;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: #303030;
+  font-size: 20rpx;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.address-row {
+  align-items: flex-start;
+}
+
+.card-signature {
+  display: block;
+  overflow: hidden;
+  margin-top: 5rpx;
+  padding-top: 5rpx;
+  color: #77736c;
+  font-size: 9rpx;
+  letter-spacing: 1rpx;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-actions {
+  display: flex;
+  width: 100%;
+  justify-content: center;
+  gap: 12rpx;
+}
+
+.action-button {
+  width: 180rpx;
+  height: 72rpx;
+  margin: 0;
+  padding: 0;
+  border: 1rpx solid #dedede;
+  border-radius: 16rpx;
+  background: #fff;
+  box-shadow: 0 3rpx 8rpx rgba(0, 0, 0, .06);
+  color: #1d1b19;
+  font-size: 22rpx;
+  line-height: 70rpx;
+}
+
+.action-button::after {
+  border: 0;
+}
+
+.modal-state,
+.modal-error {
+  width: 520rpx;
+  max-width: calc(100vw - 80rpx);
+  box-sizing: border-box;
+  padding: 40rpx 28rpx;
+  border-radius: 12rpx;
+  background: #fff;
+  color: #777;
+  font-size: 23rpx;
+  text-align: center;
+}
+
+.modal-error {
+  color: #a13b31;
+}
+
+.retry-button {
+  height: 64rpx;
+  margin-top: 20rpx;
+  padding: 0 24rpx;
+  border-radius: 6rpx;
+  background: #222;
+  color: #fff;
+  font-size: 21rpx;
+  line-height: 64rpx;
+}

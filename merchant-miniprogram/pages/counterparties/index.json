@@ -1,0 +1,8 @@
+{
+  "usingComponents": {},
+  "enablePullDownRefresh": true,
+  "navigationBarTitleText": "往来单位",
+  "navigationBarBackgroundColor": "#292929",
+  "navigationBarTextStyle": "white",
+  "backgroundColor": "#292929"
+}

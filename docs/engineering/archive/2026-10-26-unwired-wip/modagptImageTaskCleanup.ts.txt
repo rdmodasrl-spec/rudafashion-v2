@@ -1,0 +1,54 @@
+import { isModaGptImageTaskResultReferenceOwned } from './modagptImageTask';
+
+export type ModaGptImageTaskCleanupCandidate = {
+  id: string;
+  merchantId: string | null;
+  resultStorageKey: string | null;
+  resultStorageBucket: string | null;
+  cleanupAttemptCount: number;
+};
+
+export type ModaGptImageTaskCleanupOutcome =
+  | { status: 'deleted' }
+  | { status: 'deferred'; errorCode: string; retryAt: Date };
+
+export async function cleanupModaGptImageTaskResult(
+  task: ModaGptImageTaskCleanupCandidate,
+  dependencies: {
+    expectedBucket: string | null;
+    storageAvailable: boolean;
+    deleteObject: (bucket: string, key: string) => Promise<void>;
+    now?: () => number;
+  }
+): Promise<ModaGptImageTaskCleanupOutcome> {
+  const now = dependencies.now ?? Date.now;
+  const ownedReference = Boolean(task.merchantId && dependencies.expectedBucket)
+    && isModaGptImageTaskResultReferenceOwned({
+      id: task.id,
+      merchantId: task.merchantId || '',
+      resultStorageKey: task.resultStorageKey,
+      resultStorageBucket: task.resultStorageBucket
+    }, dependencies.expectedBucket || '');
+  let failureCode: string | null = null;
+  if (!dependencies.storageAvailable || !dependencies.expectedBucket || !ownedReference || !task.resultStorageKey) {
+    failureCode = 'MODAGPT_IMAGE_CLEANUP_REFERENCE_INVALID';
+  } else {
+    try {
+      await dependencies.deleteObject(dependencies.expectedBucket, task.resultStorageKey);
+    } catch (error) {
+      const statusCode = (error as { $metadata?: { httpStatusCode?: number } })?.$metadata?.httpStatusCode;
+      const name = (error as { name?: string })?.name;
+      if (statusCode !== 404 && name !== 'NoSuchKey' && name !== 'NotFound') {
+        failureCode = 'MODAGPT_IMAGE_CLEANUP_DELETE_FAILED';
+      }
+    }
+  }
+  if (!failureCode) return { status: 'deleted' };
+  const attempts = task.cleanupAttemptCount + 1;
+  const retryDelayMs = Math.min(60_000 * (2 ** Math.min(attempts - 1, 10)), 24 * 60 * 60 * 1000);
+  return {
+    status: 'deferred',
+    errorCode: failureCode,
+    retryAt: new Date(now() + retryDelayMs)
+  };
+}

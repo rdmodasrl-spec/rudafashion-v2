@@ -1,0 +1,43 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import {
+  hashModaGptImageTaskPayload,
+  modaGptImageTaskRetentionMs,
+  modaGptImageTaskStorageKey,
+  parseModaGptImageTaskIdempotencyKey
+} from '../src/server/modagptImageTask';
+import type { ModaGptImageRequest } from '../src/server/modagptEntitlements';
+
+const imageRequest: ModaGptImageRequest = {
+  task: 'tryOn',
+  prompt: 'Keep the pose',
+  category: 'tops',
+  personImage: 'data:image/png;base64,cGVyc29u',
+  garmentImage: 'data:image/webp;base64,Y2xvdGg=',
+  privacyConsent: true
+};
+
+test('ModaGPT image idempotency keys are bounded and URL-safe', () => {
+  assert.equal(parseModaGptImageTaskIdempotencyKey('image-12345678'), 'image-12345678');
+  assert.equal(parseModaGptImageTaskIdempotencyKey('short'), null);
+  assert.equal(parseModaGptImageTaskIdempotencyKey('image key 123'), null);
+  assert.equal(parseModaGptImageTaskIdempotencyKey(`image-${'x'.repeat(80)}`), null);
+});
+
+test('ModaGPT image payload fingerprint covers every generation input', () => {
+  const fingerprint = hashModaGptImageTaskPayload(imageRequest);
+  assert.match(fingerprint, /^[a-f0-9]{64}$/);
+  assert.equal(hashModaGptImageTaskPayload({ ...imageRequest }), fingerprint);
+  assert.notEqual(hashModaGptImageTaskPayload({ ...imageRequest, prompt: 'Different' }), fingerprint);
+  assert.notEqual(hashModaGptImageTaskPayload({ ...imageRequest, personImage: 'different' }), fingerprint);
+  assert.notEqual(hashModaGptImageTaskPayload({ ...imageRequest, category: 'bottoms' }), fingerprint);
+});
+
+test('ModaGPT image task results have a one-day private retention window', () => {
+  assert.equal(modaGptImageTaskRetentionMs, 86_400_000);
+  assert.equal(
+    modaGptImageTaskStorageKey('merchant_01', '123e4567-e89b-12d3-a456-426614174000'),
+    'merchants/merchant_01/modagpt/tasks/123e4567-e89b-12d3-a456-426614174000.webp'
+  );
+  assert.throws(() => modaGptImageTaskStorageKey('../other', '123e4567-e89b-12d3-a456-426614174000'));
+});

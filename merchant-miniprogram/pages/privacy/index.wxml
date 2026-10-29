@@ -1,0 +1,57 @@
+<view class="screen privacy-screen">
+  <view class="privacy-intro">
+    <text class="privacy-title">隐私指引</text>
+    <text class="privacy-updated">更新日期：2026年10月22日</text>
+    <text class="privacy-copy">本指引说明 RUDA 商家小程序在提供商家及员工工作台服务时，如何处理你主动提供或在使用功能时产生的信息。请在使用前阅读。</text>
+  </view>
+
+  <view class="privacy-section">
+    <text class="privacy-heading">一、我们处理的信息及用途</text>
+    <view class="privacy-item">
+      <text class="privacy-item-title">账号与登录信息</text>
+      <text class="privacy-copy">登录时处理你主动输入的账号（可能是邮箱、手机号或商家编码）和密码，用于身份验证、账号安全及提供商家工作台服务。登录成功后，访问令牌和必要的账号资料会保存在本机小程序存储中，用于维持登录状态和权限校验；密码通过服务端认证，不保存在小程序本地。</text>
+    </view>
+    <view class="privacy-item">
+      <text class="privacy-item-title">手机号及联系信息</text>
+      <text class="privacy-copy">当你主动将手机号作为登录账号输入，或在企业入驻网页、商家资料、客户及订单等功能中填写手机号时，RUDA ITALIA S.R.L. 会通过你填写并提交的表单接收该号码。用途包括登录身份验证、账号安全、企业入驻审核、商家业务联系、订单履行及必要的售后支持。小程序不会未经你的操作调用微信接口读取手机号；不需要手机号的功能可以不提供该信息，但相应的登录、验证或联系服务可能无法使用。</text>
+    </view>
+    <view class="privacy-item">
+      <text class="privacy-item-title">商家、员工及经营资料</text>
+      <text class="privacy-copy">根据你使用的功能，处理商家资料、联系人资料、员工身份与权限，以及商品、订单、库存、客户、供应商、采购、财务、生产和售后等经营记录，用于展示、管理和完成相应业务操作。</text>
+    </view>
+    <view class="privacy-item">
+      <text class="privacy-item-title">你选择的图片和文件</text>
+      <text class="privacy-copy">当你主动选择商品、店铺或其他业务图片时，小程序会读取所选文件并按对应功能上传或提交。请仅上传你有权使用且已取得必要授权的图片。</text>
+    </view>
+    <view class="privacy-item">
+      <text class="privacy-item-title">扫码和设备操作</text>
+      <text class="privacy-copy">使用扫码功能时，小程序处理你主动扫描的二维码内容以执行相应业务。你主动保存名片或生成图片到设备时，相关资料会用于完成该设备操作。</text>
+    </view>
+  </view>
+
+  <view class="privacy-section">
+    <text class="privacy-heading">二、设备权限与微信信息</text>
+    <text class="privacy-copy">小程序会在你主动选择图片或扫码时调用相应功能。当前小程序不使用微信手机号快捷授权接口，也不会仅因登录而向微信读取手机号、头像、昵称或定位；手机号仅在你主动输入并提交表单时处理。拒绝非必要的设备权限不会影响不依赖该权限的功能。</text>
+  </view>
+
+  <view class="privacy-section">
+    <text class="privacy-heading">三、信息的存储与提供</text>
+    <text class="privacy-copy">你输入手机号后，号码会通过 HTTPS 提交至 RUDA 服务端，用于上述验证和业务目的；登录令牌和少量会话资料保存在你的设备上。手机号及经营资料存储于 RUDA 的业务系统，并仅在提供服务所需范围内由授权人员及技术服务提供方处理。潜在客户资料原则上按隐私政策所述期限管理；合同、订单及财税记录依适用法律和业务需要保存，届期后删除或匿名化。依法需要留存、处理争议或保障账号安全的情况除外。详细规则见《用户服务协议》和本隐私政策。</text>
+  </view>
+
+  <view class="privacy-section">
+    <text class="privacy-heading">四、第三方提供与保护</text>
+    <text class="privacy-copy">为完成账号认证、系统托管、订单配送、支付或客户支持，必要信息可能在最小范围内提供给相应的服务提供方；RUDA 不出售个人信息，也不会将手机号用于未经授权的营销。RUDA 采取访问控制、HTTPS 传输和必要的安全措施保护信息；如涉及跨境处理，将按适用法律采取相应保障措施。</text>
+  </view>
+
+  <view class="privacy-section">
+    <text class="privacy-heading">五、你的权利与联系</text>
+    <text class="privacy-copy">你可以停止使用相关功能、退出登录以清除本地登录会话，并可申请查询、更正、删除或限制处理个人信息。请通过小程序「更多」中的「帮助与反馈」联系 RUDA，或发送邮件至 rdmodasrl@gmail.com。数据控制者：RUDA ITALIA S.R.L.，Via Piemonte 24, 59100 Prato, Italia。依法或为履行合同、法定义务所需保留的信息，可能无法立即删除。</text>
+  </view>
+
+  <navigator class="legal-document-link" url="/pages/service-agreement/index">查看《RUDA 用户服务协议》</navigator>
+
+  <view class="privacy-footer">
+    <text>当信息处理方式或功能发生变化时，我们会及时更新本指引，并按微信平台要求履行告知和授权流程。</text>
+  </view>
+</view>

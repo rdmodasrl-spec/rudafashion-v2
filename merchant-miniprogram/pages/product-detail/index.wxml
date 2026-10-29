@@ -1,0 +1,109 @@
+<view class="screen product-detail-screen">
+  <view wx:if="{{loading}}" class="detail-state">正在加载商品…</view>
+  <view wx:elif="{{error}}" class="detail-state detail-error">
+    <text>{{error}}</text>
+    <button class="detail-retry ui-button ui-button--secondary" hover-class="ui-button-pressed" bindtap="loadProduct">重试</button>
+  </view>
+  <block wx:elif="{{product}}">
+    <view class="detail-header">
+      <view class="detail-header-copy">
+        <view class="detail-header-tags">
+          <text class="detail-style">{{product.styleNo}}</text>
+          <text class="detail-status">{{statusLabel}}</text>
+          <text wx:if="{{canViewStock && inventoryStatusLabel}}" class="detail-inventory-status {{inventoryStatusLabel === '无库存' ? 'stock-empty' : inventoryStatusLabel === '低库存' ? 'stock-low' : 'stock-good'}}">{{inventoryStatusLabel}}</text>
+          <text wx:if="{{product.visibility === 'private'}}" class="detail-private">授权商品</text>
+        </view>
+        <text class="detail-header-name">{{product.name}}</text>
+        <text class="detail-header-category">{{product.brand || product.category}} · {{product.subCategory || '—'}}</text>
+      </view>
+      <view class="detail-header-actions">
+        <button wx:if="{{canManageProducts}}" class="detail-header-edit ui-button ui-button--quiet" hover-class="ui-button-pressed" bindtap="editProduct">编辑</button>
+        <button class="detail-back ui-button ui-button--quiet" hover-class="ui-button-pressed" bindtap="closeDetail">×</button>
+      </view>
+    </view>
+    <video wx:if="{{selectedMedia && selectedMedia.type === 'video'}}" class="detail-cover" src="{{selectedMedia.url}}" controls />
+    <image wx:elif="{{coverImage}}" class="detail-cover" src="{{coverImage}}" mode="aspectFit" />
+    <view wx:else class="detail-cover detail-cover-placeholder">RUDA</view>
+    <scroll-view wx:if="{{mediaItems.length > 1}}" class="detail-gallery" scroll-x>
+      <view class="detail-gallery-row">
+        <view wx:for="{{mediaItems}}" wx:key="id" class="detail-gallery-item {{selectedMedia.id === item.id ? 'detail-gallery-selected' : ''}}" data-index="{{index}}" bindtap="selectMedia">
+          <image wx:if="{{item.type === 'image'}}" class="detail-gallery-image" src="{{item.url}}" mode="aspectFill" />
+          <view wx:else class="detail-gallery-video">视频</view>
+        </view>
+      </view>
+    </scroll-view>
+
+    <view class="detail-card">
+      <view class="detail-price-grid">
+        <view class="detail-price-cell">
+          <text class="detail-price-label">批发价</text>
+          <text class="detail-price">€{{product.wholesalePrice}}</text>
+        </view>
+        <view class="detail-price-cell">
+          <text class="detail-price-label">阶梯批发价</text>
+          <text class="detail-price-secondary">{{product.wholesalePrice100 === null || product.wholesalePrice100 === undefined ? '未设置' : product.bulkPriceMinimumQuantity + ' 件起 · €' + product.wholesalePrice100}}</text>
+        </view>
+        <view class="detail-price-cell">
+          <text class="detail-price-label">起订量</text>
+          <text class="detail-price-secondary">{{product.moq || 1}} 件</text>
+        </view>
+        <view class="detail-price-cell">
+          <text class="detail-price-label">可售总件数</text>
+          <text class="detail-price-secondary">{{canViewStock && inventoryReady ? totalAvailableQuantity + ' 件' : '—'}}</text>
+        </view>
+      </view>
+      <text class="detail-variant-summary">{{colorCount}} 个颜色 · {{sizeCount}} 个尺码 · {{skus.length}} 个 SKU</text>
+      <view class="detail-color-size">
+        <view><text>颜色</text><text>{{colorSummary || '—'}}</text></view>
+        <view><text>尺码</text><text>{{sizeSummary || '—'}}</text></view>
+      </view>
+    </view>
+
+    <view class="detail-section-head">
+      <text>颜色 / 尺码</text>
+      <text>{{skus.length}} 个 SKU</text>
+    </view>
+    <text wx:if="{{canViewStock && inventoryError}}" class="detail-inventory-error">{{inventoryError}}</text>
+    <view wx:if="{{!canViewStock}}" class="detail-inventory-note">当前账号没有库存查看权限</view>
+    <view wx:if="{{canViewStock && inventoryLoading}}" class="detail-inventory-note">正在同步实时库存…</view>
+    <view wx:for="{{displaySkus}}" wx:key="sku" class="detail-sku {{selectedSkuIndex === index ? 'detail-sku-selected' : ''}}" data-index="{{index}}" bindtap="selectSku">
+      <view class="detail-sku-copy">
+        <text class="detail-sku-name">{{item.color || '颜色未设'}} · {{item.size || '尺码未设'}}</text>
+        <text class="detail-sku-code">{{item.sku}}<text wx:if="{{item.barcode}}"> · {{item.barcode}}</text></text>
+      </view>
+      <view class="detail-sku-values">
+        <text class="detail-sku-stock" wx:if="{{canViewStock && inventoryReady}}">{{item.stockStatus}} · {{item.availableQuantity}} 件</text>
+        <text class="detail-sku-stock" wx:elif="{{canViewStock}}">{{item.stockStatus}}</text>
+        <text class="detail-sku-price">€{{item.wholesalePrice}}</text>
+      </view>
+    </view>
+    <button wx:if="{{skus.length > 6}}" class="detail-show-skus ui-button ui-button--quiet" hover-class="ui-button-pressed" bindtap="toggleSkus">{{showAllSkus ? '收起规格' : '查看全部 ' + skus.length + ' 个规格'}}</button>
+    <view wx:if="{{product.season || product.origin || product.fabric || product.composition || product.manufacturingProcess || product.fit || product.weight || product.packaging || product.washCare || product.description}}" class="detail-info-card">
+      <text class="detail-info-title">商品说明</text>
+      <text wx:if="{{product.description}}" class="detail-description">{{product.description}}</text>
+      <view wx:if="{{product.season || product.origin || product.fabric || product.composition || product.manufacturingProcess || product.fit || product.weight || product.packaging || product.washCare}}" class="detail-specs">
+        <text wx:if="{{product.season}}">季节 {{product.season}}</text>
+        <text wx:if="{{product.origin}}">产地 {{product.origin}}</text>
+        <text wx:if="{{product.fabric}}">面料 {{product.fabric}}</text>
+        <text wx:if="{{product.composition}}">成分 {{product.composition}}</text>
+        <text wx:if="{{product.manufacturingProcess}}">工艺 {{product.manufacturingProcess}}</text>
+        <text wx:if="{{product.fit}}">版型 {{product.fit}}</text>
+        <text wx:if="{{product.weight}}">重量 {{product.weight}}</text>
+        <text wx:if="{{product.packaging}}">包装 {{product.packaging}}</text>
+        <text wx:if="{{product.washCare}}">洗护 {{product.washCare}}</text>
+      </view>
+    </view>
+
+    <view wx:if="{{industryAttributes.length}}" class="detail-info-card">
+      <text class="detail-info-title">行业字段</text>
+      <view class="detail-specs">
+        <text wx:for="{{industryAttributes}}" wx:key="key">{{item.label}} {{item.value}}</text>
+      </view>
+    </view>
+
+    <view class="detail-actions">
+      <button wx:if="{{product.lifecycleStatus === 'published'}}" class="detail-share ui-button ui-button--secondary" hover-class="ui-button-pressed" bindtap="shareProduct">发送整个商品</button>
+      <button wx:if="{{canManageProducts}}" class="detail-edit ui-button ui-button--primary" hover-class="ui-button-pressed" bindtap="editProduct">编辑</button>
+    </view>
+  </block>
+</view>

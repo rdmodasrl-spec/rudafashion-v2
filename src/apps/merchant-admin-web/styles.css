@@ -1,0 +1,471 @@
+@reference "../../index.css";
+@import "../merchant-admin-common.css";
+
+html[data-ruda-app="merchant-admin-web"] #root {
+  min-height: 100vh;
+}
+
+@layer components {
+  .merchant-web-sidebar-nav button:not([aria-expanded]) > svg:first-child {
+    display: none;
+  }
+
+  .merchant-web-sidebar-nav button:not([aria-expanded]) {
+    column-gap: 0;
+  }
+
+  .merchant-web-layout {
+    --color-neutral-50: #fbfaf8;
+    --color-neutral-100: #f5f3ef;
+    --color-neutral-200: #e9e6df;
+    --color-neutral-300: #d9d5cc;
+    --color-neutral-400: #aaa49a;
+    --color-neutral-500: #777167;
+    --color-neutral-600: #5e594f;
+    --color-neutral-700: #454139;
+    --color-neutral-800: #302d27;
+    --color-neutral-900: #201e1a;
+    --color-neutral-950: #12110f;
+  }
+
+  .merchant-web-layout .merchant-web-sidebar-nav > div > button {
+    @apply flex w-full items-center rounded-lg px-3 py-2.5 text-left text-xs transition-colors;
+  }
+
+  .merchant-web-layout [class*="bg-amber-"],
+  .merchant-web-layout [class*="bg-orange-"] {
+    background-color: #fffbeb !important;
+  }
+
+  .merchant-web-layout [class*="text-amber-"],
+  .merchant-web-layout [class*="text-orange-"] {
+    color: #92400e !important;
+  }
+
+  .merchant-web-layout [class*="border-amber-"],
+  .merchant-web-layout [class*="border-orange-"] {
+    border-color: #fde68a !important;
+  }
+
+  .merchant-web-layout [class*="bg-rose-"],
+  .merchant-web-layout [class*="bg-red-"] {
+    background-color: #fff1f2 !important;
+  }
+
+  .merchant-web-layout [class*="text-rose-"],
+  .merchant-web-layout [class*="text-red-"],
+  .merchant-web-layout [class*="text-pink-"] {
+    color: #be123c !important;
+  }
+
+  .merchant-web-layout [class*="border-rose-"],
+  .merchant-web-layout [class*="border-red-"] {
+    border-color: #fecdd3 !important;
+  }
+
+  .merchant-web-layout [class*="bg-pink-"],
+  .merchant-web-layout [class*="bg-violet-"],
+  .merchant-web-layout [class*="bg-purple-"] {
+    background-color: #f5f3ff !important;
+  }
+
+  .merchant-web-layout [class*="text-violet-"],
+  .merchant-web-layout [class*="text-purple-"] {
+    color: #6d28d9 !important;
+  }
+
+  .merchant-web-layout [class*="border-violet-"],
+  .merchant-web-layout [class*="border-purple-"] {
+    border-color: #ddd6fe !important;
+  }
+
+  .merchant-web-layout [class*="bg-indigo-"],
+  .merchant-web-layout [class*="bg-sky-"],
+  .merchant-web-layout [class*="bg-cyan-"],
+  .merchant-web-layout [class*="bg-blue-"] {
+    background-color: #eff6ff !important;
+  }
+
+  .merchant-web-layout [class*="text-indigo-"],
+  .merchant-web-layout [class*="text-sky-"],
+  .merchant-web-layout [class*="text-cyan-"],
+  .merchant-web-layout [class*="text-blue-"] {
+    color: #1d4ed8 !important;
+  }
+
+  .merchant-web-layout [class*="border-indigo-"],
+  .merchant-web-layout [class*="border-sky-"],
+  .merchant-web-layout [class*="border-cyan-"],
+  .merchant-web-layout [class*="border-blue-"] {
+    border-color: #bfdbfe !important;
+  }
+
+  .merchant-web-layout [class*="bg-emerald-50"],
+  .merchant-web-layout [class*="bg-emerald-100"],
+  .merchant-web-layout [class*="bg-emerald-200"],
+  .merchant-web-layout [class*="bg-green-50"],
+  .merchant-web-layout [class*="bg-green-100"],
+  .merchant-web-layout [class*="bg-green-200"],
+  .merchant-web-layout [class*="bg-teal-50"],
+  .merchant-web-layout [class*="bg-teal-100"],
+  .merchant-web-layout [class*="bg-teal-200"] {
+    background-color: #ecfdf5 !important;
+  }
+
+  .merchant-web-layout [class*="text-emerald-"],
+  .merchant-web-layout [class*="text-green-"],
+  .merchant-web-layout [class*="text-teal-"] {
+    color: #047857 !important;
+  }
+
+  .merchant-web-layout [class*="border-emerald-"],
+  .merchant-web-layout [class*="border-green-"],
+  .merchant-web-layout [class*="border-teal-"] {
+    border-color: #a7f3d0 !important;
+  }
+
+  #merchant-web-layout button:not([role="switch"]) {
+    transition:
+      transform 180ms cubic-bezier(0.2, 0.75, 0.25, 1),
+      box-shadow 180ms ease,
+      background-color 180ms ease,
+      border-color 180ms ease,
+      color 180ms ease;
+  }
+
+  #merchant-web-layout button:not([role="switch"]):not(:disabled):active {
+    transform: scale(0.985);
+  }
+
+  #merchant-web-layout .merchant-content-area button:not([role="switch"]):not(:disabled):is([class*="border-"], [class*="bg-"]):not([class*="rounded-full"]),
+  #merchant-web-layout .merchant-settings-workspace > div button:not([role="switch"]):not(:disabled):is([class*="border-"], [class*="bg-"]):not([class*="rounded-full"]) {
+    border-radius: 10px !important;
+    box-shadow: 0 2px 7px rgb(20 30 50 / 5%) !important;
+  }
+
+  #merchant-web-layout .merchant-content-area button:not([role="switch"]):not(:disabled):is([class*="border-"], [class*="bg-"]):not([class*="rounded-full"]):hover,
+  #merchant-web-layout .merchant-settings-workspace > div button:not([role="switch"]):not(:disabled):is([class*="border-"], [class*="bg-"]):not([class*="rounded-full"]):hover {
+    box-shadow: 0 8px 18px rgb(20 30 50 / 10%) !important;
+    transform: translateY(-1px);
+  }
+
+  #merchant-web-layout .merchant-settings-workspace .merchant-settings-nav button:not([role="switch"]) {
+    box-shadow: none !important;
+  }
+
+  .merchant-dashboard-home > :not(.merchant-dashboard-featured) {
+    display: none;
+  }
+
+  .merchant-dashboard-featured {
+    min-height: 0;
+    padding-bottom: 1.5rem;
+    background: #f7f8fa;
+    perspective: 1200px;
+  }
+
+  .merchant-dashboard-prompt__character {
+    display: inline-block;
+    animation: merchant-dashboard-prompt-enter 420ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+  }
+
+  .merchant-dashboard-search {
+    border-radius: 9999px;
+    box-shadow:
+      0 14px 36px rgb(20 30 50 / 7%),
+      0 2px 6px rgb(20 30 50 / 4%),
+      inset 0 1px 0 rgb(255 255 255 / 90%);
+    transition: box-shadow 220ms ease, transform 220ms ease;
+  }
+
+  .merchant-dashboard-search:focus-within {
+    box-shadow:
+      0 18px 44px rgb(20 30 50 / 11%),
+      0 3px 10px rgb(20 30 50 / 5%),
+      inset 0 1px 0 rgb(255 255 255 / 95%);
+    transform: translateY(-1px);
+  }
+
+  .merchant-dashboard-search__input {
+    background: linear-gradient(115deg, #fff 0%, #fff 65%, #fafbfc 100%);
+  }
+
+  .merchant-dashboard-search__submit:not(:disabled):hover {
+    box-shadow: 0 6px 16px rgb(18 17 15 / 24%);
+    transform: translateY(-1px) scale(1.04);
+  }
+
+  .merchant-dashboard-search__submit {
+    border-radius: 50%;
+    box-shadow: 0 3px 8px rgb(18 17 15 / 18%);
+  }
+
+  .merchant-dashboard-search__submit:disabled {
+    background-color: #171a20;
+    opacity: 1;
+  }
+
+  .merchant-dashboard-shortcut {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    box-shadow: 0 2px 5px rgb(20 30 50 / 3%), inset 0 1px 0 rgb(255 255 255 / 90%);
+    animation: merchant-dashboard-card-enter 480ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+  }
+
+  .merchant-dashboard-shortcut::before {
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+    background: linear-gradient(145deg, rgb(255 255 255 / 90%), rgb(245 247 250 / 40%));
+    content: "";
+    opacity: 0;
+    transition: opacity 180ms ease;
+  }
+
+  .merchant-dashboard-shortcut:hover {
+    border-color: #d5d9df;
+    box-shadow: 0 12px 24px rgb(20 30 50 / 9%), 0 3px 8px rgb(20 30 50 / 4%);
+    transform: perspective(700px) translateY(-3px) rotateX(1deg);
+  }
+
+  .merchant-dashboard-shortcut:hover::before {
+    opacity: 1;
+  }
+
+  .merchant-dashboard-shortcut:active {
+    transform: translateY(-1px) scale(0.99);
+  }
+
+  .merchant-dashboard-shortcut:nth-child(2) { animation-delay: 45ms; }
+  .merchant-dashboard-shortcut:nth-child(3) { animation-delay: 90ms; }
+  .merchant-dashboard-shortcut:nth-child(4) { animation-delay: 135ms; }
+  .merchant-dashboard-shortcut:nth-child(5) { animation-delay: 180ms; }
+  .merchant-dashboard-shortcut:nth-child(6) { animation-delay: 225ms; }
+
+  .merchant-dashboard-metric {
+    box-shadow: 0 4px 12px rgb(20 30 50 / 4%), inset 0 1px 0 rgb(255 255 255 / 90%);
+    animation: merchant-dashboard-card-enter 520ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+    transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+  }
+
+  .merchant-dashboard-metric:hover {
+    border-color: #d6dae0;
+    box-shadow: 0 10px 22px rgb(20 30 50 / 8%), inset 0 1px 0 rgb(255 255 255 / 95%);
+    transform: translateY(-2px);
+  }
+
+  .merchant-dashboard-metric:nth-child(2) { animation-delay: 70ms; }
+  .merchant-dashboard-metric:nth-child(3) { animation-delay: 140ms; }
+
+  .merchant-dashboard-panel {
+    box-shadow: 0 6px 18px rgb(20 30 50 / 4%), inset 0 1px 0 rgb(255 255 255 / 90%);
+    animation: merchant-dashboard-panel-enter 580ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+    transition: border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
+  }
+
+  .merchant-dashboard-panel:hover {
+    border-color: #d9dde3;
+    box-shadow: 0 14px 30px rgb(20 30 50 / 8%), inset 0 1px 0 rgb(255 255 255 / 95%);
+    transform: translateY(-2px);
+  }
+
+  .merchant-dashboard-panel:nth-child(2) {
+    animation-delay: 100ms;
+  }
+}
+
+@keyframes merchant-dashboard-prompt-enter {
+  from {
+    opacity: 0;
+    transform: translateY(0.3em);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes merchant-dashboard-card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.99);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes merchant-dashboard-panel-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .merchant-dashboard-prompt__character,
+  .merchant-dashboard-shortcut,
+  .merchant-dashboard-metric,
+  .merchant-dashboard-panel {
+    animation: none;
+    transition: none;
+  }
+
+  .merchant-dashboard-shortcut:hover,
+  .merchant-dashboard-shortcut:active,
+  .merchant-dashboard-metric:hover,
+  .merchant-dashboard-panel:hover,
+  .merchant-dashboard-search:focus-within {
+    transform: none;
+  }
+}
+
+#merchant-content-area button:not([role="switch"]):not(:disabled):active {
+  transform: translateY(0) scale(0.985);
+}
+
+@layer base {
+  #merchant-content-area button:not([role="switch"]) {
+    transition:
+      transform 180ms cubic-bezier(0.2, 0.75, 0.25, 1),
+      box-shadow 180ms ease,
+      background-color 180ms ease,
+      border-color 180ms ease,
+      color 180ms ease;
+  }
+
+  #merchant-content-area button:not([role="switch"]):not(:disabled):is([class*="border-"], [class*="bg-"]):not([class*="rounded-full"]) {
+    border-radius: 10px !important;
+    box-shadow: 0 2px 7px rgb(20 30 50 / 5%) !important;
+  }
+
+  #merchant-content-area button:not([role="switch"]):not(:disabled):is([class*="border-"], [class*="bg-"]):not([class*="rounded-full"]):hover {
+    box-shadow: 0 8px 18px rgb(20 30 50 / 10%) !important;
+  }
+
+  #merchant-content-area .merchant-settings-workspace .merchant-settings-nav button:not([role="switch"]):not(:disabled):is([class*="border-"], [class*="bg-"]):not([class*="rounded-full"]) {
+    box-shadow: none !important;
+  }
+}
+
+#merchant-content-area :is(section, article)[class*="rounded-"][class*="border-"][class*="bg-white"],
+#merchant-content-area div[class*="rounded-xl"][class*="border-"][class*="bg-white"] {
+  border-radius: 14px !important;
+  box-shadow:
+    0 6px 18px rgb(20 30 50 / 5%),
+    inset 0 1px 0 rgb(255 255 255 / 85%);
+  transition:
+    transform 220ms cubic-bezier(0.2, 0.75, 0.25, 1),
+    box-shadow 220ms ease,
+    border-color 220ms ease;
+  animation: merchant-surface-enter 420ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
+#merchant-content-area :is(section, article)[class*="rounded-"][class*="border-"][class*="bg-white"]:hover,
+#merchant-content-area div[class*="rounded-xl"][class*="border-"][class*="bg-white"]:hover {
+  border-color: #d9dde3;
+  box-shadow:
+    0 12px 28px rgb(20 30 50 / 8%),
+    inset 0 1px 0 rgb(255 255 255 / 95%);
+  transform: translateY(-2px);
+}
+
+.merchant-web-layout input:not([type="checkbox"]):not([type="radio"]),
+.merchant-web-layout select,
+.merchant-web-layout textarea {
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.merchant-web-layout input:not([type="checkbox"]):not([type="radio"]):focus-visible,
+.merchant-web-layout select:focus-visible,
+.merchant-web-layout textarea:focus-visible {
+  border-color: #a7cdbc;
+  box-shadow: 0 0 0 3px rgb(16 118 78 / 10%);
+  outline: none;
+}
+
+.merchant-web-layout input[type="checkbox"],
+.merchant-web-layout input[type="radio"] {
+  accent-color: #047857;
+}
+
+.merchant-settings-workspace .merchant-home-card,
+.merchant-settings-workspace section[class*="rounded-2xl"][class*="border-"][class*="bg-white"] {
+  transition:
+    transform 220ms cubic-bezier(0.2, 0.75, 0.25, 1),
+    box-shadow 220ms ease,
+    border-color 220ms ease;
+}
+
+.merchant-settings-workspace .merchant-home-card:hover,
+.merchant-settings-workspace section[class*="rounded-2xl"][class*="border-"][class*="bg-white"]:hover {
+  border-color: #d9dde3;
+  box-shadow:
+    0 10px 24px rgb(20 30 50 / 7%),
+    inset 0 1px 0 rgb(255 255 255 / 95%);
+  transform: translateY(-1px);
+}
+
+.merchant-settings-workspace input:not([type="checkbox"]):not([type="radio"]),
+.merchant-settings-workspace select,
+.merchant-settings-workspace textarea {
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.merchant-settings-workspace input:not([type="checkbox"]):not([type="radio"]):focus-visible,
+.merchant-settings-workspace select:focus-visible,
+.merchant-settings-workspace textarea:focus-visible {
+  border-color: #a7cdbc;
+  box-shadow: 0 0 0 3px rgb(16 118 78 / 10%);
+  outline: none;
+}
+
+@keyframes merchant-surface-enter {
+  from {
+    opacity: 0.72;
+    transform: translateY(7px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #merchant-web-layout button,
+  .merchant-web-layout input,
+  .merchant-web-layout select,
+  .merchant-web-layout textarea,
+  #merchant-content-area button,
+  .merchant-settings-workspace .merchant-home-card,
+  .merchant-settings-workspace section[class*="rounded-2xl"][class*="border-"][class*="bg-white"],
+  .merchant-settings-workspace input,
+  .merchant-settings-workspace select,
+  .merchant-settings-workspace textarea,
+  #merchant-content-area :is(section, article, div[class*="rounded-xl"][class*="border-"][class*="bg-white"]) {
+    animation: none;
+    transition: none;
+  }
+
+  #merchant-content-area button:not(:disabled):hover,
+  #merchant-content-area button:not(:disabled):active,
+  .merchant-settings-workspace .merchant-home-card:hover,
+  .merchant-settings-workspace section[class*="rounded-2xl"][class*="border-"][class*="bg-white"]:hover,
+  #merchant-content-area :is(section, article, div[class*="rounded-xl"][class*="border-"][class*="bg-white"]):hover {
+    transform: none;
+  }
+}

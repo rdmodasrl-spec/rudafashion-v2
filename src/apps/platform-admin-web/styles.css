@@ -1,0 +1,5 @@
+@import "../platform-admin-common.css";
+
+html[data-ruda-app="platform-admin-web"] #root {
+  min-height: 100vh;
+}

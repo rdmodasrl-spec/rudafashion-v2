@@ -1,0 +1,170 @@
+<web-view wx:if="{{isPartnerPortal && url && !loadError}}" src="{{url}}" binderror="onWebViewError" />
+
+<view wx:if="{{isPartnerPortal && loadError}}" class="screen partner-error">
+  <view class="error-mark">!</view>
+  <text class="error-title">{{title}}</text>
+  <text class="error-description">{{description}}</text>
+  <button class="primary-button" bindtap="copyRegistrationLink">{{copyLabel}}</button>
+</view>
+
+<view wx:if="{{!isPartnerPortal && step < 5}}" class="register-page">
+  <view class="login-card card">
+    <view class="step-progress">
+      <text class="progress-count">{{step < 10 ? '0' + step : step}} <text class="progress-total">/ 02</text></text>
+      <view class="progress-track"><view class="progress-fill" style="width: {{step * 50}}%;"></view></view>
+    </view>
+
+    <view class="register-panel">
+    <block wx:if="{{step === 1}}">
+      <view class="section-heading">
+        <text class="section-title">邮箱注册</text>
+      </view>
+      <view class="field-group">
+        <text class="field-label">邮箱 <text class="required-mark">*</text></text>
+        <view class="password-field email-field">
+          <input class="form-input email-address-input" data-field="email" value="{{form.email}}" type="text" placeholder="请输入邮箱地址" bindinput="onFormInput" maxlength="120" />
+          <button wx:if="{{!verificationSent && !verificationToken}}" class="email-verify-button" loading="{{verificationBusy}}" disabled="{{verificationBusy}}" bindtap="requestVerification">验证</button>
+        </view>
+      </view>
+      <view wx:if="{{verificationSent && !verificationToken}}" class="field-group verification-code-group">
+        <text class="field-label">邮箱验证码</text>
+        <input class="form-input code-input" value="{{verificationCode}}" type="number" maxlength="6" placeholder="输入 6 位验证码" bindinput="onVerificationCodeInput" />
+      </view>
+      <view wx:if="{{verificationToken}}" class="verified-state">
+        <text class="verified-mark">✓</text>
+        <text>邮箱已验证</text>
+      </view>
+      <view wx:if="{{verificationSent && !verificationToken}}" class="verification-actions">
+        <button class="primary-action verify-action" loading="{{verificationBusy}}" disabled="{{verificationBusy}}" bindtap="verifyContact">验证</button>
+        <button class="resend-code" loading="{{verificationBusy}}" disabled="{{verificationBusy || verificationCooldown > 0}}" bindtap="requestVerification">{{verificationCooldown > 0 ? verificationCooldown + 's' : '重发'}}</button>
+      </view>
+      <view class="field-group">
+        <text class="field-label">登录密码</text>
+        <view class="password-field">
+          <input class="form-input password-input" data-field="password" value="{{form.password}}" password="{{!showPassword}}" placeholder="至少 8 位" bindinput="onFormInput" maxlength="100" />
+          <text class="password-toggle" bindtap="togglePasswordVisibility">{{showPassword ? '隐藏' : '显示'}}</text>
+        </view>
+      </view>
+    </block>
+
+    <block wx:elif="{{step === 2}}">
+      <view class="section-heading">
+        <text class="section-title">企业信息</text>
+      </view>
+      <view class="field-group">
+        <text class="field-label">店铺或品牌名称 <text class="required-mark">*</text></text>
+        <input class="form-input" data-field="displayName" value="{{form.displayName}}" placeholder="填写企业名称" bindinput="onFormInput" maxlength="120" />
+      </view>
+      <view class="form-row">
+        <view class="field-group form-column">
+          <text class="field-label">国家 <text class="required-mark">*</text></text>
+          <picker range="{{countryOptions}}" value="{{countryIndex}}" bindchange="onRegistrationCountryChange">
+            <view class="form-input picker-value"><text>{{form.country}}</text><text class="picker-chevron">⌄</text></view>
+          </picker>
+        </view>
+        <view class="field-group form-column">
+          <text class="field-label">城市 <text class="required-mark">*</text></text>
+          <picker range="{{countryCities}}" value="{{cityIndex}}" bindchange="onRegistrationCityChange">
+            <view class="form-input picker-value"><text>{{form.city}}</text><text class="picker-chevron">⌄</text></view>
+          </picker>
+        </view>
+      </view>
+      <text class="group-label">业务类型 <text class="required-mark">*</text></text>
+      <view class="role-list">
+        <view wx:for="{{roleOptions}}" wx:key="id" class="role-option {{item.selected ? 'role-option-selected' : ''}}" data-id="{{item.id}}" bindtap="toggleRole">
+          <view class="role-option-copy">
+            <text class="role-name">{{item.label}}</text>
+          </view>
+          <view class="role-radio {{item.selected ? 'role-radio-selected' : ''}}"></view>
+        </view>
+      </view>
+      <text class="group-label category-heading">主营品类 <text class="required-mark">*</text></text>
+      <view class="category-grid">
+        <view wx:for="{{categoryOptions}}" wx:key="id" class="category-option {{item.selected ? 'category-option-selected' : ''}}" data-id="{{item.id}}" bindtap="toggleCategory">
+          <text>{{item.label}}</text>
+          <text wx:if="{{item.selected}}" class="category-check">✓</text>
+        </view>
+      </view>
+      <view class="field-group industry-group">
+        <text class="field-label">企业所属行业 <text class="required-mark">*</text></text>
+        <picker range="{{industryOptions}}" range-key="label" value="{{industryIndex}}" bindchange="onIndustryChange">
+          <view class="form-input picker-value {{industryLabel ? '' : 'picker-placeholder'}}">{{industryLabel || '请选择行业'}}</view>
+        </picker>
+      </view>
+      <view class="optional-fields-toggle" bindtap="toggleOptionalFields">
+        <text>{{showOptionalFields ? '收起选填资料' : '补充资料（选填）'}}</text>
+        <text class="picker-chevron">{{showOptionalFields ? '−' : '+'}}</text>
+      </view>
+      <block wx:if="{{showOptionalFields}}">
+        <view class="field-group">
+          <text class="field-label">企业法定名称</text>
+          <input class="form-input" data-field="legalName" value="{{form.legalName}}" placeholder="选填" bindinput="onFormInput" maxlength="160" />
+        </view>
+        <view class="field-group">
+          <text class="field-label">VAT / 税号</text>
+          <input class="form-input" data-field="vatNumber" value="{{form.vatNumber}}" placeholder="选填" bindinput="onFormInput" maxlength="40" />
+        </view>
+        <view class="field-group">
+          <text class="field-label">联系地址</text>
+          <input class="form-input" data-field="address" value="{{form.address}}" placeholder="选填" bindinput="onFormInput" maxlength="200" />
+        </view>
+        <view class="form-row">
+          <view class="field-group form-column">
+            <text class="field-label">邮政编码</text>
+            <input class="form-input" data-field="postalCode" value="{{form.postalCode}}" placeholder="选填" bindinput="onFormInput" maxlength="20" />
+          </view>
+          <view class="field-group form-column">
+            <text class="field-label">联系人</text>
+            <input class="form-input" data-field="contactName" value="{{form.contactName}}" placeholder="选填" bindinput="onFormInput" maxlength="80" />
+          </view>
+        </view>
+        <view class="field-group">
+          <text class="field-label">企业网站 / 社交主页</text>
+          <input class="form-input" data-field="website" value="{{form.website}}" placeholder="选填" bindinput="onFormInput" maxlength="240" />
+        </view>
+      </block>
+    </block>
+
+    <view wx:if="{{error}}" class="form-error">{{error}}</view>
+    <checkbox-group class="consent-group" bindchange="onConsentChange">
+      <label class="consent-row">
+        <checkbox value="terms" checked="{{form.acceptedTerms}}" color="#806c49" />
+        <view class="consent-copy">
+          <text>我已阅读并同意</text>
+          <text class="legal-link" data-document="terms" catchtap="openLegalDocument">《用户服务协议》</text>
+        </view>
+      </label>
+      <label class="consent-row">
+        <checkbox value="privacy" checked="{{form.acceptedPrivacy}}" color="#806c49" />
+        <view class="consent-copy">
+          <text>我已阅读并同意</text>
+          <text class="legal-link" data-document="privacy" catchtap="openLegalDocument">《隐私政策》</text>
+        </view>
+      </label>
+    </checkbox-group>
+    <view class="form-actions">
+      <button wx:if="{{step < 2}}" class="primary-action next-action" bindtap="nextStep">下一步</button>
+      <button wx:else class="primary-action next-action" loading="{{busy}}" disabled="{{busy}}" bindtap="submitRegistration">{{busy ? '正在提交…' : '提交申请'}}</button>
+      <button wx:if="{{step > 1}}" class="back-action" disabled="{{busy}}" bindtap="previousStep">上一步</button>
+      <button wx:else class="back-action" bindtap="previousStep">返回</button>
+    </view>
+    </view>
+  </view>
+</view>
+
+<view wx:if="{{!isPartnerPortal && step === 5}}" class="register-page result-page">
+  <view class="login-card card result-card">
+    <view class="result-panel">
+      <view class="result-mark">✓</view>
+      <text class="result-title">提交成功</text>
+      <text class="result-description">企业资料审核中。</text>
+      <view class="result-status {{companyStatus === 'ACTIVE' ? 'result-status-active' : ''}}">
+        <text class="result-status-label">当前状态</text>
+        <text class="result-status-value">{{companyStatus === 'ACTIVE' ? '企业已激活' : '等待审核'}}</text>
+      </view>
+      <text wx:if="{{accountIdentityReviewRequired}}" class="result-warning">邮箱已验证，但已有账号信息需要核实。请等待管理员确认后使用统一账号登录。</text>
+      <view wx:if="{{companyId}}" class="application-id"><text>申请编号</text><text class="application-id-value">{{companyId}}</text></view>
+      <button class="primary-action result-button" bindtap="finishRegistration">完成</button>
+    </view>
+  </view>
+</view>

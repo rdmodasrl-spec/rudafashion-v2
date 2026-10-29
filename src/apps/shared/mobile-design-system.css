@@ -1,0 +1,103 @@
+/*
+ * RUDA mobile design system
+ * Single source for mobile-only shape, density and icon rules.
+ * Imported by frontend-mobile, merchant-admin-mobile and platform-admin-mobile.
+ * Web targets keep the sharp 2px baseline declared in src/index.css.
+ */
+
+html[data-ruda-app="frontend-mobile"],
+html[data-ruda-app="merchant-admin-mobile"],
+html[data-ruda-app="platform-admin-mobile"] {
+  --radius-ruda-control: 6px;
+  --radius-ruda-card: 8px;
+  --radius-ruda-input: 6px;
+  --radius-ruda-modal: 10px;
+  --radius-ruda-tag: 4px;
+  --ruda-mobile-card-padding: 12px;
+  --ruda-mobile-card-gap: 12px;
+}
+
+/* One icon size for mobile controls, one larger size for bottom navigation.
+   Utilities layer keeps these important rules above the legacy base icon rule. */
+@layer utilities {
+  html[data-ruda-app="frontend-mobile"] svg.lucide,
+  html[data-ruda-app="merchant-admin-mobile"] svg.lucide,
+  html[data-ruda-app="platform-admin-mobile"] svg.lucide {
+    width: 18px !important;
+    height: 18px !important;
+    stroke-width: 1.7;
+  }
+
+  html[data-ruda-app="frontend-mobile"] #mobile-app-bottom-nav svg.lucide,
+  html[data-ruda-app="frontend-mobile"] #mobile-admin-bottom-bar svg.lucide {
+    width: 22px !important;
+    height: 22px !important;
+  }
+
+  html[data-ruda-app="merchant-admin-mobile"] .ruda-bottom-nav svg.lucide {
+    width: 20px !important;
+    height: 20px !important;
+  }
+}
+
+/* Card surfaces. Page code may keep layout utilities, but shape and padding
+   come from tokens so pages cannot drift into 12/16/24px card families. */
+html[data-ruda-app="frontend-mobile"] .rounded-xl,
+html[data-ruda-app="frontend-mobile"] .rounded-2xl,
+html[data-ruda-app="merchant-admin-mobile"] .rounded-xl,
+html[data-ruda-app="merchant-admin-mobile"] .rounded-2xl,
+html[data-ruda-app="merchant-admin-mobile"] .rounded-3xl,
+html[data-ruda-app="platform-admin-mobile"] .rounded-xl,
+html[data-ruda-app="platform-admin-mobile"] .rounded-2xl,
+html[data-ruda-app="platform-admin-mobile"] .rounded-3xl {
+  border-radius: var(--radius-ruda-card) !important;
+}
+
+/* Full-screen mobile sheets: only the visible top edge is rounded. */
+html[data-ruda-app="frontend-mobile"] .rounded-t-3xl,
+html[data-ruda-app="merchant-admin-mobile"] .rounded-t-3xl,
+html[data-ruda-app="platform-admin-mobile"] .rounded-t-3xl {
+  border-top-left-radius: var(--radius-ruda-modal) !important;
+  border-top-right-radius: var(--radius-ruda-modal) !important;
+}
+
+/* Dialogs and drawers use the modal token, independent of card radius. */
+html[data-ruda-app="frontend-mobile"] [role="dialog"],
+html[data-ruda-app="merchant-admin-mobile"] [role="dialog"],
+html[data-ruda-app="platform-admin-mobile"] [role="dialog"],
+html[data-ruda-app="frontend-mobile"] .ruda-modal,
+html[data-ruda-app="merchant-admin-mobile"] .ruda-modal,
+html[data-ruda-app="platform-admin-mobile"] .ruda-modal {
+  border-radius: var(--radius-ruda-modal) !important;
+}
+
+/* Cards use compact mobile padding; modals and inputs keep their own spacing. */
+html[data-ruda-app="merchant-admin-mobile"] .ruda-mobile-content :is(section, article, div, form)[class*="rounded-"][class*="bg-white"][class*="p-4"],
+html[data-ruda-app="merchant-admin-mobile"] .ruda-mobile-content :is(section, article, div, form)[class*="rounded-"][class*="bg-white"][class*="p-3.5"],
+html[data-ruda-app="merchant-admin-mobile"] .ruda-mobile-content .ruda-mobile-surface > div[class*="p-4"],
+html[data-ruda-app="merchant-admin-mobile"] .ruda-mobile-content .ruda-home-surface > div[class*="p-4"],
+html[data-ruda-app="platform-admin-mobile"] #platform-admin-mobile-root :is(section, article, div, form)[class*="rounded-"][class*="bg-white"][class*="p-4"],
+html[data-ruda-app="platform-admin-mobile"] #platform-admin-mobile-root :is(section, article, div, form)[class*="rounded-"][class*="bg-white"][class*="p-3.5"] {
+  padding: var(--ruda-mobile-card-padding);
+}
+
+/* Search surfaces follow the input token, not the card token. */
+html[data-ruda-app="frontend-mobile"] .ruda-home-search,
+html[data-ruda-app="merchant-admin-mobile"] .ruda-home-search,
+html[data-ruda-app="platform-admin-mobile"] .ruda-home-search {
+  border-radius: var(--radius-ruda-input) !important;
+}
+
+/* Pairing rule: in a fixed action bar, secondary and primary share height. */
+html[data-ruda-app="merchant-admin-mobile"] .ruda-action-bar .ruda-btn-secondary {
+  height: 40px;
+}
+
+/* Small status badges stay compact, but use the tag token instead of pills. */
+html[data-ruda-app="frontend-mobile"] .ruda-tag,
+html[data-ruda-app="merchant-admin-mobile"] .ruda-tag,
+html[data-ruda-app="platform-admin-mobile"] .ruda-tag {
+  border-radius: var(--radius-ruda-tag) !important;
+  min-height: 22px;
+  padding-inline: 8px;
+}

@@ -1,0 +1,94 @@
+<view class="screen more-screen animate-fade-in">
+  <!-- 状态处理 -->
+  <view wx:if="{{loading}}" class="status-notice">
+    <view class="loading-spinner"></view>
+    <text>加载配置中...</text>
+  </view>
+  
+  <view wx:elif="{{error}}" class="status-notice error">
+    <text>{{error}}</text>
+    <view class="retry-btn" bindtap="retry">重试</view>
+  </view>
+
+  <block wx:else>
+    <view wx:if="{{merchant}}" class="profile-section more-company-header" hover-class="ruda-card--pressed" bindtap="openBusinessCard">
+      <view class="avatar-box">
+        <image wx:if="{{merchantLogo}}" class="avatar-img" src="{{merchantLogo}}" mode="aspectFit" binderror="onMerchantLogoError" />
+        <image wx:else class="avatar-img avatar-fallback" src="/assets/default-merchant-logo.jpg" mode="aspectFit" />
+        <view wx:if="{{canManageSettings}}" class="avatar-edit" catchtap="chooseMerchantLogo">
+          <text>{{uploadingLogo ? '…' : '更换'}}</text>
+        </view>
+      </view>
+      <text class="profile-name">{{merchantDisplayName}}</text>
+      <text wx:if="{{storeLookupCode}}" class="store-lookup-code">店铺码 {{storeLookupCode}}</text>
+      <view wx:if="{{merchantWebsiteUrl}}" class="merchant-qr-entry" hover-class="ui-row-pressed" catchtap="openMerchantQrCode">
+        <image class="merchant-qr-icon" src="/assets/icons/scan.png" mode="aspectFit" />
+        <text>店铺二维码</text>
+      </view>
+    </view>
+
+    <view wx:if="{{showMerchantQr}}" class="merchant-qr-mask" catchtap="closeMerchantQrCode">
+      <view class="merchant-qr-modal" catchtap="stopQrModalTap">
+        <view class="merchant-qr-heading">
+          <text class="merchant-qr-title">店铺二维码</text>
+          <text class="merchant-qr-close" catchtap="closeMerchantQrCode">×</text>
+        </view>
+        <canvas type="2d" id="merchant-qr-canvas" class="merchant-qr-canvas"></canvas>
+        <text class="merchant-qr-url">{{merchantWebsiteUrl}}</text>
+        <text class="merchant-qr-hint">扫码访问商家店铺</text>
+        <button class="merchant-qr-share" bindtap="shareMerchantQrCode" loading="{{qrLoading}}" disabled="{{qrLoading}}">
+          {{qrLoading ? '正在生成…' : '发送二维码给朋友'}}
+        </button>
+        <button class="merchant-qr-copy" bindtap="copyMerchantWebsite">复制店铺链接</button>
+      </view>
+    </view>
+
+    <!-- 功能分组 -->
+    <view wx:for="{{groups}}" wx:key="id" class="more-group animate-fade-in">
+      <text class="group-header">{{item.title}}</text>
+      <view class="module-container ruda-card ui-card">
+        <view wx:for="{{item.items}}" wx:for-item="module" wx:key="id" class="module-item module-row" hover-class="ui-row-pressed" data-id="{{module.id}}" bindtap="openModule">
+          <view class="module-icon-box"><image class="module-icon-image" src="{{module.iconSrc}}" mode="aspectFit" /></view>
+          <view class="module-content">
+            <text class="module-label">{{module.title}}</text>
+            <text wx:if="{{module.id === 'notifications' && notificationError}}" class="module-desc error">{{notificationError}}</text>
+            <text wx:elif="{{module.description}}" class="module-desc">{{module.description}}</text>
+          </view>
+          <view class="module-side">
+            <view wx:if="{{module.id === 'notifications' && unreadNotificationCount > 0}}" class="module-badge">{{unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}}</view>
+            <image class="module-arrow" src="/assets/icons/chevron_right.png" mode="aspectFit" />
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{!groups.length}}" class="empty-view">
+      <text>暂无管理权限</text>
+    </view>
+
+    <view class="more-group privacy-guide-group">
+      <text class="group-header">信息保护</text>
+      <view class="module-container ruda-card ui-card">
+        <view class="module-item module-row" hover-class="ui-row-pressed" bindtap="openPrivacyGuide">
+          <view class="module-icon-box"><text class="privacy-guide-icon">隐</text></view>
+          <view class="module-content">
+            <text class="module-label">隐私指引</text>
+            <text class="module-desc">信息收集使用说明</text>
+          </view>
+          <view class="module-side">
+            <image class="module-arrow" src="/assets/icons/chevron_right.png" mode="aspectFit" />
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 页脚区域 -->
+    <view class="more-footer">
+      <view class="footer-branding">
+        <text class="brand-h">RUDA FASHION</text>
+        <text class="brand-c">BUSINESS PORTAL V2.0</text>
+      </view>
+      <button class="btn ui-button ui-button--secondary btn--secondary logout-btn" hover-class="ui-button-pressed" bindtap="logout">退出登录</button>
+    </view>
+  </block>
+</view>

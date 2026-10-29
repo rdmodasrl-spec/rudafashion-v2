@@ -1,0 +1,406 @@
+.pos-screen {
+  padding-bottom: 40rpx;
+}
+
+.pos-header {
+  padding: 24rpx 24rpx 8rpx;
+}
+
+.pos-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.pos-store-picker {
+  display: flex;
+  align-items: baseline;
+  gap: 12rpx;
+}
+
+.pos-store-name {
+  font-size: 34rpx;
+  font-weight: 600;
+  color: #1d1b19;
+}
+
+.pos-store-hint {
+  font-size: 22rpx;
+  color: #8a8580;
+}
+
+.pos-shift-chip {
+  padding: 8rpx 18rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  color: #8a8580;
+  background: #f0eeea;
+}
+
+.pos-shift-chip--open {
+  color: #1d1b19;
+  background: #e6f0e6;
+}
+
+.pos-notice {
+  display: block;
+  margin-top: 16rpx;
+  padding: 16rpx 20rpx;
+  border-radius: 16rpx;
+  font-size: 24rpx;
+  color: #6b5b2e;
+  background: #fbf5e6;
+}
+
+.pos-notice--error {
+  color: #8c2f2f;
+  background: #fbecec;
+}
+
+.pos-section {
+  padding: 12rpx 24rpx;
+}
+
+.pos-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 16rpx;
+}
+
+.pos-section-title {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #1d1b19;
+}
+
+.pos-section-meta {
+  font-size: 22rpx;
+  color: #8a8580;
+}
+
+.pos-shift-form {
+  display: flex;
+  gap: 16rpx;
+  align-items: center;
+}
+
+.pos-input {
+  flex: 1;
+  height: 76rpx;
+  padding: 0 20rpx;
+  border-radius: 16rpx;
+  background: #f5f4f2;
+  font-size: 26rpx;
+}
+
+.pos-primary-btn {
+  min-width: 140rpx;
+  height: 76rpx;
+  line-height: 76rpx;
+  text-align: center;
+  border-radius: 16rpx;
+  font-size: 26rpx;
+  color: #ffffff;
+  background: #1d1b19;
+}
+
+.pos-primary-btn.is-busy,
+.pos-submit.is-busy {
+  opacity: 0.6;
+}
+
+.pos-search {
+  display: flex;
+  gap: 16rpx;
+  align-items: center;
+}
+
+.pos-search-input {
+  flex: 1;
+  height: 80rpx;
+  padding: 0 24rpx;
+  border-radius: 999rpx;
+  background: #ffffff;
+  font-size: 26rpx;
+}
+
+.pos-scan-btn {
+  padding: 0 28rpx;
+  height: 80rpx;
+  line-height: 80rpx;
+  border-radius: 999rpx;
+  font-size: 26rpx;
+  color: #1d1b19;
+  background: #ffffff;
+}
+
+.pos-product {
+  margin-bottom: 16rpx;
+  padding: 24rpx;
+}
+
+.pos-product-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.pos-product-name {
+  flex: 1;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #1d1b19;
+}
+
+.pos-product-price {
+  font-size: 26rpx;
+  color: #1d1b19;
+}
+
+.pos-product-style {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: #8a8580;
+}
+
+.pos-sku-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-top: 16rpx;
+}
+
+.pos-sku-chip {
+  padding: 12rpx 22rpx;
+  border-radius: 999rpx;
+  font-size: 24rpx;
+  color: #1d1b19;
+  background: #f5f4f2;
+}
+
+.pos-cart-line {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 16rpx 0;
+  border-bottom: 1rpx solid #f0eeea;
+}
+
+.pos-cart-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.pos-cart-name {
+  font-size: 26rpx;
+  color: #1d1b19;
+}
+
+.pos-cart-variant {
+  font-size: 22rpx;
+  color: #8a8580;
+}
+
+.pos-qty {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.pos-qty-btn {
+  width: 52rpx;
+  height: 52rpx;
+  line-height: 52rpx;
+  text-align: center;
+  border-radius: 50%;
+  font-size: 28rpx;
+  background: #f5f4f2;
+}
+
+.pos-qty-value {
+  min-width: 32rpx;
+  text-align: center;
+  font-size: 26rpx;
+}
+
+.pos-cart-remove {
+  font-size: 22rpx;
+  color: #8a8580;
+}
+
+.pos-total-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 20rpx;
+}
+
+.pos-total-label {
+  font-size: 22rpx;
+  color: #8a8580;
+}
+
+.pos-total-value {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #1d1b19;
+}
+
+.pos-payment {
+  display: flex;
+  gap: 24rpx;
+  margin-top: 20rpx;
+}
+
+.pos-payment-item {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  font-size: 24rpx;
+  color: #1d1b19;
+}
+
+.pos-confirm-row {
+  margin-top: 16rpx;
+}
+
+.pos-confirm {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  font-size: 24rpx;
+  color: #1d1b19;
+}
+
+.pos-submit {
+  margin-top: 24rpx;
+  height: 92rpx;
+  line-height: 92rpx;
+  text-align: center;
+  border-radius: 20rpx;
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #ffffff;
+  background: #1d1b19;
+}
+
+.pos-empty {
+  padding: 48rpx 0;
+  text-align: center;
+  font-size: 24rpx;
+  color: #8a8580;
+}
+
+.pos-sales {
+  padding: 8rpx 24rpx;
+}
+
+.pos-sale {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+  padding: 16rpx 0;
+  border-bottom: 1rpx solid #f0eeea;
+}
+
+.pos-sale-no {
+  font-size: 24rpx;
+  color: #1d1b19;
+}
+
+.pos-sale-meta {
+  font-size: 22rpx;
+  color: #8a8580;
+}
+
+.pos-sale-total {
+  font-size: 26rpx;
+  color: #1d1b19;
+}
+
+.pos-direction-row,
+.pos-cash-form {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.pos-direction-row {
+  margin-bottom: 14rpx;
+}
+
+.pos-direction-btn {
+  flex: 1;
+  padding: 14rpx 18rpx;
+  border: 1rpx solid #dedbd6;
+  border-radius: 12rpx;
+  text-align: center;
+  font-size: 22rpx;
+  color: #4a4641;
+  background: #ffffff;
+}
+
+.pos-direction-btn.is-selected {
+  border-color: #1d1b19;
+  color: #ffffff;
+  background: #1d1b19;
+}
+
+.pos-cash-form {
+  flex-wrap: wrap;
+}
+
+.pos-cash-form .pos-input {
+  min-width: 180rpx;
+}
+
+.pos-cash-form .pos-primary-btn {
+  min-width: 112rpx;
+}
+
+.pos-ledger-list,
+.pos-refund-list {
+  margin-top: 16rpx;
+}
+
+.pos-ledger-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding: 14rpx 0;
+  border-bottom: 1rpx solid #f0eeea;
+  font-size: 22rpx;
+  color: #4a4641;
+}
+
+.pos-sale-item {
+  padding: 18rpx 0;
+}
+
+.pos-inline-action {
+  flex-shrink: 0;
+  padding: 10rpx 16rpx;
+  border: 1rpx solid #c9c5bf;
+  border-radius: 10rpx;
+  font-size: 22rpx;
+  color: #1d1b19;
+  background: #ffffff;
+}
+
+.pos-history-row {
+  margin-top: 12rpx;
+  padding: 18rpx;
+}
+
+@media (max-width: 360px) {
+  .pos-cash-form .pos-input {
+    flex-basis: 100%;
+  }
+}

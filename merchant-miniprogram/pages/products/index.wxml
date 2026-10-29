@@ -1,0 +1,205 @@
+<view class="screen product-list-screen animate-fade-in {{selectionMode && selectedProductIds.length ? 'has-batch-toolbar' : ''}}">
+  <!-- 搜索栏 -->
+  <view class="search-container">
+    <view class="search-heading">
+      <text class="search-heading-title">智能搜款</text>
+      <text class="search-heading-hint">款号 · 名称 · SKU · 条码</text>
+    </view>
+    <view class="modern-search">
+      <view class="search-icon-wrap">
+        <image class="search-icon-inner" src="/assets/icons/search.png" mode="aspectFit" />
+      </view>
+      <input class="search-input-field" value="{{query}}" placeholder="输入关键词，快速定位商品" placeholder-class="placeholder" confirm-type="search" bindinput="onSearch" />
+      <view wx:if="{{query}}" class="search-clear-btn" catchtap="clearSearch"><image class="close-icon" src="/assets/icons/close.png" mode="aspectFit" /></view>
+      <view wx:if="{{canManageProducts}}" class="search-add-btn" hover-class="ui-button-pressed" catchtap="createProduct" aria-label="上传商品">
+        <image class="search-add-icon" src="/assets/icons/plus_light.png" mode="aspectFit" />
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{productSummary}}" class="mobile-summary-card product-summary-card">
+    <text class="mobile-summary-heading">智能商品工作台</text>
+    <view class="mobile-summary-grid">
+      <view class="mobile-summary-stat">
+        <text class="mobile-summary-label">商品总数</text>
+        <text class="mobile-summary-value">{{productSummary.total}}</text>
+      </view>
+      <view class="mobile-summary-stat">
+        <text class="mobile-summary-label">低库存</text>
+        <text class="mobile-summary-value">{{productSummary.lowStock === null ? '—' : productSummary.lowStock}}</text>
+      </view>
+      <view class="mobile-summary-stat">
+        <text class="mobile-summary-label">待完善</text>
+        <text class="mobile-summary-value">{{productSummary.incomplete}}</text>
+      </view>
+    </view>
+    <button wx:if="{{canManageProducts}}" class="btn ui-button ui-button--primary btn--primary product-summary-add" hover-class="ui-button-pressed" bindtap="createProduct">
+      <image class="icon-plus-small" src="/assets/icons/plus_light.png" mode="aspectFit" /> 发布商品
+    </button>
+  </view>
+  <view wx:elif="{{loading}}" class="mobile-summary-skeleton product-summary-skeleton">
+    <view class="mobile-summary-skeleton-line"></view>
+    <view class="mobile-summary-skeleton-grid"></view>
+  </view>
+
+  <!-- 快捷筛选 -->
+  <scroll-view class="filter-scroll-view" scroll-x>
+    <view class="filter-chips">
+      <view wx:for="{{filters}}" wx:key="id" class="filter-chip ui-chip {{filter === item.id ? 'active' : ''}}" hover-class="ui-button-pressed" data-id="{{item.id}}" bindtap="selectFilter">
+        {{item.label}}
+      </view>
+    </view>
+  </scroll-view>
+
+  <!-- 工具栏 -->
+  <view class="toolbar-section">
+    <text class="count-text">{{visibleProducts.length}} 件商品</text>
+    <view class="toolbar-actions">
+      <view wx:if="{{canManageProducts}}" class="tool-item" hover-class="ui-button-pressed" bindtap="toggleSelectionMode">
+        {{selectionMode ? '取消选择' : '批量选择'}}
+      </view>
+      <view class="tool-item" hover-class="ui-button-pressed" bindtap="toggleProductOptions">
+        {{showProductOptions ? '收起筛选' : '筛选 / 排序'}}
+      </view>
+    </view>
+  </view>
+
+  <!-- 高级筛选面板 -->
+  <view wx:if="{{showProductOptions}}" class="options-panel animate-fade-in">
+    <view class="options-grid">
+      <picker class="picker-box" range="{{extraFilterOptions}}" range-key="label" value="{{extraFilterIndex}}" data-field="extraFilter" bindchange="onProductOptionChange">
+        <view class="picker-content">{{extraFilterOptions[extraFilterIndex].label}} <image class="picker-chevron" src="/assets/icons/chevron_down.png" mode="aspectFit" /></view>
+      </picker>
+      <picker class="picker-box" range="{{sortOptions}}" range-key="label" value="{{sortIndex}}" data-field="sort" bindchange="onProductOptionChange">
+        <view class="picker-content">{{sortOptions[sortIndex].label}} <image class="picker-chevron" src="/assets/icons/chevron_down.png" mode="aspectFit" /></view>
+      </picker>
+      <picker class="picker-box" range="{{specFilterOptions}}" range-key="label" value="{{specFilterIndex}}" data-field="specFilter" bindchange="onProductOptionChange">
+        <view class="picker-content">{{specFilterOptions[specFilterIndex].label}} <image class="picker-chevron" src="/assets/icons/chevron_down.png" mode="aspectFit" /></view>
+      </picker>
+      <view class="price-range">
+        <input class="price-input" type="digit" value="{{minPrice}}" data-field="minPrice" bindinput="onPriceFilterInput" placeholder="最低价 €" />
+        <text class="range-sep">-</text>
+        <input class="price-input" type="digit" value="{{maxPrice}}" data-field="maxPrice" bindinput="onPriceFilterInput" placeholder="最高价 €" />
+      </view>
+    </view>
+    <button wx:if="{{canManageProducts}}" class="btn ui-button ui-button--secondary btn--secondary btn-sm" hover-class="ui-button-pressed" bindtap="openCategoryManager">管理商品分类</button>
+  </view>
+
+  <!-- 列表状态 -->
+  <view wx:if="{{error || searchError}}" class="status-notice ui-status error animate-fade-in">
+    <text>{{error || searchError}}</text>
+    <view class="retry-btn" bindtap="{{error ? 'retryLoad' : 'retrySearch'}}">重试</view>
+  </view>
+  
+  <view wx:if="{{inventoryError && canViewStock}}" class="status-notice ui-status warning">实时库存加载受阻</view>
+
+  <!-- 骨架屏 -->
+  <view wx:if="{{loading && !products.length}}" class="skeleton-list">
+    <view wx:for="{{[1,2,3,4]}}" wx:key="*this" class="skeleton-item ruda-card ui-card">
+      <view class="skeleton-img skeleton"></view>
+      <view class="skeleton-content">
+        <view class="skeleton-title skeleton"></view>
+        <view class="skeleton-line skeleton"></view>
+        <view class="skeleton-line short skeleton"></view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:elif="{{!loading && !visibleProducts.length}}" class="empty-view animate-fade-in">
+    <!-- 空状态 -->
+    <view class="empty-icon"><image class="empty-state-icon" src="/assets/icons/search_empty.png" mode="aspectFit" /></view>
+    <text class="empty-text">{{query ? '未找到匹配结果' : '暂无商品数据'}}</text>
+    <button wx:if="{{query || filter !== 'all'}}" class="btn ui-button ui-button--secondary btn--secondary btn-sm" bindtap="clearProductFilters">重置筛选</button>
+    <button wx:elif="{{canManageProducts}}" class="btn ui-button ui-button--primary btn--primary btn-sm" bindtap="createProduct">发布第一件商品</button>
+  </view>
+
+  <!-- 商品列表 -->
+  <view class="product-grid">
+    <view wx:for="{{visibleProducts}}" wx:key="id" class="product-item product-card ruda-card ui-card ui-list-row {{selectionMode ? 'in-selection' : ''}}" hover-class="ruda-card--pressed" data-id="{{item.id}}" bindtap="openProduct">
+      <checkbox-group wx:if="{{selectionMode && canManageProducts}}" class="item-checkbox" data-id="{{item.id}}" catchtap="stopTap" bindchange="onProductSelectionChange">
+        <checkbox value="selected" checked="{{item.selected}}" color="#000" />
+      </checkbox-group>
+      
+      <view class="item-visual product-image">
+        <image wx:if="{{item.coverImage}}" class="item-img" src="{{item.coverImage}}" mode="aspectFit" />
+        <view wx:else class="item-img-placeholder"><image class="empty-state-icon" src="/assets/icons/no_image.png" mode="aspectFit" /></view>
+        <view class="item-status-tag status-{{item.lifecycleStatus}}">{{item.statusLabel}}</view>
+      </view>
+      
+      <view class="item-info">
+        <view class="item-header">
+          <text class="item-name">{{item.name}}</text>
+          <view class="item-more-btn" catchtap="openProductActions" data-id="{{item.id}}"><image class="more-action-icon" src="/assets/icons/more.png" mode="aspectFit" /></view>
+        </view>
+        <text class="item-sku">款号: {{item.styleNo}}</text>
+        <view class="item-footer">
+          <view class="item-price-box">
+            <text class="item-currency">€</text>
+            <text class="item-price-val">{{item.wholesalePrice}}</text>
+          </view>
+          <text wx:if="{{canViewStock}}" class="item-stock {{item.stockQuantity <= 0 ? 'out' : ''}}">
+            库存: {{item.stockQuantity || 0}}
+          </text>
+        </view>
+        <text class="item-specs">{{item.colorSummary || '标准'}} · {{item.sizeSummary || '均码'}}</text>
+      </view>
+
+      <!-- 更多菜单 (气泡) -->
+      <view wx:if="{{openMenuProductId === item.id}}" class="action-menu animate-fade-in" catchtap="stopTap">
+        <view class="menu-item" bindtap="handleProductMenuAction" data-id="{{item.id}}" data-action="edit">编辑商品</view>
+        <view class="menu-item" bindtap="handleProductMenuAction" data-id="{{item.id}}" data-action="copy">复制商品</view>
+        <view wx:if="{{item.lifecycleStatus === 'published'}}" class="menu-item" bindtap="handleProductMenuAction" data-id="{{item.id}}" data-action="share">分享商品</view>
+        <view class="menu-item {{item.lifecycleStatus === 'published' ? 'danger' : ''}}" bindtap="handleProductMenuAction" data-id="{{item.id}}" data-action="{{item.lifecycleStatus === 'published' ? 'draft' : 'publish'}}">
+          {{item.lifecycleStatus === 'published' ? '下架商品' : '上架商品'}}
+        </view>
+        <view class="menu-item danger" bindtap="handleProductMenuAction" data-id="{{item.id}}" data-action="archive">归档商品</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 批量操作栏 -->
+  <view wx:if="{{canManageProducts && selectionMode && selectedProductIds.length}}" class="batch-bar animate-fade-in">
+    <view class="batch-header">
+      <text class="batch-count">已选 {{selectedProductIds.length}} 件商品</text>
+      <text class="batch-clear" bindtap="clearProductSelection">取消</text>
+    </view>
+    <view class="batch-btns">
+      <button class="btn ui-button ui-button--primary btn--primary flex-1" data-type="lifecycle" data-value="published" bindtap="batchProductAction">批量上架</button>
+      <button class="btn ui-button ui-button--secondary btn--secondary flex-1" data-type="lifecycle" data-value="draft" bindtap="batchProductAction">批量下架</button>
+      <picker class="batch-picker" range="{{categories}}" range-key="name" value="{{batchCategoryIndex}}" bindchange="onBatchCategoryChange">
+        <button class="btn ui-button ui-button--secondary btn--secondary">分类</button>
+      </picker>
+    </view>
+  </view>
+
+  <!-- 分类管理器 -->
+  <view wx:if="{{showCategoryManager}}" class="full-modal animate-fade-in">
+    <view class="modal-header">
+      <view class="modal-close" bindtap="closeCategoryManager"><image class="modal-close-icon" src="/assets/icons/close.png" mode="aspectFit" /></view>
+      <text class="modal-title">分类管理</text>
+      <view class="modal-spacer"></view>
+    </view>
+    <scroll-view class="modal-content" scroll-y>
+      <view class="category-form ruda-card">
+        <input class="modern-input" value="{{categoryNameDraft}}" placeholder="输入新分类名称" bindinput="onCategoryNameInput" />
+        <view class="form-btns">
+          <button wx:if="{{editingCategoryId}}" class="btn ui-button ui-button--quiet btn--ghost" bindtap="cancelCategoryEdit">取消</button>
+          <button class="btn ui-button ui-button--primary btn--primary" disabled="{{!categoryNameDraft}}" bindtap="saveCategory">{{editingCategoryId ? '更新' : '添加'}}</button>
+        </view>
+      </view>
+      
+      <view class="category-list">
+        <view wx:for="{{categories}}" wx:key="id" class="category-row">
+          <view class="cat-info">
+            <text class="cat-name">{{item.name}}</text>
+            <text class="cat-count">{{item.productCount}} 商品</text>
+          </view>
+          <view class="cat-actions">
+            <view class="cat-btn" bindtap="editCategory" data-id="{{item.id}}">编辑</view>
+            <view class="cat-btn danger" bindtap="deleteCategory" data-id="{{item.id}}">删除</view>
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+</view>

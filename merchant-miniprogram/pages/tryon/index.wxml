@@ -1,0 +1,44 @@
+<view class="screen tryon-page">
+  <view class="tryon-heading">
+    <text class="tryon-title">虚拟试衣</text>
+  </view>
+  <view class="tryon-stage">
+    <view class="tryon-frames">
+      <view class="tryon-frame" data-field="person" bindtap="chooseImage">
+        <image wx:if="{{personPath}}" class="frame-image" src="{{personPath}}" mode="aspectFill" />
+        <text wx:else class="frame-add">＋</text>
+        <text class="frame-label">模特</text>
+      </view>
+      <view class="tryon-frame" data-field="garment" bindtap="chooseImage">
+        <image wx:if="{{garmentPath}}" class="frame-image" src="{{garmentPath}}" mode="aspectFill" />
+        <text wx:else class="frame-add">＋</text>
+        <text class="frame-label">样衣</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="tryon-options">
+    <view class="tryon-controls">
+      <picker range="{{categories}}" range-key="label" value="{{categoryIndex}}" bindchange="onCategoryChange">
+        <view class="category-picker">{{categories[categoryIndex].label}}<text>⌄</text></view>
+      </picker>
+      <text wx:if="{{remaining !== null}}" class="remaining-count">剩余 {{remaining}} 次</text>
+    </view>
+
+    <view wx:if="{{resultUrl}}" class="result-frame">
+      <image class="result-image" src="{{resultUrl}}" mode="widthFix" />
+    </view>
+
+    <view class="consent-row">
+      <checkbox-group bindchange="onConsentChange">
+        <label class="consent-label"><checkbox value="agree" color="#1d1b19" checked="{{privacyConsent}}" />图片仅用于本次试衣</label>
+      </checkbox-group>
+    </view>
+  </view>
+
+  <text wx:if="{{status}}" class="task-status">{{status}}</text>
+  <text wx:if="{{error}}" class="tryon-error">{{error}}</text>
+
+  <button wx:if="{{pendingTaskKey}}" class="primary-button tryon-submit" loading="{{checking}}" disabled="{{loading || checking}}" bindtap="checkTask">查询任务</button>
+  <button wx:else class="primary-button tryon-submit" loading="{{loading}}" disabled="{{loading || checking || remaining === 0}}" bindtap="startTryOn">开始试衣</button>
+</view>

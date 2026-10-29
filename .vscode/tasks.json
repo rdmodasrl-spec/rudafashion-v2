@@ -1,0 +1,132 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "db-check",
+			"type": "shell",
+			"command": "pwd && ls -la && echo 'task-ok'",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "none"
+		},
+		{
+			"label": "db-role-check",
+			"type": "shell",
+			"command": "whoami && id && sudo -n -u postgres psql -d postgres -c '\\du'",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "none"
+		},
+		{
+			"label": "open-psql-for-db-user-reset",
+			"type": "shell",
+			"command": "sudo -n -u postgres psql -d postgres",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "none"
+		},
+		{
+			"label": "test-admin-ip-whitelist",
+			"type": "shell",
+			"command": "node --import tsx --test --test-reporter=tap tests/admin-ip-whitelist.test.ts",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "test-unit",
+			"type": "shell",
+			"command": "npm run test:unit -- --test-reporter=tap",
+			"command": "git status --short -- .vscode/tasks.json server.ts src/apps/shared/components/auth/PasswordChangeForm.tsx src/i18n/uiCopyCatalog.ts src/server/adminIpWhitelist.ts src/server/adminSession.ts src/server/clientIp.ts src/shared/passwordPolicy.ts tests/admin-ip-whitelist.test.ts tests/admin-session.test.ts tests/client-ip.test.ts tests/password-policy.test.ts tests/integration/p0-http.postgres.test.ts tests/e2e/b2c-checkout.e2e.ts scripts/seed-e2e.ts scripts/test-pos-e2e-isolated.sh scripts/test-recovery-drill-isolated.sh docs/SYSTEM_COMPLETION_STATUS.md docs/FINAL_SYSTEM_COMPLETION_REPORT.md docs/BLOCKED_ITEMS.md fashion-ingestion && git diff --check -- .vscode/tasks.json server.ts src/apps/shared/components/auth/PasswordChangeForm.tsx src/i18n/uiCopyCatalog.ts src/server/adminIpWhitelist.ts src/server/adminSession.ts src/server/clientIp.ts src/shared/passwordPolicy.ts tests/admin-ip-whitelist.test.ts tests/admin-session.test.ts tests/client-ip.test.ts tests/password-policy.test.ts tests/integration/p0-http.postgres.test.ts tests/e2e/b2c-checkout.e2e.ts scripts/seed-e2e.ts scripts/test-pos-e2e-isolated.sh scripts/test-recovery-drill-isolated.sh docs/SYSTEM_COMPLETION_STATUS.md docs/FINAL_SYSTEM_COMPLETION_REPORT.md docs/BLOCKED_ITEMS.md && git diff --stat -- .vscode/tasks.json server.ts src/apps/shared/components/auth/PasswordChangeForm.tsx src/i18n/uiCopyCatalog.ts src/server/adminIpWhitelist.ts src/server/adminSession.ts src/server/clientIp.ts src/shared/passwordPolicy.ts tests/admin-ip-whitelist.test.ts tests/admin-session.test.ts tests/client-ip.test.ts tests/password-policy.test.ts tests/integration/p0-http.postgres.test.ts tests/e2e/b2c-checkout.e2e.ts scripts/seed-e2e.ts scripts/test-pos-e2e-isolated.sh scripts/test-recovery-drill-isolated.sh docs/SYSTEM_COMPLETION_STATUS.md docs/FINAL_SYSTEM_COMPLETION_REPORT.md docs/BLOCKED_ITEMS.md && git check-ignore -v fashion-ingestion/app/services/ai.py fashion-ingestion/app/config.py fashion-ingestion/tests/test_ai.py && git diff --unified=2 -- server.ts src/apps/shared/components/auth/PasswordChangeForm.tsx src/i18n/uiCopyCatalog.ts | grep -n -E -C 2 'isAdminSessionCurrent|credentialVersion|MINIMUM_PASSWORD|bindHost|isAdminIpAllowed|adminIpWhitelist|getClientIp|管理员密码至少|admin password' || true",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "test-p0-isolated",
+			"type": "shell",
+			"command": "bash scripts/test-ai-growth-p0-isolated.sh",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "test-pos-e2e-isolated",
+			"type": "shell",
+			"command": "bash scripts/test-pos-e2e-isolated.sh",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "test-recovery-isolated",
+			"type": "shell",
+			"command": "bash scripts/test-recovery-drill-isolated.sh",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "test-integration-isolated",
+			"type": "shell",
+			"command": "bash scripts/test-ai-growth-p0-isolated.sh --full",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "test-fashion-ingestion",
+			"type": "shell",
+			"command": "cd fashion-ingestion && python3 -m venv --system-site-packages /tmp/ruda-fashion-ingestion-venv && /tmp/ruda-fashion-ingestion-venv/bin/pip install --quiet -r requirements.txt && PYTHONPATH=. PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 /tmp/ruda-fashion-ingestion-venv/bin/python -m pytest -q tests",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "lint-typescript",
+			"type": "shell",
+			"command": "npm run lint",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "build-production",
+			"type": "shell",
+			"command": "npm run build",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "test-flutter",
+			"type": "shell",
+			"command": "cd fu && flutter test",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "restart-and-health-check",
+			"type": "shell",
+			"command": "./node_modules/.bin/pm2 restart ruda-fashion && curl -fsS --retry 20 --retry-delay 1 --retry-connrefused https://ruda.fashion/api/health/ready",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "none"
+		},
+	]
+}

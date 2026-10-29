@@ -1,0 +1,32 @@
+<view class="authorizations-page">
+  <view wx:if="{{loading}}" class="state">正在加载授权…</view>
+  <view wx:elif="{{error}}" class="state state-error">
+    <text>{{error}}</text>
+    <text class="state-retry" bindtap="load">重试</text>
+  </view>
+  <view wx:elif="{{!authorizations.length}}" class="state">
+    <text class="state-title">还没有看货授权</text>
+    <text>在商家店铺内申请私密货盘权限，商家通过后会显示在这里。</text>
+    <text class="state-action" bindtap="openMerchants">前往商家</text>
+  </view>
+  <view wx:else class="authorization-list">
+    <view
+      wx:for="{{authorizations}}"
+      wx:key="id"
+      class="authorization-item"
+    >
+      <view class="authorization-head">
+        <text class="authorization-name">{{item.merchantName}}</text>
+        <text class="authorization-status authorization-status-{{item.status}}">{{item.statusLabel}}</text>
+      </view>
+      <text wx:if="{{item.appliedDate}}" class="authorization-meta">申请日期 {{item.appliedDate}}</text>
+      <text wx:if="{{item.expiresDate}}" class="authorization-meta">有效期至 {{item.expiresDate}}</text>
+      <view wx:if="{{item.canOpen}}" class="authorization-link" data-slug="{{item.storeSlug}}" bindtap="openStore">
+        <text>进入店铺</text>
+        <view class="chevron"></view>
+      </view>
+      <text wx:elif="{{item.status === 'expired'}}" class="authorization-meta">授权已到期，如需继续查看请重新申请。</text>
+      <text wx:elif="{{item.status === 'approved'}}" class="authorization-meta">商家店铺当前未公开，暂时无法进入。</text>
+    </view>
+  </view>
+</view>

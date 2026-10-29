@@ -1,0 +1,43 @@
+{
+  "pages": [
+    "pages/dashboard/index",
+    "pages/products/index",
+    "pages/orders/index",
+    "pages/more/index",
+    "pages/login/index",
+    "pages/enterprise-register/index",
+    "pages/product-form/index",
+    "pages/product-detail/index",
+    "pages/counterparties/index",
+    "pages/order-create/index",
+    "pages/reservation-requests/index",
+    "pages/workspace/index",
+    "pages/industry/index",
+    "pages/pos/index",
+    "pages/business-card/index",
+    "pages/privacy/index",
+    "pages/service-agreement/index"
+  ],
+  "lazyCodeLoading": "requiredComponents",
+  "window": {
+    "navigationBarTitleText": "RUDA 商家",
+    "navigationBarBackgroundColor": "#f5f5f7",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f5f5f7"
+  },
+  "tabBar": {
+    "custom": true,
+    "color": "#8a8580",
+    "selectedColor": "#1d1b19",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "white",
+    "list": [
+      { "pagePath": "pages/dashboard/index", "text": "首页" },
+      { "pagePath": "pages/products/index", "text": "商品" },
+      { "pagePath": "pages/orders/index", "text": "订单" },
+      { "pagePath": "pages/more/index", "text": "更多" }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

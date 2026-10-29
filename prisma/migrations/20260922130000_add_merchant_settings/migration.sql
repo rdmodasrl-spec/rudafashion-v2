@@ -1,0 +1,1 @@
+ALTER TABLE "Merchant" ADD COLUMN "settings" TEXT NOT NULL DEFAULT '{}';

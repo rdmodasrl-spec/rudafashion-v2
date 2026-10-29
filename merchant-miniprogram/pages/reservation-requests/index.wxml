@@ -1,0 +1,59 @@
+<site-header />
+<view class="reservation-page">
+  <view class="page-heading">
+    <text class="page-title">商品预订意向</text>
+    <text class="page-subtitle">买家提交的颜色、尺码和数量需求</text>
+  </view>
+
+  <view wx:if="{{loading && !requests.length}}" class="state-card">正在加载预订意向…</view>
+  <view wx:if="{{error}}" class="state-card state-error">{{error}}</view>
+  <view wx:if="{{!loading && !error && !requests.length}}" class="state-card">
+    <text class="empty-title">暂无预订意向</text>
+    <text class="empty-copy">买家提交的商品需求会显示在这里。</text>
+  </view>
+
+  <view wx:for="{{requests}}" wx:key="id" class="request-card">
+    <view class="request-heading">
+      <view>
+        <text class="request-number">{{item.requestNo}}</text>
+        <text class="request-date">{{item.createdAt}}</text>
+      </view>
+      <text class="request-status status-{{item.status}}">{{item.statusLabel}}</text>
+    </view>
+    <view class="request-product">
+      <text class="product-name">{{item.product.name_zh || item.product.name}}</text>
+      <text class="product-style">款号 {{item.product.styleNo}}</text>
+    </view>
+    <view class="request-lines">
+      <view wx:for="{{item.lines}}" wx:for-item="line" wx:key="sku" class="request-line">
+        <text>{{line.color || '默认'}} / {{line.size || '均码'}}</text>
+        <text>{{line.quantity}} 件 · {{line.sku}}</text>
+      </view>
+    </view>
+    <view class="request-summary">
+      <text>{{item.customer.companyName}}</text>
+      <text>{{item.totalQty}} 件 · {{item.displayAmount}}</text>
+    </view>
+    <text wx:if="{{item.notes}}" class="request-note">买家备注：{{item.notes}}</text>
+    <text wx:if="{{item.decisionNote}}" class="request-note">处理备注：{{item.decisionNote}}</text>
+    <view wx:if="{{item.status === 'pending'}}" class="request-actions">
+      <button
+        class="request-reject"
+        data-id="{{item.id}}"
+        data-status="rejected"
+        loading="{{updatingId === item.id}}"
+        disabled="{{!!updatingId}}"
+        bindtap="decideRequest"
+      >拒绝</button>
+      <button
+        class="request-confirm"
+        data-id="{{item.id}}"
+        data-status="confirmed"
+        loading="{{updatingId === item.id}}"
+        disabled="{{!!updatingId}}"
+        bindtap="decideRequest"
+      >确认意向</button>
+    </view>
+    <text wx:if="{{item.status === 'confirmed'}}" class="request-footnote">已通知买家通过正常下单流程购买；本次确认未锁定库存。</text>
+  </view>
+</view>

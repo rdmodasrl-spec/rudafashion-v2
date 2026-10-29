@@ -1,0 +1,14 @@
+@import "../privacy/index.wxss";
+
+.legal-document-link {
+  display: block;
+  margin: 0 0 20rpx;
+  padding: 22rpx 26rpx;
+  border: 1rpx solid #e8e4dc;
+  border-radius: 16rpx;
+  background: #fff;
+  color: #201e1b;
+  font-size: 22rpx;
+  font-weight: 600;
+  text-decoration: underline;
+}

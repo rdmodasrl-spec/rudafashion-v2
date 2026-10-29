@@ -1,0 +1,162 @@
+@layer components {
+  .merchant-home-intro {
+    border-radius: 2px !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    animation: none;
+  }
+
+  .merchant-home-prompt:focus-within {
+    box-shadow: none;
+  }
+
+  .merchant-home-intro > .pointer-events-none {
+    display: none;
+  }
+
+  .merchant-home-answer {
+    animation: merchant-home-enter 360ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+
+  .merchant-home-card {
+    animation: merchant-home-enter 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+
+  .merchant-home-product-grid > :nth-child(2),
+  .merchant-home-action-grid > :nth-child(2) {
+    animation-delay: 60ms;
+  }
+
+  .merchant-home-product-grid > :nth-child(3),
+  .merchant-home-action-grid > :nth-child(3) {
+    animation-delay: 120ms;
+  }
+
+  .merchant-home-product-grid > :nth-child(4),
+  .merchant-home-action-grid > :nth-child(4) {
+    animation-delay: 180ms;
+  }
+
+  .merchant-home-product-grid > :nth-child(5) {
+    animation-delay: 240ms;
+  }
+
+  .merchant-home-product-grid > :nth-child(6) {
+    animation-delay: 300ms;
+  }
+
+  .merchant-home-tone-blue {
+    background-image: linear-gradient(115deg, #fff 55%, #eff6ff 100%);
+  }
+
+  .merchant-home-tone-amber {
+    background-image: linear-gradient(115deg, #fff 55%, #fffbeb 100%);
+  }
+
+  .merchant-home-tone-green {
+    background-image: linear-gradient(115deg, #fff 55%, #ecfdf5 100%);
+  }
+
+  .merchant-home-tone-violet {
+    background-image: linear-gradient(115deg, #fff 55%, #f5f3ff 100%);
+  }
+
+  @keyframes merchant-home-enter {
+    from {
+      opacity: 0;
+      translate: 0 12px;
+    }
+    to {
+      opacity: 1;
+      translate: 0 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .merchant-home-intro,
+    .merchant-home-answer,
+    .merchant-home-card {
+      animation: none;
+    }
+  }
+}
+/* Keep horizontal tool rails clean while preserving touch scrolling. */
+.ruda-ai-suggestions {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.ruda-ai-suggestions::-webkit-scrollbar {
+  display: none;
+}
+
+
+/* ModaUI 智能核心：WebGL2 不可用时的实时降级视觉（非图片/GIF/视频）。
+   纯白背景 + 黑灰粒子点阵，和 WebGL 版本共用同一套黑白灰视觉规范。 */
+.modaui-core-fallback {
+  position: relative;
+  overflow: hidden;
+  border-radius: 9999px;
+  background-image:
+    radial-gradient(circle at 50% 50%, rgba(10, 10, 14, 0.92) 0 0.85px, transparent 1.7px),
+    radial-gradient(circle at 50% 50%, rgba(10, 10, 14, 0.4) 0 1.9px, transparent 3px);
+  background-size: 4px 4px, 11px 11px;
+  -webkit-mask-image: radial-gradient(closest-side, #000 0 60%, rgba(0, 0, 0, 0.55) 76%, transparent 93%);
+  mask-image: radial-gradient(closest-side, #000 0 60%, rgba(0, 0, 0, 0.55) 76%, transparent 93%);
+  animation: modaui-core-breathe 7s cubic-bezier(0.4, 0, 0.4, 1) infinite;
+}
+
+.modaui-core-fallback::before {
+  content: '';
+  position: absolute;
+  inset: -18%;
+  background: conic-gradient(from 0deg, transparent 0deg, rgba(0, 0, 0, 0.5) 70deg, transparent 150deg, rgba(0, 0, 0, 0.28) 240deg, transparent 320deg);
+  filter: blur(14px);
+  mix-blend-mode: multiply;
+  animation: modaui-core-swirl 22s linear infinite;
+}
+
+.modaui-core-fallback::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  /* 白底上不使用白色高光，否则会在纸面上变成白洞；改用极淡的中灰提亮。 */
+  background:
+    radial-gradient(circle at 40% 34%, rgba(124, 124, 130, 0.16) 0%, rgba(124, 124, 130, 0) 44%),
+    radial-gradient(circle at 68% 76%, rgba(124, 124, 130, 0.1) 0%, rgba(124, 124, 130, 0) 50%);
+}
+
+[data-modaui-core-state='error'] .modaui-core-fallback {
+  opacity: 0.55;
+  filter: grayscale(1);
+}
+
+[data-modaui-core-state='success'] .modaui-core-fallback {
+  box-shadow: 0 0 0 1px rgba(12, 12, 16, 0.08), 0 20px 48px -26px rgba(12, 12, 16, 0.4);
+}
+
+@keyframes modaui-core-breathe {
+  0%,
+  100% {
+    transform: scale(0.97) rotate(-1.4deg);
+  }
+  50% {
+    transform: scale(1.03) rotate(1.6deg);
+  }
+}
+
+@keyframes modaui-core-swirl {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modaui-core-fallback {
+    animation: none;
+  }
+  .modaui-core-fallback::before {
+    animation-duration: 90s;
+  }
+}

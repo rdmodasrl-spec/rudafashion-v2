@@ -1,0 +1,547 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import {
+  createOrReplayModaGptImageQueueTask,
+  type CreateModaGptImageQueueTaskInput
+} from '../src/server/modagptImageTaskService';
+import type { PrismaClient } from '@prisma/client';
+import {
+  createModaGptImageTaskPayload,
+  canAccessModaGptImageTask,
+  getModaGptImageTaskRecoveryAction,
+  isModaGptImageTaskResultReferenceOwned,
+  isModaGptImageTaskPayload,
+  removeModaGptImageTaskTemporaryInputReferences
+} from '../src/server/modagptImageTask';
+import { AiEmployeeFalImageTaskError } from '../src/server/aiEmployeeProviders';
+import {
+  type ModaGptImageTaskWorkerDependencies,
+  createModaGptImageTaskHandler
+} from '../src/server/modagptImageTaskWorker';
+import { cleanupModaGptImageTaskResult } from '../src/server/modagptImageTaskCleanup';
+import type { ModaGptTask } from '../src/server/modagptTaskQueue';
+
+test('try-on queue payload stores expiring provider references, never source image bytes', () => {
+  const personImage = 'data:image/png;base64,cGVyc29uLXNlY3JldA==';
+  const garmentImage = 'data:image/webp;base64,Z2FybWVudC1zZWNyZXQ=';
+  const payload = createModaGptImageTaskPayload({
+    task: 'tryOn',
+    prompt: 'Keep the pose',
+    category: 'tops',
+    personImage,
+    garmentImage,
+    privacyConsent: true as const
+  }, {
+    personImageUrl: 'https://fal.media/files/person-temporary.png',
+    garmentImageUrl: 'https://fal.media/files/garment-temporary.webp'
+  });
+
+  assert.equal(JSON.stringify(payload).includes(personImage), false);
+  assert.equal(JSON.stringify(payload).includes(garmentImage), false);
+  assert.deepEqual(payload, {
+    version: 1,
+    task: 'tryOn',
+    prompt: 'Keep the pose',
+    category: 'tops',
+    providerInput: {
+      personImageUrl: 'https://fal.media/files/person-temporary.png',
+      garmentImageUrl: 'https://fal.media/files/garment-temporary.webp'
+    }
+  });
+  const retained = removeModaGptImageTaskTemporaryInputReferences(payload);
+  assert.equal(isModaGptImageTaskPayload(retained), true);
+  assert.equal(JSON.stringify(retained).includes('fal.media'), false);
+});
+
+test('try-on queue payload rejects non-HTTPS or embedded image data references', () => {
+  const input = {
+    task: 'tryOn' as const,
+    prompt: 'Keep the pose',
+    category: 'tops' as const,
+    personImage: 'data:image/png;base64,cGVyc29u',
+    garmentImage: 'data:image/webp;base64,Y2xvdGg=',
+    privacyConsent: true as const
+  };
+
+  assert.throws(() => createModaGptImageTaskPayload(input, {
+    personImageUrl: 'http://fal.media/person.png',
+    garmentImageUrl: 'https://fal.media/garment.webp'
+  }), /MODAGPT_IMAGE_TASK_PROVIDER_INPUT_INVALID/);
+  assert.throws(() => createModaGptImageTaskPayload(input, {
+    personImageUrl: 'data:image/png;base64,cGVyc29u',
+    garmentImageUrl: 'https://fal.media/garment.webp'
+  }), /MODAGPT_IMAGE_TASK_PROVIDER_INPUT_INVALID/);
+});
+
+test('worker recovery never resubmits after a provider call may have been accepted', () => {
+  assert.equal(getModaGptImageTaskRecoveryAction({
+    executionPhase: 'ready',
+    providerRequestId: null,
+    resultStorageKey: null
+  }), 'submit_provider');
+  assert.equal(getModaGptImageTaskRecoveryAction({
+    executionPhase: 'provider_submitting',
+    providerRequestId: null,
+    resultStorageKey: null
+  }), 'mark_result_unknown');
+  assert.equal(getModaGptImageTaskRecoveryAction({
+    executionPhase: 'provider_accepted',
+    providerRequestId: 'fal-request-123',
+    resultStorageKey: null
+  }), 'poll_provider');
+  assert.equal(getModaGptImageTaskRecoveryAction({
+    executionPhase: 'result_stored',
+    providerRequestId: 'fal-request-123',
+    resultStorageKey: 'merchants/merchant-01/modagpt/tasks/123e4567-e89b-12d3-a456-426614174000.webp'
+  }), 'finalize_result');
+});
+
+test('result cleanup accepts only the exact task-owned private object reference', () => {
+  const task = {
+    id: '123e4567-e89b-12d3-a456-426614174000',
+    merchantId: 'merchant-01',
+    resultStorageKey: 'merchants/merchant-01/modagpt/tasks/123e4567-e89b-12d3-a456-426614174000.webp',
+    resultStorageBucket: 'private-media'
+  };
+
+  assert.equal(isModaGptImageTaskResultReferenceOwned(task, 'private-media'), true);
+  assert.equal(isModaGptImageTaskResultReferenceOwned(task, 'public-media'), false);
+  assert.equal(isModaGptImageTaskResultReferenceOwned({
+    ...task,
+    resultStorageKey: 'merchants/merchant-02/modagpt/tasks/123e4567-e89b-12d3-a456-426614174000.webp'
+  }, 'private-media'), false);
+});
+
+test('result cleanup deletes only the owned private task object and treats missing objects as already cleaned', async () => {
+  const candidate = {
+    id: '123e4567-e89b-12d3-a456-426614174000',
+    merchantId: 'merchant-01',
+    resultStorageKey: 'merchants/merchant-01/modagpt/tasks/123e4567-e89b-12d3-a456-426614174000.webp',
+    resultStorageBucket: 'private-media',
+    cleanupAttemptCount: 0
+  };
+  let deleted: { bucket: string; key: string } | null = null;
+  const outcome = await cleanupModaGptImageTaskResult(candidate, {
+    expectedBucket: 'private-media',
+    storageAvailable: true,
+    deleteObject: async (bucket, key) => { deleted = { bucket, key }; }
+  });
+  assert.deepEqual(outcome, { status: 'deleted' });
+  assert.deepEqual(deleted, { bucket: 'private-media', key: candidate.resultStorageKey });
+
+  const alreadyMissing = await cleanupModaGptImageTaskResult(candidate, {
+    expectedBucket: 'private-media',
+    storageAvailable: true,
+    deleteObject: async () => { throw Object.assign(new Error('missing'), { name: 'NoSuchKey' }); }
+  });
+  assert.deepEqual(alreadyMissing, { status: 'deleted' });
+});
+
+test('result cleanup refuses foreign objects and persists bounded retry times after deletion errors', async () => {
+  const candidate = {
+    id: '123e4567-e89b-12d3-a456-426614174000',
+    merchantId: 'merchant-01',
+    resultStorageKey: 'merchants/merchant-02/modagpt/tasks/123e4567-e89b-12d3-a456-426614174000.webp',
+    resultStorageBucket: 'private-media',
+    cleanupAttemptCount: 0
+  };
+  let deleteCalls = 0;
+  const invalidReference = await cleanupModaGptImageTaskResult(candidate, {
+    expectedBucket: 'private-media',
+    storageAvailable: true,
+    deleteObject: async () => { deleteCalls += 1; }
+  });
+  assert.equal(invalidReference.status, 'deferred');
+  assert.equal(deleteCalls, 0);
+
+  const failedDelete = await cleanupModaGptImageTaskResult({
+    ...candidate,
+    resultStorageKey: 'merchants/merchant-01/modagpt/tasks/123e4567-e89b-12d3-a456-426614174000.webp'
+  }, {
+    expectedBucket: 'private-media',
+    storageAvailable: true,
+    deleteObject: async () => { throw new Error('storage unavailable'); },
+    now: () => 1_000
+  });
+  assert.deepEqual(failedDelete, {
+    status: 'deferred',
+    errorCode: 'MODAGPT_IMAGE_CLEANUP_DELETE_FAILED',
+    retryAt: new Date(61_000)
+  });
+});
+
+test('task tenant authorization rejects null or mismatched tenant ownership', () => {
+  assert.equal(canAccessModaGptImageTask({
+    merchantId: 'merchant-01',
+    tenantId: 'merchant-01'
+  }, 'merchant-01'), true);
+  assert.equal(canAccessModaGptImageTask({
+    merchantId: 'merchant-02',
+    tenantId: 'merchant-02'
+  }, 'merchant-01'), false);
+  assert.equal(canAccessModaGptImageTask({
+    merchantId: 'merchant-01',
+    tenantId: null
+  }, 'merchant-01'), false);
+});
+
+function imageTaskInput(overrides: Partial<CreateModaGptImageQueueTaskInput> = {}): CreateModaGptImageQueueTaskInput {
+  return {
+    id: '123e4567-e89b-12d3-a456-426614174000',
+    merchantId: 'merchant-01',
+    actorId: 'employee-01',
+    task: 'imageGeneration',
+    clientIdempotencyKey: 'image-request-01',
+    queueIdempotencyKey: 'tenant:0123456789abcdef',
+    requestPayloadHash: 'a'.repeat(64),
+    provider: 'fal',
+    model: 'fal-ai/flux/dev',
+    payload: JSON.stringify({ version: 1, task: 'imageGeneration', prompt: 'A coat' }),
+    resultStorageKey: 'merchants/merchant-01/modagpt/tasks/123e4567-e89b-12d3-a456-426614174000.webp',
+    resultStorageBucket: 'private-media',
+    now: new Date('2026-10-18T13:00:00.000Z'),
+    ...overrides
+  };
+}
+
+function transactionalTaskStore() {
+  const tasks = new Map<string, Record<string, unknown>>();
+  let lock: Promise<void> = Promise.resolve();
+  const transaction = async <T>(callback: (tx: Record<string, any>) => Promise<T>): Promise<T> => {
+    let unlock = () => {};
+    const current = new Promise<void>(resolve => { unlock = resolve; });
+    const previous = lock;
+    lock = current;
+    await previous;
+    const snapshot = new Map([...tasks].map(([key, value]) => [key, { ...value }]));
+    const tx = {
+      modaGptTask: {
+        createMany: async ({ data }: { data: Array<Record<string, unknown>> }) => {
+          const [row] = data;
+          const key = String(row.idempotencyKey);
+          if (tasks.has(key)) return { count: 0 };
+          tasks.set(key, { ...row });
+          return { count: 1 };
+        },
+        findUnique: async ({ where }: { where: { idempotencyKey: string } }) =>
+          tasks.get(where.idempotencyKey) || null,
+        update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+          const task = [...tasks.values()].find(row => row.id === where.id);
+          if (!task) throw new Error('TEST_TASK_NOT_FOUND');
+          Object.assign(task, data);
+          return task;
+        }
+      }
+    };
+    try {
+      return await callback(tx);
+    } catch (error) {
+      tasks.clear();
+      for (const [key, value] of snapshot) tasks.set(key, value);
+      throw error;
+    } finally {
+      unlock();
+    }
+  };
+  return {
+    tasks,
+    prisma: { $transaction: transaction } as unknown as PrismaClient
+  };
+}
+
+test('concurrent matching image requests create one queue task and one billing reservation', async () => {
+  const store = transactionalTaskStore();
+  let reservations = 0;
+  const reserve = async () => {
+    reservations += 1;
+    return {
+      billingMode: 'credits',
+      billingStatus: 'reserved',
+      creditReservationId: 'reservation-01'
+    };
+  };
+
+  const [first, replay] = await Promise.all([
+    createOrReplayModaGptImageQueueTask(store.prisma, imageTaskInput(), reserve),
+    createOrReplayModaGptImageQueueTask(store.prisma, imageTaskInput(), reserve)
+  ]);
+
+  assert.equal(store.tasks.size, 1);
+  assert.equal(reservations, 1);
+  assert.equal(first.task.id, replay.task.id);
+  assert.equal([first.deduplicated, replay.deduplicated].filter(Boolean).length, 1);
+});
+
+test('a changed provider configuration still replays the same business request', async () => {
+  const store = transactionalTaskStore();
+  const original = await createOrReplayModaGptImageQueueTask(
+    store.prisma,
+    imageTaskInput(),
+    async () => ({ billingMode: 'credits', billingStatus: 'reserved' })
+  );
+  const replay = await createOrReplayModaGptImageQueueTask(
+    store.prisma,
+    imageTaskInput({ provider: 'automatic1111', model: 'local-model' }),
+    async () => { throw new Error('duplicate reservation attempted'); }
+  );
+
+  assert.equal(replay.deduplicated, true);
+  assert.equal(replay.task.id, original.task.id);
+  assert.equal(replay.task.provider, 'fal');
+  assert.equal(replay.task.model, 'fal-ai/flux/dev');
+});
+
+test('same idempotency key with changed input conflicts without making a second reservation', async () => {
+  const store = transactionalTaskStore();
+  let reservations = 0;
+  const reserve = async () => {
+    reservations += 1;
+    return { billingMode: 'credits', billingStatus: 'reserved' };
+  };
+  await createOrReplayModaGptImageQueueTask(store.prisma, imageTaskInput(), reserve);
+
+  await assert.rejects(
+    createOrReplayModaGptImageQueueTask(store.prisma, imageTaskInput({
+      requestPayloadHash: 'b'.repeat(64)
+    }), reserve),
+    /MODAGPT_IMAGE_TASK_IDEMPOTENCY_CONFLICT/
+  );
+  assert.equal(store.tasks.size, 1);
+  assert.equal(reservations, 1);
+});
+
+test('billing reservation failure rolls back the newly inserted task', async () => {
+  const store = transactionalTaskStore();
+
+  await assert.rejects(
+    createOrReplayModaGptImageQueueTask(store.prisma, imageTaskInput(), async () => {
+      throw new Error('MODAGPT_CREDITS_INSUFFICIENT');
+    }),
+    /MODAGPT_CREDITS_INSUFFICIENT/
+  );
+  assert.equal(store.tasks.size, 0);
+});
+
+test('explicit regeneration with a new business idempotency key creates a separate task', async () => {
+  const store = transactionalTaskStore();
+  let reservations = 0;
+  const reserve = async () => {
+    reservations += 1;
+    return { billingMode: 'credits', billingStatus: 'reserved' };
+  };
+  const first = await createOrReplayModaGptImageQueueTask(store.prisma, imageTaskInput(), reserve);
+  const regenerated = await createOrReplayModaGptImageQueueTask(store.prisma, imageTaskInput({
+    id: '123e4567-e89b-12d3-a456-426614174001',
+    clientIdempotencyKey: 'image-request-02',
+    queueIdempotencyKey: 'tenant:fedcba9876543210',
+    resultStorageKey: 'merchants/merchant-01/modagpt/tasks/123e4567-e89b-12d3-a456-426614174001.webp'
+  }), reserve);
+
+  assert.notEqual(first.task.id, regenerated.task.id);
+  assert.equal(store.tasks.size, 2);
+  assert.equal(reservations, 2);
+});
+
+function workerTask(overrides: Partial<ModaGptTask> = {}): ModaGptTask {
+  return {
+    id: '123e4567-e89b-12d3-a456-426614174000',
+    merchantId: 'merchant-01',
+    tenantId: 'merchant-01',
+    actorId: null,
+    traceId: 'trace-01',
+    parentTaskId: null,
+    goal: 'Generate image',
+    taskType: 'ai.image.generate',
+    status: 'running',
+    priority: 20,
+    agentId: null,
+    payload: { version: 1, task: 'imageGeneration', prompt: 'A coat' },
+    context: {},
+    plan: null,
+    attempts: 1,
+    retryCount: 0,
+    maxAttempts: 10,
+    idempotencyKey: 'tenant:0123456789abcdef',
+    lockedBy: 'worker-01',
+    error: null,
+    provider: 'fal',
+    model: 'fal-ai/flux/dev',
+    providerRequestId: null,
+    executionPhase: 'ready',
+    resultStorageKey: 'merchants/merchant-01/modagpt/tasks/123e4567-e89b-12d3-a456-426614174000.webp',
+    resultStorageBucket: 'private-media',
+    billingStatus: 'reserved',
+    ...overrides
+  };
+}
+
+function workerDependencies(overrides: Partial<ModaGptImageTaskWorkerDependencies> = {}) {
+  const persistedStates: string[] = [];
+  const dependencies: ModaGptImageTaskWorkerDependencies = {
+    prisma: {
+      modaGptTask: {
+        updateMany: async ({ data }: { data: { executionPhase: string } }) => {
+          persistedStates.push(data.executionPhase);
+          return { count: 1 };
+        }
+      }
+    } as unknown as PrismaClient,
+    generateLocalImage: async () => Buffer.from('local image'),
+    submitProvider: async () => 'provider-request-01',
+    pollProvider: async () => ({ status: 'completed', image: Buffer.from('generated image') }),
+    normalizeResult: async bytes => bytes,
+    storeResult: async () => {},
+    loadStoredResult: async () => { throw new Error('MODAGPT_IMAGE_TASK_RESULT_NOT_FOUND'); },
+    settleBilling: async () => {},
+    now: () => 1_000,
+    ...overrides
+  };
+  return { dependencies, persistedStates };
+}
+
+function workerExecution() {
+  return {
+    signal: new AbortController().signal,
+    assertLease: async () => {},
+    setPhase: async () => {},
+    persistPlan: async () => {}
+  };
+}
+
+test('unknown provider submission is not blindly retried or billed as failure', async () => {
+  let submissions = 0;
+  let settlements = 0;
+  const { dependencies } = workerDependencies({
+    submitProvider: async () => {
+      submissions += 1;
+      throw new AiEmployeeFalImageTaskError('unknown', 'AI_EMPLOYEE_FAL_TASK_SUBMIT_UNKNOWN');
+    },
+    settleBilling: async () => { settlements += 1; }
+  });
+  const handler = createModaGptImageTaskHandler(dependencies);
+
+  await assert.rejects(handler(workerTask(), workerExecution()), /AI_EMPLOYEE_FAL_TASK_SUBMIT_UNKNOWN/);
+  assert.equal(submissions, 1);
+  assert.equal(settlements, 0);
+});
+
+test('a confirmed permanent provider rejection releases the task reservation', async () => {
+  const settlements: string[] = [];
+  const { dependencies } = workerDependencies({
+    submitProvider: async () => {
+      throw new AiEmployeeFalImageTaskError('permanent', 'AI_EMPLOYEE_FAL_TASK_REJECTED');
+    },
+    settleBilling: async (_taskId, action) => { settlements.push(action); }
+  });
+  const handler = createModaGptImageTaskHandler(dependencies);
+
+  await assert.rejects(handler(workerTask(), workerExecution()), /AI_EMPLOYEE_FAL_TASK_REJECTED/);
+  assert.deepEqual(settlements, ['RELEASE']);
+});
+
+test('a provider-confirmed failed task releases its reservation after restart polling', async () => {
+  const settlements: string[] = [];
+  const { dependencies } = workerDependencies({
+    pollProvider: async () => {
+      throw new AiEmployeeFalImageTaskError('permanent', 'AI_EMPLOYEE_FAL_TASK_FAILED');
+    },
+    settleBilling: async (_taskId, action) => { settlements.push(action); }
+  });
+  const handler = createModaGptImageTaskHandler(dependencies);
+
+  await assert.rejects(handler(workerTask({
+    executionPhase: 'provider_accepted',
+    providerRequestId: 'fal-request-123'
+  }), workerExecution()), /AI_EMPLOYEE_FAL_TASK_FAILED/);
+  assert.deepEqual(settlements, ['RELEASE']);
+});
+
+test('a restarted worker polls a persisted provider request instead of resubmitting', async () => {
+  let submissions = 0;
+  let polls = 0;
+  let stored = 0;
+  let settlements = 0;
+  const { dependencies, persistedStates } = workerDependencies({
+    submitProvider: async () => { submissions += 1; return 'unexpected'; },
+    pollProvider: async () => {
+      polls += 1;
+      return { status: 'completed', image: Buffer.from('generated image') };
+    },
+    storeResult: async () => { stored += 1; },
+    settleBilling: async () => { settlements += 1; }
+  });
+  const handler = createModaGptImageTaskHandler(dependencies);
+
+  await handler(workerTask({
+    executionPhase: 'provider_accepted',
+    providerRequestId: 'fal-request-123'
+  }), workerExecution());
+  assert.equal(submissions, 0);
+  assert.equal(polls, 1);
+  assert.equal(stored, 1);
+  assert.equal(settlements, 1);
+  assert.deepEqual(persistedStates, ['result_stored']);
+});
+
+test('an object uploaded before a database failure is recovered without another provider request', async () => {
+  let resultObject: Buffer | null = null;
+  let failedResultStateWrite = false;
+  let polls = 0;
+  let settlements = 0;
+  const { dependencies } = workerDependencies({
+    prisma: {
+      modaGptTask: {
+        updateMany: async ({ data }: { data: { executionPhase: string } }) => {
+          if (data.executionPhase === 'result_stored' && !failedResultStateWrite) {
+            failedResultStateWrite = true;
+            return { count: 0 };
+          }
+          return { count: 1 };
+        }
+      }
+    } as unknown as PrismaClient,
+    pollProvider: async () => {
+      polls += 1;
+      return { status: 'completed', image: Buffer.from('generated image') };
+    },
+    loadStoredResult: async () => {
+      if (!resultObject) throw new Error('MODAGPT_IMAGE_TASK_RESULT_NOT_FOUND');
+      return resultObject;
+    },
+    storeResult: async (_task, bytes) => { resultObject = bytes; },
+    settleBilling: async () => { settlements += 1; }
+  });
+  const handler = createModaGptImageTaskHandler(dependencies);
+
+  await assert.rejects(
+    handler(workerTask({
+      executionPhase: 'provider_accepted',
+      providerRequestId: 'fal-request-123'
+    }), workerExecution()),
+    /MODAGPT_TASK_LEASE_LOST/
+  );
+  await handler(workerTask({
+    executionPhase: 'provider_accepted',
+    providerRequestId: 'fal-request-123'
+  }), workerExecution());
+  assert.equal(polls, 1);
+  assert.ok(resultObject);
+  assert.equal(settlements, 1);
+});
+
+test('a crash during provider submission without a request ID becomes unknown', async () => {
+  let submissions = 0;
+  let settlements = 0;
+  const { dependencies } = workerDependencies({
+    submitProvider: async () => { submissions += 1; return 'unexpected'; },
+    settleBilling: async () => { settlements += 1; }
+  });
+  const handler = createModaGptImageTaskHandler(dependencies);
+
+  await assert.rejects(
+    handler(workerTask({ executionPhase: 'provider_submitting' }), workerExecution()),
+    /MODAGPT_IMAGE_TASK_RESULT_UNKNOWN/
+  );
+  assert.equal(submissions, 0);
+  assert.equal(settlements, 0);
+});

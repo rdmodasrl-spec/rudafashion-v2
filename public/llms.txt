@@ -1,0 +1,22 @@
+# RUDA Fashion B2B
+
+> RUDA Fashion connects professional fashion buyers with verified European suppliers, wholesale products, and merchant showrooms.
+
+## Public website
+
+- [Italian homepage](https://ruda.fashion/it/)
+- [Wholesale catalogue](https://ruda.fashion/it/catalog)
+- [Verified showrooms](https://ruda.fashion/it/showrooms)
+- [Fashion trends](https://ruda.fashion/it/trends)
+- [About RUDA](https://ruda.fashion/it/about)
+- [Public sitemap](https://ruda.fashion/sitemap.xml)
+- [Agentic Resource Discovery manifest](https://ruda.fashion/.well-known/ard.json)
+
+## Available languages
+
+Public pages are available under `/en/`, `/it/`, `/zh/`, `/fr/`, `/de/`, `/es/`, `/pt/`, `/nl/`, `/pl/`, `/ro/`, `/tr/`, and `/ar/`. Italian is the default language at `/it/`.
+
+## Usage and access
+
+Only public pages, verified merchant showrooms, and published public products are intended for discovery. Account, checkout, merchant, employee, and administrative areas require the appropriate user session and are not public data sources. Product availability, prices, and business terms can change; confirm them with the merchant before relying on them.
+

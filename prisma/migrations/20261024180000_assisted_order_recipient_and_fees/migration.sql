@@ -1,0 +1,5 @@
+ALTER TABLE "Order"
+  ADD COLUMN IF NOT EXISTS "shippingRecipient" TEXT,
+  ADD COLUMN IF NOT EXISTS "shippingPhone" TEXT,
+  ADD COLUMN IF NOT EXISTS "additionalFees" DECIMAL(12,2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "additionalFeesDescription" TEXT;

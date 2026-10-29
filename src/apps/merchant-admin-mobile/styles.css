@@ -1,0 +1,287 @@
+@import "../shared/mobile-design-system.css";
+
+@reference "../../index.css";
+@import "../merchant-admin-common.css";
+
+html[data-ruda-app="merchant-admin-mobile"] #root {
+  min-height: 100dvh;
+  overflow-x: clip;
+}
+
+/* RUDA Mobile Design System Tokens */
+.ruda-btn-primary {
+  @apply h-[40px] px-4 bg-neutral-950 text-white text-[13px] font-medium rounded-[6px] flex items-center justify-center transition-all active:scale-[0.98] disabled:opacity-40;
+}
+
+.ruda-btn-secondary {
+  @apply h-[36px] px-4 bg-white border border-neutral-200 text-neutral-800 text-[13px] font-medium rounded-[6px] flex items-center justify-center transition-all active:scale-[0.98] disabled:opacity-40;
+}
+
+.ruda-btn-icon {
+  @apply w-[36px] h-[36px] flex items-center justify-center rounded-[6px] text-neutral-800 active:scale-[0.95] transition-all;
+}
+
+.ruda-btn-inline {
+  display: inline-flex;
+  width: auto;
+}
+
+.ruda-card {
+  @apply bg-white border border-neutral-100 rounded-[8px] p-3 shadow-none transition-all active:scale-[0.99];
+}
+
+.ruda-input {
+  @apply h-[40px] px-3 bg-neutral-50 border-0 rounded-[6px] text-[14px] text-neutral-900 placeholder:text-neutral-400 outline-none focus:ring-1 focus:ring-neutral-900/5 transition-all;
+}
+
+.ruda-search-bar {
+  @apply h-[40px] px-3 bg-neutral-100 rounded-[6px] flex items-center gap-2;
+}
+
+.ruda-tag {
+  @apply h-[22px] px-2 flex items-center justify-center text-[12px] font-medium rounded-[4px];
+}
+
+.ruda-tag-success { @apply bg-emerald-50 text-emerald-700; }
+.ruda-tag-info { @apply bg-blue-50 text-blue-700; }
+.ruda-tag-warning { @apply bg-amber-50 text-amber-700; }
+.ruda-tag-error { @apply bg-rose-50 text-rose-700; }
+.ruda-tag-neutral { @apply bg-neutral-100 text-neutral-600; }
+
+.ruda-tab-pill {
+  @apply h-[32px] px-3 flex items-center justify-center text-[13px] rounded-[6px] transition-all;
+}
+
+.ruda-accordion {
+  @apply h-[48px] px-4 flex items-center justify-between bg-white border-b border-neutral-50 text-[14px] font-medium text-neutral-900 active:bg-neutral-50;
+}
+
+/* Animations */
+@keyframes rudaFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes rudaSlideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.animate-ruda-fade { animation: rudaFadeIn 220ms ease-out; }
+.animate-ruda-slide { animation: rudaSlideUp 220ms ease-out; }
+
+@keyframes rudaHomeCardEnter {
+  from { opacity: 0; transform: translate3d(0, 9px, 0) scale(0.99); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+.ruda-home-surface {
+  border-color: #e8e8e8;
+  background: linear-gradient(180deg, #ffffff 0%, #fdfdfd 100%);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.035), 0 8px 24px rgba(0, 0, 0, 0.025);
+}
+
+.ruda-home-search {
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.ruda-home-search:focus-within {
+  border-color: #c9c9c9;
+  box-shadow: 0 0 0 3px rgba(26, 26, 26, 0.045), 0 5px 18px rgba(0, 0, 0, 0.035);
+}
+
+.ruda-home-quick-action {
+  position: relative;
+  overflow: hidden;
+  border-color: #e8e8e8;
+  background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.035), 0 5px 16px rgba(0, 0, 0, 0.025);
+  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.ruda-home-quick-action:active {
+  transform: scale(0.975);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.045);
+}
+
+.ruda-home-quick-action-icon {
+  transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1), background-color 180ms ease;
+}
+
+.ruda-home-list-row {
+  transition: background-color 160ms ease, transform 160ms ease;
+}
+
+.ruda-home-list-row:active {
+  transform: scale(0.99);
+  background-color: #f8f8f8;
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .ruda-home-quick-action:hover {
+    transform: translateY(-2px);
+    border-color: #d8d8d8;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.045), 0 12px 28px rgba(0, 0, 0, 0.04);
+  }
+
+  .ruda-home-quick-action:hover .ruda-home-quick-action-icon {
+    transform: translateY(-1px);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ruda-home-enter {
+    animation: rudaHomeCardEnter 360ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+
+  .ruda-home-action-grid > :nth-child(2) { animation-delay: 35ms; }
+  .ruda-home-action-grid > :nth-child(3) { animation-delay: 70ms; }
+  .ruda-home-action-grid > :nth-child(4) { animation-delay: 105ms; }
+  .ruda-home-action-grid > :nth-child(5) { animation-delay: 140ms; }
+  .ruda-home-action-grid > :nth-child(6) { animation-delay: 175ms; }
+  .ruda-home-stat-grid > :nth-child(2) { animation-delay: 45ms; }
+  .ruda-home-stat-grid > :nth-child(3) { animation-delay: 90ms; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ruda-home-quick-action,
+  .ruda-home-quick-action-icon,
+  .ruda-home-list-row,
+  .ruda-home-search {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Shared mobile polish across the merchant tabs and their nested pages. */
+@keyframes rudaMobilePageEnter {
+  from { opacity: 0; transform: translate3d(0, 7px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+.ruda-mobile-surface {
+  border-color: #e8e8e8;
+  background: linear-gradient(180deg, #fff 0%, #fdfdfd 100%);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 7px 22px rgba(0, 0, 0, 0.022);
+}
+
+.ruda-mobile-content > * {
+  animation: rudaMobilePageEnter 300ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
+.ruda-mobile-content > :nth-child(2) { animation-delay: 25ms; }
+.ruda-mobile-content > :nth-child(3) { animation-delay: 50ms; }
+
+#merchant-mobile-app-root button:not(:disabled),
+#merchant-mobile-app-root a {
+  -webkit-tap-highlight-color: transparent;
+  transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+  transition-duration: 170ms;
+  transition-timing-function: cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+#merchant-mobile-app-root button:not(:disabled):active {
+  transform: scale(0.985);
+}
+
+#merchant-mobile-app-root .ruda-btn-primary {
+  border: 1px solid #242424;
+  background: linear-gradient(180deg, #252525 0%, #151515 100%);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.09);
+}
+
+#merchant-mobile-app-root .ruda-btn-secondary {
+  border-color: #e3e3e3;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.025);
+}
+
+#merchant-mobile-app-root .ruda-card {
+  border-color: #e9e9e9;
+  background: linear-gradient(180deg, #fff 0%, #fdfdfd 100%);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 5px 16px rgba(0, 0, 0, 0.018);
+}
+
+#merchant-mobile-app-root button:focus-visible,
+#merchant-mobile-app-root a:focus-visible,
+.ruda-product-form input:focus-visible,
+.ruda-product-form select:focus-visible,
+.ruda-product-form textarea:focus-visible {
+  outline: 2px solid rgba(26, 26, 26, 0.28);
+  outline-offset: 2px;
+}
+
+.ruda-more-row {
+  transition: background-color 170ms ease, transform 170ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+.ruda-more-row:active { transform: scale(0.99); }
+.ruda-more-row > span:first-child { transition: background-color 170ms ease, border-color 170ms ease, transform 170ms ease; }
+.ruda-more-row:active > span:first-child { transform: scale(0.96); background-color: #f0f0f0; }
+
+.ruda-products-page input:focus,
+.ruda-products-page select:focus {
+  border-color: #c7c7c7;
+  box-shadow: 0 0 0 3px rgba(26, 26, 26, 0.045);
+}
+
+.ruda-product-row {
+  border-bottom: 1px solid #f0f0f0;
+  transition: background-color 170ms ease, transform 170ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+.ruda-product-row:active { transform: scale(0.992); background-color: #fafafa; }
+.ruda-product-row > button:first-of-type img { transition: transform 220ms cubic-bezier(0.2, 0.75, 0.25, 1); }
+
+.ruda-order-stats {
+  border-color: #e9e9e9;
+  background: linear-gradient(180deg, #fff 0%, #fdfdfd 100%);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 7px 22px rgba(0, 0, 0, 0.02);
+}
+.ruda-order-stats button { border-radius: var(--radius-ruda-card); transition: background-color 160ms ease, transform 170ms ease; }
+.ruda-order-stats button:active { transform: scale(0.97); }
+.ruda-order-card { border-color: #e8e8e8; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.025); }
+
+.ruda-product-form > header { background: rgba(255, 255, 255, 0.96); }
+.ruda-product-form > footer { box-shadow: 0 -5px 18px rgba(0, 0, 0, 0.035); }
+.ruda-product-form input:not([type="checkbox"]),
+.ruda-product-form select,
+.ruda-product-form textarea { transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease; }
+.ruda-product-form [role="dialog"] { box-shadow: 0 16px 48px rgba(0, 0, 0, 0.14); }
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  #merchant-mobile-app-root button:not(:disabled):hover {
+    transform: translateY(-1px);
+  }
+
+  #merchant-mobile-app-root .ruda-btn-primary:hover {
+    box-shadow: 0 5px 12px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+
+  #merchant-mobile-app-root .ruda-btn-secondary:hover {
+    border-color: #cfcfcf;
+    background-color: #fcfcfc;
+    box-shadow: 0 3px 9px rgba(0, 0, 0, 0.055);
+  }
+
+  .ruda-more-row:hover { background-color: #fafafa; }
+  .ruda-product-row:hover { background-color: #fcfcfc; }
+  .ruda-product-row:hover > button:first-of-type img { transform: scale(1.025); }
+  .ruda-order-card:hover { border-color: #dcdcdc; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.045); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #merchant-mobile-app-root button:not(:disabled),
+  #merchant-mobile-app-root a {
+    transition: none !important;
+  }
+
+  .ruda-mobile-content > *,
+  .ruda-more-row,
+  .ruda-more-row > span:first-child,
+  .ruda-product-row,
+  .ruda-product-row > button:first-of-type img,
+  .ruda-order-stats button {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+

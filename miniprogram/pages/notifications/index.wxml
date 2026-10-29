@@ -1,0 +1,28 @@
+<view class="notifications-page">
+  <text wx:if="{{unread > 0}}" class="notifications-summary">未读 {{unread}} 条</text>
+  <view wx:if="{{loading}}" class="state">正在加载消息…</view>
+  <view wx:elif="{{error}}" class="state state-error">
+    <text>{{error}}</text>
+    <text class="state-retry" bindtap="load">重试</text>
+  </view>
+  <view wx:elif="{{!notifications.length}}" class="state">
+    <text class="state-title">还没有消息</text>
+    <text>订单、约定与付款状态更新会显示在这里。</text>
+  </view>
+  <view wx:else class="notification-list">
+    <view
+      wx:for="{{notifications}}"
+      wx:key="id"
+      class="notification-item {{item.unread ? 'notification-item-unread' : ''}}"
+      data-id="{{item.id}}"
+      bindtap="openNotification"
+    >
+      <view class="notification-head">
+        <text class="notification-label">{{item.label}}</text>
+        <text wx:if="{{item.unread}}" class="notification-dot"></text>
+      </view>
+      <text wx:if="{{item.detail}}" class="notification-detail">{{item.detail}}</text>
+      <text wx:if="{{item.time}}" class="notification-time">{{item.time}}</text>
+    </view>
+  </view>
+</view>

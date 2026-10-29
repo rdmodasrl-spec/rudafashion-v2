@@ -1,0 +1,27 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { addUtcMonths, merchantGrowthReferralQualificationStatus } from '../src/server/merchantPromotions';
+
+test('UTC month extension clamps to the target month end and preserves time', () => {
+  assert.equal(addUtcMonths(new Date('2024-01-31T15:45:12.000Z'), 1).toISOString(), '2024-02-29T15:45:12.000Z');
+  assert.equal(addUtcMonths(new Date('2025-01-31T15:45:12.000Z'), 1).toISOString(), '2025-02-28T15:45:12.000Z');
+  assert.equal(addUtcMonths(new Date('2024-02-29T00:00:00.000Z'), 12).toISOString(), '2025-02-28T00:00:00.000Z');
+});
+
+test('merchant referral qualification includes the 30-day deadline and all required activation checks', () => {
+  const deadline = new Date('2025-03-31T12:00:00.000Z');
+  const eligible = {
+    now: deadline,
+    deadline,
+    emailVerified: true,
+    profileComplete: true,
+    productCount: 3,
+    coreActionCount: 1
+  };
+  assert.equal(merchantGrowthReferralQualificationStatus(eligible), 'qualified');
+  assert.equal(merchantGrowthReferralQualificationStatus({ ...eligible, now: new Date(deadline.getTime() + 1) }), 'expired');
+  assert.equal(merchantGrowthReferralQualificationStatus({ ...eligible, emailVerified: false }), 'pending');
+  assert.equal(merchantGrowthReferralQualificationStatus({ ...eligible, profileComplete: false }), 'pending');
+  assert.equal(merchantGrowthReferralQualificationStatus({ ...eligible, productCount: 2 }), 'pending');
+  assert.equal(merchantGrowthReferralQualificationStatus({ ...eligible, coreActionCount: 0 }), 'pending');
+});

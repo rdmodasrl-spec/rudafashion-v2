@@ -1,0 +1,119 @@
+{
+  "generatedAt": "2026-10-27T23:19:50.834Z",
+  "target": "http://127.0.0.1:3000",
+  "session": "local signed merchant JWT (JWT_MERCHANT_SECRET, same verifyToken as login)",
+  "merchant": {
+    "id": "mch-0d63a38b-a5e8-4aab-91f7-d1b9a2dc16b7",
+    "name": "modaui",
+    "contactEmail": "001@ruda.fashion",
+    "planState": null,
+    "subscription": null
+  },
+  "before": {
+    "creditLedgerSum": 0,
+    "creditLedgerEntries": 0,
+    "designCount": 0
+  },
+  "calls": [
+    {
+      "step": "entitlements",
+      "method": "GET",
+      "path": "/api/merchant/modagpt/entitlements",
+      "status": 200,
+      "body": {
+        "success": true,
+        "plan": "free",
+        "expiresAt": null,
+        "period": "2026-10",
+        "quotas": {
+          "chat": 500,
+          "imageGeneration": 0,
+          "tryOn": 0
+        },
+        "usage": {
+          "chat": 13,
+          "imageGeneration": 0,
+          "tryOn": 0
+        },
+        "remaining": {
+          "chat": 487,
+          "imageGeneration": 0,
+          "tryOn": 0
+        },
+        "billing": {
+          "active": false,
+          "planId": null,
+          "monthlyCredits": null,
+          "creditBalance": 0
+        },
+        "capabilities": {
+          "fashionDesign": true,
+          "imageGeneration": false,
+          "tryOn": false
+        },
+        "providers": {
+          "reasoning": "local",
+          "image": "unavailable"
+        }
+      },
+      "durationMs": 48
+    },
+    {
+      "step": "designs",
+      "method": "GET",
+      "path": "/api/merchant/modagpt/designs",
+      "status": 200,
+      "body": {
+        "success": true,
+        "designs": []
+      },
+      "durationMs": 7
+    },
+    {
+      "step": "design-generate",
+      "method": "POST",
+      "path": "/api/merchant/modagpt/images",
+      "idempotencyKey": "wb-audit-design-generate-1793143190821",
+      "status": 403,
+      "body": {
+        "success": false,
+        "error": {
+          "code": "MODAGPT_UPGRADE_REQUIRED",
+          "message": "MODAGPT_UPGRADE_REQUIRED",
+          "retryable": false
+        },
+        "requestId": "82631745-0b6a-4afc-9400-2709bbfd2e6d"
+      },
+      "durationMs": 6
+    },
+    {
+      "step": "tryon",
+      "method": "POST",
+      "path": "/api/merchant/modagpt/images",
+      "idempotencyKey": "wb-audit-tryon-1793143190827",
+      "status": 403,
+      "body": {
+        "success": false,
+        "error": {
+          "code": "MODAGPT_UPGRADE_REQUIRED",
+          "message": "MODAGPT_UPGRADE_REQUIRED",
+          "retryable": false
+        },
+        "requestId": "eef3bdda-b9ff-43af-ae9f-1efd1053872f"
+      },
+      "durationMs": 6
+    }
+  ],
+  "after": {
+    "creditLedgerSum": 0,
+    "creditLedgerEntries": 0,
+    "designCount": 0
+  },
+  "verdict": {
+    "imageProvider": "unavailable",
+    "imageGenerationCapability": false,
+    "tryOnCapability": false,
+    "creditsUnchanged": true,
+    "designsUnchanged": true
+  }
+}

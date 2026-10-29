@@ -1,0 +1,15 @@
+{
+  "id": "/super-admin?ruda-app=platform-admin-web",
+  "name": "RUDA Platform Admin",
+  "short_name": "RUDA Admin",
+  "start_url": "/super-admin?ruda-app=platform-admin-web",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#0a0a0a",
+  "background_color": "#ffffff",
+  "icons": [
+    { "src": "/pwa-192x192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/pwa-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

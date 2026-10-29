@@ -1,0 +1,26 @@
+@layer base {
+  .portal-theme-admin button[aria-current="page"],
+  .portal-theme-admin button[aria-pressed="true"] {
+    border-color: var(--ruda-ink) !important;
+    background-color: var(--ruda-ink) !important;
+    color: #fff !important;
+    box-shadow: none !important;
+  }
+
+  .portal-theme-admin button[aria-current="page"] svg,
+  .portal-theme-admin button[aria-pressed="true"] svg {
+    color: currentColor !important;
+  }
+}
+
+@layer components {
+  .portal-theme-admin aside nav button > svg,
+  .portal-theme-admin nav[aria-label$="快速导航"] button > svg {
+    display: none;
+  }
+
+  .portal-theme-admin aside nav button,
+  .portal-theme-admin nav[aria-label$="快速导航"] button {
+    column-gap: 0;
+  }
+}

@@ -1,0 +1,193 @@
+import { createHash } from 'node:crypto';
+import type { ModaGptImageRequest } from './modagptEntitlements';
+
+export const modaGptImageTaskRetentionMs = 24 * 60 * 60 * 1000;
+export const modaGptImageTaskProcessingTimeoutMs = 5 * 60 * 1000;
+
+export type ModaGptImageExecutionPhase =
+  | 'ready'
+  | 'provider_submitting'
+  | 'provider_accepted'
+  | 'result_stored'
+  | 'result_unknown';
+
+export type ModaGptImageRecoveryAction =
+  | 'submit_provider'
+  | 'poll_provider'
+  | 'finalize_result'
+  | 'mark_result_unknown';
+
+export type ModaGptImageTaskPayload =
+  | {
+    version: 1;
+    task: 'imageGeneration';
+    prompt: string;
+  }
+  | {
+    version: 1;
+    task: 'tryOn';
+    prompt: string;
+    category: 'tops' | 'bottoms' | 'one-pieces';
+    providerInput?: {
+      personImageUrl: string;
+      garmentImageUrl: string;
+    };
+  };
+
+function isFalTemporaryImageUrl(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length > 4096) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:'
+      && (url.hostname === 'fal.media' || url.hostname.endsWith('.fal.media'))
+      && url.pathname.startsWith('/files/')
+      && !url.username
+      && !url.password;
+  } catch {
+    return false;
+  }
+}
+
+export function createModaGptImageTaskPayload(
+  input: ModaGptImageRequest,
+  providerInput?: { personImageUrl: string; garmentImageUrl: string }
+): ModaGptImageTaskPayload {
+  if (input.task === 'imageGeneration') {
+    if (providerInput) throw new Error('MODAGPT_IMAGE_TASK_PROVIDER_INPUT_INVALID');
+    return { version: 1, task: input.task, prompt: input.prompt };
+  }
+  if (!providerInput
+    || !isFalTemporaryImageUrl(providerInput.personImageUrl)
+    || !isFalTemporaryImageUrl(providerInput.garmentImageUrl)) {
+    throw new Error('MODAGPT_IMAGE_TASK_PROVIDER_INPUT_INVALID');
+  }
+  return {
+    version: 1,
+    task: input.task,
+    prompt: input.prompt,
+    category: input.category,
+    providerInput: {
+      personImageUrl: providerInput.personImageUrl,
+      garmentImageUrl: providerInput.garmentImageUrl
+    }
+  };
+}
+
+export function isModaGptImageTaskPayload(value: unknown): value is ModaGptImageTaskPayload {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const payload = value as Record<string, unknown>;
+  if (payload.version !== 1
+    || typeof payload.prompt !== 'string'
+    || payload.prompt.length > 1000) return false;
+  if (payload.task === 'imageGeneration') {
+    return Object.keys(payload).sort().join(',') === 'prompt,task,version';
+  }
+  if (payload.task !== 'tryOn'
+    || !['tops', 'bottoms', 'one-pieces'].includes(String(payload.category))) return false;
+  if (!('providerInput' in payload)) {
+    return Object.keys(payload).sort().join(',') === 'category,prompt,task,version';
+  }
+  if (!payload.providerInput || typeof payload.providerInput !== 'object' || Array.isArray(payload.providerInput)) {
+    return false;
+  }
+  const providerInput = payload.providerInput as Record<string, unknown>;
+  return Object.keys(payload).sort().join(',') === 'category,prompt,providerInput,task,version'
+    && Object.keys(providerInput).sort().join(',') === 'garmentImageUrl,personImageUrl'
+    && isFalTemporaryImageUrl(providerInput.personImageUrl)
+    && isFalTemporaryImageUrl(providerInput.garmentImageUrl);
+}
+
+export function removeModaGptImageTaskTemporaryInputReferences(
+  payload: ModaGptImageTaskPayload
+): ModaGptImageTaskPayload {
+  if (payload.task !== 'tryOn' || !payload.providerInput) return payload;
+  return {
+    version: payload.version,
+    task: payload.task,
+    prompt: payload.prompt,
+    category: payload.category
+  };
+}
+
+export function getModaGptImageTaskRecoveryAction(input: {
+  executionPhase: ModaGptImageExecutionPhase;
+  providerRequestId: string | null;
+  resultStorageKey: string | null;
+}): ModaGptImageRecoveryAction {
+  if (input.executionPhase === 'result_stored') {
+    return input.resultStorageKey ? 'finalize_result' : 'mark_result_unknown';
+  }
+  if (input.executionPhase === 'provider_accepted') {
+    return input.providerRequestId ? 'poll_provider' : 'mark_result_unknown';
+  }
+  if (input.executionPhase === 'provider_submitting' || input.executionPhase === 'result_unknown') {
+    return input.providerRequestId ? 'poll_provider' : 'mark_result_unknown';
+  }
+  return 'submit_provider';
+}
+
+export function isModaGptImageTaskResultReferenceOwned(
+  task: {
+    id: string;
+    merchantId: string;
+    resultStorageKey: string | null;
+    resultStorageBucket: string | null;
+  },
+  expectedBucket: string
+): boolean {
+  try {
+    return Boolean(expectedBucket)
+      && task.resultStorageBucket === expectedBucket
+      && task.resultStorageKey === modaGptImageTaskStorageKey(task.merchantId, task.id);
+  } catch {
+    return false;
+  }
+}
+
+export function canAccessModaGptImageTask(
+  task: { merchantId: string | null; tenantId: string | null },
+  merchantId: string
+): boolean {
+  return task.merchantId === merchantId && task.tenantId === merchantId;
+}
+
+export function modaGptImageTaskQueueIdempotencyKey(merchantId: string, clientKey: string): string {
+  if (!/^[A-Za-z0-9_-]{1,120}$/.test(merchantId)
+    || !parseModaGptImageTaskIdempotencyKey(clientKey)) {
+    throw new Error('MODAGPT_IMAGE_TASK_IDEMPOTENCY_KEY_INVALID');
+  }
+  return `tenant:${createHash('sha256').update(JSON.stringify([merchantId, clientKey])).digest('hex')}`;
+}
+
+export function parseModaGptImageTaskIdempotencyKey(value: unknown): string | null {
+  return typeof value === 'string' && /^[A-Za-z0-9._-]{8,80}$/.test(value)
+    ? value
+    : null;
+}
+
+export function hashModaGptImageTaskPayload(input: ModaGptImageRequest): string {
+  const hash = createHash('sha256');
+  const add = (value: string) => {
+    hash.update(String(Buffer.byteLength(value, 'utf8')));
+    hash.update(':');
+    hash.update(value);
+    hash.update('|');
+  };
+  add(input.task);
+  add(input.prompt);
+  if (input.task === 'tryOn') {
+    add(input.category);
+    add(input.personImage);
+    add(input.garmentImage ?? '');
+    add(input.garmentStorageKey ?? '');
+    add(String(input.privacyConsent));
+  }
+  return hash.digest('hex');
+}
+
+export function modaGptImageTaskStorageKey(merchantId: string, taskId: string): string {
+  if (!/^[A-Za-z0-9_-]{1,120}$/.test(merchantId) || !/^[0-9a-f-]{36}$/i.test(taskId)) {
+    throw new Error('MODAGPT_IMAGE_TASK_STORAGE_KEY_INVALID');
+  }
+  return `merchants/${merchantId}/modagpt/tasks/${taskId}.webp`;
+}

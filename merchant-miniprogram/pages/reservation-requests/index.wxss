@@ -1,0 +1,160 @@
+.reservation-page {
+  min-height: 100vh;
+  padding: 24rpx 24rpx calc(40rpx + env(safe-area-inset-bottom));
+  background: #f5f5f7;
+  color: #171717;
+  box-sizing: border-box;
+}
+
+.page-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  margin-bottom: 22rpx;
+}
+
+.page-title {
+  font-size: 34rpx;
+  font-weight: 700;
+}
+
+.page-subtitle,
+.request-date,
+.product-style,
+.empty-copy,
+.request-note,
+.request-footnote {
+  color: #777;
+  font-size: 21rpx;
+  line-height: 1.5;
+}
+
+.state-card,
+.request-card {
+  margin-bottom: 18rpx;
+  padding: 24rpx;
+  border: 1rpx solid #ececf0;
+  border-radius: 14rpx;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.state-card {
+  display: flex;
+  min-height: 150rpx;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8rpx;
+  color: #666;
+  text-align: center;
+}
+
+.state-error {
+  color: #a33131;
+}
+
+.empty-title,
+.request-number,
+.product-name {
+  color: #171717;
+  font-size: 24rpx;
+  font-weight: 700;
+}
+
+.request-heading,
+.request-summary,
+.request-line,
+.request-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14rpx;
+}
+
+.request-heading {
+  align-items: flex-start;
+  padding-bottom: 18rpx;
+  border-bottom: 1rpx solid #eee;
+}
+
+.request-heading > view,
+.request-product {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.request-status {
+  padding: 6rpx 12rpx;
+  border-radius: 20rpx;
+  background: #f4f1eb;
+  color: #716149;
+  font-size: 19rpx;
+}
+
+.status-confirmed {
+  background: #e8f4ec;
+  color: #23623c;
+}
+
+.status-rejected {
+  background: #f7eaea;
+  color: #9a3434;
+}
+
+.request-product {
+  padding: 18rpx 0;
+}
+
+.request-lines {
+  padding: 12rpx 14rpx;
+  border-radius: 8rpx;
+  background: #f8f8f9;
+}
+
+.request-line {
+  min-height: 48rpx;
+  color: #444;
+  font-size: 20rpx;
+}
+
+.request-summary {
+  margin-top: 16rpx;
+  color: #444;
+  font-size: 21rpx;
+  font-weight: 600;
+}
+
+.request-note,
+.request-footnote {
+  display: block;
+  margin-top: 12rpx;
+}
+
+.request-actions {
+  margin-top: 18rpx;
+}
+
+.request-actions button {
+  flex: 1;
+  height: 72rpx;
+  margin: 0;
+  border-radius: 8rpx;
+  font-size: 22rpx;
+  line-height: 72rpx;
+}
+
+.request-reject {
+  border: 1rpx solid #d8d8dc;
+  background: #fff;
+  color: #444;
+}
+
+.request-confirm {
+  background: #171717;
+  color: #fff;
+}
+
+.request-actions button::after {
+  border: 0;
+}

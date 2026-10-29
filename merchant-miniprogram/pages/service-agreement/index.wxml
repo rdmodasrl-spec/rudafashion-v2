@@ -1,0 +1,44 @@
+<view class="screen privacy-screen">
+  <view class="privacy-intro">
+    <text class="privacy-title">服务协议</text>
+    <text class="privacy-updated">更新日期：2026年10月22日</text>
+    <text class="privacy-copy">本协议适用于你通过 RUDA 商家小程序使用商家及员工工作台、企业入驻入口和相关业务功能。请在登录或提交信息前阅读。</text>
+  </view>
+
+  <view class="privacy-section">
+    <text class="privacy-heading">一、服务主体与服务内容</text>
+    <text class="privacy-copy">服务由 RUDA ITALIA S.R.L. 提供，包括商家账号登录、企业入驻申请、商家资料管理、商品和库存管理、订单及客户业务处理、经营支持等功能。部分入驻或账户页面通过小程序 web-view 打开 RUDA 官方网站。</text>
+  </view>
+
+  <view class="privacy-section">
+    <text class="privacy-heading">二、账号和联系信息</text>
+    <text class="privacy-copy">你可以按页面要求使用邮箱、手机号、商家编码及密码登录。手机号为你主动输入的信息，将用于身份验证、账号安全、入驻审核、业务联系、订单履行及必要的客户支持。请确保所填信息准确并由你合法使用；不提供特定信息可能导致相应的登录、验证或联系功能无法使用。小程序不会未经你的主动操作从微信读取手机号。</text>
+  </view>
+
+  <view class="privacy-section">
+    <text class="privacy-heading">三、使用规范与账号安全</text>
+    <text class="privacy-copy">你应提供真实、准确、完整且及时更新的资料，并妥善保管账号和密码。你应确保有权代表相关企业或取得必要授权后操作商家资料、员工、客户、商品、图片及订单。不得利用服务从事欺诈、侵害他人权益、违法经营或破坏平台安全的活动。</text>
+  </view>
+
+  <view class="privacy-section">
+    <text class="privacy-heading">四、订单与业务信息</text>
+    <text class="privacy-copy">商品、库存、价格、起订量、交付及交易条件以 RUDA 系统和订单确认信息为准。通过小程序提交业务信息不代表交易已完成或款项已收取；涉及付款、配送、退换货等事项，应以订单及服务页面的具体说明为准。</text>
+  </view>
+
+  <view class="privacy-section">
+    <text class="privacy-heading">五、个人信息与隐私</text>
+    <text class="privacy-copy">RUDA 按《RUDA 商家小程序隐私政策》说明处理你主动提交的手机号、账号资料和经营信息。信息通过表单或业务操作提交，经 HTTPS 传输至 RUDA 服务端，并在提供服务、账号安全及适用法律所需范围内保存和使用。需要行使个人信息权利或提出隐私请求时，请通过「更多」中的帮助与反馈联系 RUDA，或邮件联系 rdmodasrl@gmail.com。</text>
+  </view>
+
+  <view class="privacy-section">
+    <text class="privacy-heading">六、服务调整与责任</text>
+    <text class="privacy-copy">为维护安全、遵守法律或改善服务，RUDA 可在合理范围内更新功能或本协议，并通过小程序或网站公布更新内容。因网络、设备、第三方服务或不可抗力造成暂时中断时，RUDA 将在可行范围内处理；法律规定不得排除或限制的责任不受本条影响。</text>
+  </view>
+
+  <view class="privacy-section">
+    <text class="privacy-heading">七、服务主体联系信息</text>
+    <text class="privacy-copy">RUDA ITALIA S.R.L. · Via Piemonte 24, 59100 Prato, Italia · 邮箱：rdmodasrl@gmail.com。</text>
+  </view>
+
+  <navigator class="legal-document-link" url="/pages/privacy/index">查看《RUDA 商家小程序隐私政策》</navigator>
+</view>

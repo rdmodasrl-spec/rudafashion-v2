@@ -1,0 +1,458 @@
+<view class="screen workspace-page workspace-page--{{id}}">
+  <view class="workspace-heading">
+    <text class="page-title">{{id === 'notifications' ? '通知中心' : title}}</text>
+  </view>
+  <view wx:if="{{error}}" class="error-box">{{error}}</view>
+  <view wx:if="{{loading}}" class="empty">正在加载工作区…</view>
+
+  <view wx:if="{{metrics.length && id !== 'notifications'}}" class="metric-grid {{id === 'team' ? 'metric-grid--team' : ''}}">
+    <view wx:for="{{metrics}}" wx:key="label" class="metric-card">
+      <text class="metric-label">{{item.label}}</text><text class="metric-value">{{item.value}}</text>
+    </view>
+  </view>
+
+  <view wx:if="{{id === 'procurement' || id === 'inventory' || id === 'team' || id === 'notifications' || id === 'materials' || id === 'site_content' || id === 'finance' || id === 'store' || id === 'settings'}}" class="record-tools">
+    <view wx:if="{{id === 'procurement' || id === 'inventory' || id === 'team' || id === 'materials'}}" class="record-search">
+      <image class="record-search-icon" src="/assets/icons/search.png" mode="aspectFit" />
+      <input value="{{query}}" bindinput="onRecordSearch" placeholder="{{id === 'procurement' ? '搜索采购单或供应商' : id === 'inventory' ? '搜索商品或 SKU' : id === 'team' ? '搜索员工' : id === 'materials' ? '搜索材料名称或编码' : '搜索通知'}}" confirm-type="search" />
+      <text wx:if="{{query}}" class="record-search-clear" bindtap="onRecordSearch" data-value="">清除</text>
+    </view>
+    <scroll-view wx:if="{{filterOptions.length}}" class="record-filters" scroll-x>
+      <button wx:for="{{filterOptions}}" wx:key="id" class="record-filter {{statusFilter === item.id ? 'record-filter--active' : ''}}" data-filter="{{item.id}}" bindtap="onRecordFilterChange">{{item.label}}</button>
+    </scroll-view>
+    <view wx:if="{{id === 'procurement'}}" class="procurement-quick-actions">
+      <button class="secondary-button quick-action" bindtap="togglePurchaseForm">{{showPurchaseForm ? '收起采购单' : '＋ 创建采购单'}}</button>
+      <button class="secondary-button quick-action" bindtap="toggleSupplierForm">{{showSupplierForm ? '收起供应商' : '＋ 添加供应商'}}</button>
+    </view>
+    <button wx:if="{{id === 'team'}}" class="secondary-button employee-create-trigger" bindtap="toggleEmployeeForm">{{showEmployeeForm ? '收起' : '＋ 创建员工'}}</button>
+    <button wx:if="{{id === 'materials'}}" class="secondary-button employee-create-trigger" bindtap="toggleMaterialForm">{{showMaterialForm ? '收起' : '＋ 新增材料'}}</button>
+    <button wx:if="{{id === 'site_content'}}" class="secondary-button employee-create-trigger" bindtap="toggleCategoryForm">{{showCategoryForm ? '收起' : '＋ 新增分类'}}</button>
+    <button wx:if="{{id === 'finance'}}" class="secondary-button employee-create-trigger" bindtap="toggleBankForm">{{showBankForm ? '收起' : '＋ 添加收款账户'}}</button>
+    <button wx:if="{{id === 'store'}}" class="secondary-button employee-create-trigger" bindtap="toggleStorefrontEditor">{{showStorefrontEditor ? '收起编辑' : '编辑店铺'}}</button>
+    <button wx:if="{{id === 'settings'}}" class="secondary-button employee-create-trigger" bindtap="toggleSettingsEditor">{{showSettingsEditor ? '收起编辑' : '编辑资料'}}</button>
+  </view>
+
+  <view wx:if="{{id === 'site_content' && showCategoryForm}}" class="card quick-form">
+    <text class="item-title">{{editingCategoryId ? '编辑分类' : '新增分类'}}</text>
+    <input class="input" value="{{quickValue}}" placeholder="分类名称" bindinput="onQuickValue" />
+    <view class="button-row">
+      <button wx:if="{{editingCategoryId}}" class="secondary-button" bindtap="cancelCategoryEdit">取消</button>
+      <button class="primary-button form-button" bindtap="createCategory">{{editingCategoryId ? '保存分类' : '创建分类'}}</button>
+    </view>
+  </view>
+
+  <view wx:if="{{id === 'finance' && showBankForm}}" class="card quick-form">
+    <text class="item-title">收款账户</text>
+    <input class="input" value="{{bankHolder}}" data-field="bankHolder" placeholder="账户持有人" bindinput="onBankInput" />
+    <input class="input" value="{{bankIban}}" data-field="bankIban" placeholder="IBAN" bindinput="onBankInput" />
+    <text class="item-meta">完整 IBAN 仅在提交时传给服务端；审核状态和掩码账号由服务端返回。</text>
+    <button class="secondary-button form-button" bindtap="addBankAccount">提交收款账户</button>
+  </view>
+
+  <view wx:if="{{id === 'settings' && merchantSettings.name && !showSettingsEditor}}" class="settings-overview">
+    <view class="settings-profile">
+      <view class="storefront-mark">{{merchantSettings.name ? merchantSettings.name[0] : '店'}}</view>
+      <view class="settings-profile-copy">
+        <text class="storefront-overview-name">{{merchantSettings.name}}</text>
+        <text class="storefront-overview-template">{{merchantSettings.companyLegalName}}</text>
+      </view>
+    </view>
+    <view wx:if="{{merchantSettings.contactPhone}}" class="storefront-preview-row"><text>电话</text><text>{{merchantSettings.contactPhone}}</text></view>
+    <view wx:if="{{merchantSettings.contactEmail}}" class="storefront-preview-row"><text>邮箱</text><text>{{merchantSettings.contactEmail}}</text></view>
+    <view wx:if="{{merchantSettings.city || merchantSettings.country}}" class="storefront-preview-row"><text>所在地</text><text>{{merchantSettings.city}}{{merchantSettings.city && merchantSettings.country ? '，' : ''}}{{merchantSettings.country}}</text></view>
+  </view>
+  <view wx:if="{{id === 'settings' && merchantSettings.name}}" class="settings-preferences">
+    <text class="form-section-title">通知偏好</text>
+    <view class="preference-row"><text>订单通知</text><switch checked="{{merchantSettings.notifyOrders}}" data-field="notifyOrders" bindchange="onNotificationPreference" color="#1d1b19" /></view>
+    <view class="preference-row"><text>结算通知</text><switch checked="{{merchantSettings.notifyPayouts}}" data-field="notifyPayouts" bindchange="onNotificationPreference" color="#1d1b19" /></view>
+    <view class="preference-row"><text>客户授权通知</text><switch checked="{{merchantSettings.notifyVault}}" data-field="notifyVault" bindchange="onNotificationPreference" color="#1d1b19" /></view>
+    <view class="preference-row"><text>营销通知</text><switch checked="{{merchantSettings.notifyMarketing}}" data-field="notifyMarketing" bindchange="onNotificationPreference" color="#1d1b19" /></view>
+    <button class="primary-button settings-preference-save" bindtap="saveMerchantSettings">保存偏好</button>
+  </view>
+  <view wx:if="{{id === 'settings' && merchantSettings.name && showSettingsEditor}}" class="card settings-form">
+    <text class="form-section-title">企业资料</text>
+    <input class="input" data-field="name" value="{{merchantSettings.name}}" placeholder="店铺名称" bindinput="onMerchantSettingInput" />
+    <input class="input" data-field="companyLegalName" value="{{merchantSettings.companyLegalName}}" placeholder="公司法定名称" bindinput="onMerchantSettingInput" />
+    <input class="input" data-field="vatNumber" value="{{merchantSettings.vatNumber}}" placeholder="VAT 税号" bindinput="onMerchantSettingInput" />
+    <input class="input" data-field="country" value="{{merchantSettings.country}}" placeholder="国家/地区" bindinput="onMerchantSettingInput" />
+    <input class="input" data-field="city" value="{{merchantSettings.city}}" placeholder="城市" bindinput="onMerchantSettingInput" />
+    <input class="input" data-field="showroomAddress" value="{{merchantSettings.showroomAddress}}" placeholder="展厅地址" bindinput="onMerchantSettingInput" />
+    <text class="form-section-title">联系方式</text>
+    <input class="input" data-field="contactPerson" value="{{merchantSettings.contactPerson}}" placeholder="联系人" bindinput="onMerchantSettingInput" />
+    <input class="input" data-field="contactPhone" value="{{merchantSettings.contactPhone}}" placeholder="联系电话" bindinput="onMerchantSettingInput" />
+    <input class="input" data-field="contactEmail" value="{{merchantSettings.contactEmail}}" placeholder="联系邮箱" bindinput="onMerchantSettingInput" />
+    <text class="form-section-title">经营偏好</text>
+    <input class="input" data-field="moq" type="number" value="{{merchantSettings.moq}}" placeholder="默认起订量" bindinput="onMerchantSettingInput" />
+    <textarea class="textarea" data-field="shippingNote" value="{{merchantSettings.shippingNote}}" placeholder="发货说明" bindinput="onMerchantSettingInput" />
+    <view class="button-row">
+      <button class="secondary-button" bindtap="toggleSettingsEditor">收起编辑</button>
+      <button class="primary-button form-button" bindtap="saveMerchantSettings">保存设置</button>
+    </view>
+  </view>
+
+  <view wx:if="{{id === 'store'}}" class="card quick-form storefront-settings">
+    <view wx:if="{{!showStorefrontEditor}}" class="storefront-overview">
+      <view class="storefront-overview-head">
+        <view class="storefront-mark">{{items[0].source.name ? items[0].source.name[0] : '店'}}</view>
+        <view class="storefront-overview-copy">
+          <text class="storefront-overview-name">{{items[0].title || '店铺资料'}}</text>
+          <text wx:if="{{items[0].source.storeSlug}}" class="storefront-overview-template">{{items[0].source.storeSlug}}</text>
+        </view>
+      </view>
+      <view wx:if="{{storefrontDraft.tagline}}" class="storefront-preview-row"><text>店铺简介</text><text>{{storefrontDraft.tagline}}</text></view>
+      <view wx:if="{{storefrontDraft.description}}" class="storefront-preview-row"><text>页面介绍</text><text>{{storefrontDraft.description}}</text></view>
+    </view>
+    <view wx:if="{{showStorefrontEditor}}" class="storefront-editor">
+      <view class="storefront-template-picker">
+        <picker range="{{storefrontDraft.templates}}" range-key="label" value="{{storefrontDraft.templateIndex}}" bindchange="onStorefrontTemplateChange">
+          <view class="input picker-input">网站模板：{{storefrontDraft.selectedTemplate.label}}　›</view>
+        </picker>
+        <view class="template-actions">
+          <text class="item-meta">{{storefrontDraft.selectedTemplate.description}}</text>
+          <button class="secondary-button template-apply-button" bindtap="applyStorefrontTemplate">一键应用到商家网站</button>
+        </view>
+      </view>
+      <text class="form-section-title">店铺页面</text>
+      <input class="input" data-field="tagline" value="{{storefrontDraft.tagline}}" maxlength="160" placeholder="店铺标语" bindinput="onStorefrontInput" />
+      <textarea class="textarea" data-field="description" value="{{storefrontDraft.description}}" maxlength="3000" placeholder="店铺介绍" bindinput="onStorefrontInput" />
+      <text class="form-section-title">搜索展示</text>
+      <input class="input" data-field="seoTitle" value="{{storefrontDraft.seoTitle}}" maxlength="70" placeholder="页面 SEO 标题" bindinput="onStorefrontInput" />
+      <textarea class="textarea" data-field="seoDescription" value="{{storefrontDraft.seoDescription}}" maxlength="320" placeholder="页面 SEO 描述" bindinput="onStorefrontInput" />
+      <text class="form-section-title">配送与退换政策</text>
+      <textarea class="textarea" data-field="shippingPolicy" value="{{storefrontDraft.shippingPolicy}}" maxlength="2000" placeholder="配送政策：区域、预计时效、运费说明" bindinput="onStorefrontInput" />
+      <textarea class="textarea" data-field="returnsPolicy" value="{{storefrontDraft.returnsPolicy}}" maxlength="2000" placeholder="退换货政策" bindinput="onStorefrontInput" />
+      <view class="button-row">
+        <button class="secondary-button" bindtap="toggleStorefrontEditor">收起编辑</button>
+        <button class="primary-button form-button" bindtap="saveStorefront">保存店铺页面</button>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{id === 'procurement' && showSupplierForm}}" class="card quick-form">
+    <text class="item-title">供应商</text>
+    <input class="input" data-field="name" value="{{supplierName}}" placeholder="供应商名称" bindinput="onSupplierInput" />
+    <input class="input" data-field="contact" value="{{supplierContact}}" placeholder="联系人（选填）" bindinput="onSupplierInput" />
+    <input class="input" data-field="email" value="{{supplierEmail}}" placeholder="联系邮箱（选填）" bindinput="onSupplierInput" />
+    <input class="input" type="number" data-field="leadTime" value="{{supplierLeadTime}}" placeholder="交期天数" bindinput="onSupplierInput" />
+    <button class="secondary-button form-button" bindtap="createSupplier">添加供应商</button>
+  </view>
+
+  <view wx:if="{{id === 'procurement' && showPurchaseForm && purchaseSuppliers.length && purchaseProducts.length}}" class="card quick-form">
+    <text class="item-title">采购单</text>
+    <picker range="{{purchaseSuppliers}}" range-key="name" value="{{purchaseSupplierIndex}}" bindchange="onPurchaseSupplierChange">
+      <view class="input picker-input">供应商：{{purchaseSuppliers[purchaseSupplierIndex].name}}　›</view>
+    </picker>
+    <picker range="{{purchaseProducts}}" range-key="name" value="{{purchaseProductIndex}}" bindchange="onPurchaseProductChange">
+      <view class="input picker-input">商品：{{purchaseProducts[purchaseProductIndex].name}}　›</view>
+    </picker>
+    <picker range="{{purchaseProducts[purchaseProductIndex].skus}}" range-key="sku" value="{{purchaseSkuIndex}}" bindchange="onPurchaseSkuChange">
+      <view class="input picker-input">SKU：{{purchaseProducts[purchaseProductIndex].skus[purchaseSkuIndex].sku}}　›</view>
+    </picker>
+    <input class="input" type="number" data-field="quantity" value="{{purchaseQuantity}}" placeholder="采购数量" bindinput="onPurchaseInput" />
+    <input class="input" type="digit" data-field="unitCost" value="{{purchaseUnitCost}}" placeholder="采购单价" bindinput="onPurchaseInput" />
+    <button class="secondary-button form-button" bindtap="createPurchaseOrder">创建采购单</button>
+  </view>
+  <view wx:if="{{id === 'procurement' && showPurchaseForm && (!purchaseSuppliers.length || !purchaseProducts.length)}}" class="empty">
+    添加供应商与商品
+  </view>
+
+  <view wx:if="{{id === 'procurement' && receiptOrder}}" class="card quick-form">
+    <text class="item-title">登记到货 · {{receiptOrder.purchaseOrderNo}}</text>
+    <text class="item-meta">{{receiptItem.productName}} · {{receiptItem.sku}}</text>
+    <input class="input" type="number" data-field="quantity" value="{{receiptQuantity}}" placeholder="本次收货数量" bindinput="onReceiptInput" />
+    <input class="input" type="digit" data-field="unitCost" value="{{receiptUnitCost}}" placeholder="实际采购单价" bindinput="onReceiptInput" />
+    <view class="button-row">
+      <button class="secondary-button" bindtap="submitReceipt">确认收货</button>
+      <button class="secondary-button" bindtap="cancelReceipt">取消</button>
+    </view>
+  </view>
+
+  <view wx:if="{{id === 'materials' && showMaterialForm}}" class="card quick-form">
+    <text class="item-title">新增物料</text>
+    <input class="input" data-field="code" value="{{materialDraft.code}}" placeholder="材料编码" bindinput="onMaterialDraftInput" />
+    <input class="input" data-field="name" value="{{materialDraft.name}}" placeholder="材料名称" bindinput="onMaterialDraftInput" />
+    <picker range="{{materialCategories}}" range-key="label" value="{{materialCategoryIndex}}" bindchange="onMaterialCategoryChange">
+      <view class="input picker-input">材料分类：{{materialCategories[materialCategoryIndex].label}}　›</view>
+    </picker>
+    <picker range="{{materialUnits}}" range-key="label" value="{{materialUnitIndex}}" bindchange="onMaterialUnitChange">
+      <view class="input picker-input">计量单位：{{materialUnits[materialUnitIndex].label}}　›</view>
+    </picker>
+    <input class="input" type="digit" data-field="unitCost" value="{{materialDraft.unitCost}}" placeholder="单位成本" bindinput="onMaterialDraftInput" />
+    <input class="input" type="digit" data-field="reorderPoint" value="{{materialDraft.reorderPoint}}" placeholder="补货点" bindinput="onMaterialDraftInput" />
+    <input class="input" type="number" data-field="leadTimeDays" value="{{materialDraft.leadTimeDays}}" placeholder="交期（天）" bindinput="onMaterialDraftInput" />
+    <textarea class="textarea" data-field="notes" value="{{materialDraft.notes}}" placeholder="材料备注" bindinput="onMaterialDraftInput" />
+    <button class="secondary-button form-button" bindtap="createMaterial">创建材料</button>
+  </view>
+
+  <view wx:if="{{id === 'materials' && materialInbound}}" class="card adjustment-form">
+    <text class="item-title">材料入库 · {{materialInbound.name}}</text>
+    <input class="input" type="digit" value="{{materialQuantity}}" data-field="quantity" placeholder="入库数量" bindinput="onMaterialInput" />
+    <input class="input" value="{{materialNote}}" data-field="note" placeholder="备注（选填）" bindinput="onMaterialInput" />
+    <button class="primary-button form-button" bindtap="submitMaterialInbound">确认入库</button>
+  </view>
+
+  <view wx:if="{{id === 'pos'}}" class="card pos-card">
+    <view class="pos-header">
+      <text class="pill">{{posShift ? '班次进行中' : '未开班'}}</text>
+    </view>
+    <view wx:if="{{!posShift}}" class="pos-shift-form">
+      <input class="input" type="digit" value="{{openingCash}}" placeholder="开班备用金（€）" bindinput="onOpeningCash" />
+      <button class="secondary-button form-button" bindtap="openPosShift">开启 POS 班次</button>
+    </view>
+    <view wx:else class="item-meta">班次 {{posShift.id}} · 开始时间 {{posShift.openedAt}}</view>
+    <view wx:if="{{posShift}}" class="cash-movement-form">
+      <text class="item-meta">备用金调整</text>
+      <input class="input" type="digit" data-field="movementAmount" value="{{cashMovementAmount}}" placeholder="金额（€）" bindinput="onPosCashInput" />
+      <input class="input" data-field="movementNote" value="{{cashMovementNote}}" placeholder="现金流水备注" bindinput="onPosCashInput" />
+      <view class="button-row">
+        <button class="secondary-button" data-direction="in" bindtap="addPosCashMovement">现金存入</button>
+        <button class="secondary-button" data-direction="out" bindtap="addPosCashMovement">现金支出</button>
+      </view>
+      <input class="input" type="digit" data-field="closingCash" value="{{closingCash}}" placeholder="交班盘点现金（€）" bindinput="onPosCashInput" />
+      <button class="danger-button form-button" bindtap="closePosShift">盘点并关闭班次</button>
+    </view>
+    <view class="pos-product-heading">可售商品</view>
+    <view wx:for="{{posProducts}}" wx:key="id" class="pos-product-row">
+      <view class="pos-product-copy">
+        <text class="item-title">{{item.name}}</text>
+        <text class="item-meta">{{item.styleNo}} · €{{item.rrpPrice || item.wholesalePrice}}</text>
+      </view>
+      <picker range="{{item.skus}}" range-key="sku" value="{{item.selectedSkuIndex}}" data-id="{{item.id}}" bindchange="onPosSkuChange">
+        <view class="sku-picker">{{item.skus[item.selectedSkuIndex].sku}}　›</view>
+      </picker>
+      <button class="text-button" data-id="{{item.id}}" bindtap="addPosItem">加入</button>
+    </view>
+    <view wx:if="{{!posProducts.length}}" class="empty">暂无可采购商品</view>
+    <view class="pos-product-heading">本单商品 · {{posCart.length}}</view>
+    <view wx:for="{{posCart}}" wx:key="sku" class="cart-line">
+      <view><text class="item-title">{{item.name}}</text><text class="item-meta">{{item.sku}} · €{{item.unitPrice}}</text></view>
+      <view class="quantity-controls">
+        <button data-sku="{{item.sku}}" data-delta="-1" bindtap="changePosQuantity">−</button>
+        <text>{{item.quantity}}</text>
+        <button data-sku="{{item.sku}}" data-delta="1" bindtap="changePosQuantity">＋</button>
+      </view>
+    </view>
+    <view class="payment-methods">
+      <text class="item-meta">付款方式</text>
+      <view class="payment-row">
+        <button wx:for="{{paymentMethods}}" wx:key="id" class="payment-option {{paymentMethod === item.id ? 'payment-active' : ''}}" data-method="{{item.id}}" bindtap="onPaymentMethodChange">{{item.label}}</button>
+      </view>
+    </view>
+    <view class="pos-total"><text>合计</text><text>€{{posTotal}}</text></view>
+    <button class="primary-button form-button" loading="{{posSaving}}" disabled="{{posSaving || !posCart.length || (posSettings.requireOpenShift && !posShift)}}" bindtap="submitPosSale">收款并完成销售</button>
+  </view>
+
+  <view wx:if="{{id === 'support'}}" class="card quick-form">
+    <text class="item-title">提交反馈</text>
+    <input class="input" value="{{supportSubject}}" placeholder="问题主题" maxlength="120" bindinput="onSupportSubjectInput" />
+    <textarea class="textarea" value="{{supportMessage}}" placeholder="请描述你需要的帮助" bindinput="onSupportInput" />
+    <button class="secondary-button form-button" bindtap="sendSupportRequest">创建支持会话</button>
+  </view>
+
+  <view wx:if="{{id === 'support' && supportConversation}}" class="card support-thread">
+    <view class="order-head">
+      <view><text class="item-title">{{supportConversation.subject}}</text><text class="item-meta">{{supportConversation.status}}</text></view>
+      <text class="text-button" bindtap="closeSupportConversation">关闭</text>
+    </view>
+    <view wx:for="{{supportMessages}}" wx:key="id" class="support-message">
+      <text class="support-sender">{{item.senderName || item.senderRole}}</text>
+      <text class="support-content">{{item.content}}</text>
+      <text class="support-time">{{item.createdAt}}</text>
+    </view>
+    <textarea class="textarea" value="{{supportReply}}" placeholder="继续补充问题或回复支持团队" maxlength="4000" bindinput="onSupportReplyInput" />
+    <button class="primary-button form-button" bindtap="replySupportConversation">发送回复</button>
+  </view>
+
+  <view wx:if="{{id === 'team' && showEmployeeForm}}" class="card quick-form">
+    <text class="item-title">新增员工</text>
+    <input class="input" data-field="name" value="{{employeeDraft.name}}" placeholder="员工姓名" bindinput="onEmployeeInput" />
+    <input class="input" data-field="email" value="{{employeeDraft.email}}" placeholder="员工邮箱" bindinput="onEmployeeInput" />
+    <input class="input" password data-field="password" value="{{employeeDraft.password}}" placeholder="初始密码（至少 8 位）" bindinput="onEmployeeInput" />
+    <picker range="{{employeeRoles}}" range-key="label" value="{{employeeRoleIndex}}" bindchange="onEmployeeRoleChange">
+      <view class="input picker-input">员工角色：{{employeeRoles[employeeRoleIndex].label}}　›</view>
+    </picker>
+    <button class="primary-button form-button" bindtap="createEmployee">创建员工</button>
+  </view>
+
+  <view wx:if="{{id === 'team' && employeeEditDraft.id}}" class="card quick-form">
+    <text class="item-title">员工权限</text>
+    <input class="input" value="{{employeeEditDraft.name}}" placeholder="员工姓名" bindinput="onEmployeeEditName" />
+    <picker range="{{employeeRoles}}" range-key="label" value="{{employeeEditRoleIndex}}" bindchange="onEmployeeEditRoleChange">
+      <view class="input picker-input">岗位：{{employeeEditDraft.roleLabel}}　›</view>
+    </picker>
+    <checkbox-group bindchange="onEmployeePermissionsChange">
+      <label wx:for="{{employeePermissionOptions}}" wx:key="id" class="preference-row">
+        <checkbox value="{{item.id}}" checked="{{employeePermissionState[item.id]}}" color="#1d1b19" />
+        <text>{{item.label}}</text>
+      </label>
+    </checkbox-group>
+    <view class="button-row">
+      <button class="secondary-button" bindtap="cancelEmployeeEdit">取消</button>
+      <button class="primary-button" bindtap="saveEmployeeAccess">保存权限</button>
+    </view>
+  </view>
+
+  <view wx:if="{{id === 'inventory' && selectedBalance}}" class="card adjustment-form">
+    <text class="item-title">调整 {{selectedBalance.sku}}</text>
+    <text class="item-meta">正数增加库存，负数减少库存；减少后不能低于已占用数量。</text>
+    <input class="input" type="number" value="{{adjustmentQuantity}}" data-field="quantity" placeholder="数量变化，例如 5 或 -2" bindinput="onAdjustmentInput" />
+    <input class="input" value="{{adjustmentNote}}" data-field="note" placeholder="调整原因（必填）" bindinput="onAdjustmentInput" />
+    <button class="primary-button form-button" bindtap="submitInventoryAdjustment">确认调整</button>
+  </view>
+
+  <view wx:if="{{!loading && !items.length && !error}}" class="empty">暂无记录或无权限</view>
+  <view wx:if="{{!loading && items.length && !visibleItems.length}}" class="empty">暂无匹配记录</view>
+  <view wx:if="{{visibleItems.length}}" class="workspace-list-panel">
+  <view wx:for="{{visibleItems}}" wx:key="index" class="list-card workspace-record workspace-record--{{id}}">
+    <view wx:if="{{id === 'procurement'}}" class="purchase-order-main" data-id="{{item.source.id}}" bindtap="openPurchaseOrder">
+    <view class="purchase-order-copy">
+        <text class="item-title">{{item.title}}</text>
+        <text class="item-meta">{{item.source.supplier && item.source.supplier.name || '未关联供应商'}}</text>
+        <text class="item-meta">{{item.source.createdAt || item.source.expectedAt || ''}}</text>
+      </view>
+      <view class="purchase-order-side">
+        <text class="status-pill">{{item.statusLabel}}</text>
+        <text wx:if="{{item.source.totalAmount !== undefined}}" class="record-amount">€{{item.source.totalAmount}}</text>
+        <text class="record-arrow">›</text>
+      </view>
+    </view>
+    <view wx:elif="{{id === 'inventory'}}" class="inventory-row">
+      <view class="record-avatar record-avatar--inventory">{{item.source.product && item.source.product.name ? item.source.product.name[0] : '货'}}</view>
+      <view class="inventory-copy">
+        <text class="item-title">{{item.source.product && item.source.product.name || '商品'}} · {{item.source.sku}}</text>
+        <text class="item-meta">{{item.source.color}} {{item.source.size}}</text>
+        <text class="item-meta">在库 {{item.source.onHandQuantity}} · 占用 {{item.source.reservedQuantity}}</text>
+      </view>
+      <view class="inventory-stock">
+        <text class="stock-count">{{item.source.availableQuantity}}</text>
+        <text class="stock-caption">可售</text>
+        <text class="status-pill {{item.source.availableQuantity > 0 ? 'status-pill--available' : 'status-pill--empty'}}">{{item.source.availableQuantity > 0 ? '有货' : '缺货'}}</text>
+      </view>
+    </view>
+    <view wx:elif="{{id === 'team' && item.source.email}}" class="employee-row">
+      <view class="record-avatar record-avatar--employee">{{item.source.name ? item.source.name[0] : '员'}}</view>
+      <view class="employee-copy">
+        <text class="item-title">{{item.source.name}}</text>
+        <text class="item-meta">{{item.source.email}}</text>
+        <text class="item-meta">{{item.source.role}}</text>
+      </view>
+      <text class="status-pill {{item.source.active ? 'status-pill--available' : 'status-pill--empty'}}">{{item.source.active ? '在职' : '已停用'}}</text>
+    </view>
+    <view wx:elif="{{id === 'notifications'}}" class="notification-row">
+      <view class="notification-mark {{item.source.readAt ? 'notification-mark--read' : ''}}">
+        <image class="notification-icon" src="/assets/icons/bell.png" mode="aspectFit" />
+      </view>
+      <view class="notification-copy">
+        <view class="notification-title-line">
+          <text class="item-title">{{item.title}}</text>
+          <text wx:if="{{!item.source.readAt}}" class="unread-dot"></text>
+        </view>
+        <text class="item-meta">{{item.source.payload && (item.source.payload.message || item.source.payload.body) || item.meta}}</text>
+        <text class="notification-time">{{item.source.createdAt}}</text>
+      </view>
+    </view>
+    <block wx:else>
+      <text class="item-title">{{item.title}}</text>
+      <text class="item-meta">{{item.meta}}</text>
+    </block>
+    <view class="item-actions">
+      <button wx:if="{{id === 'inventory'}}" class="text-button" data-id="{{item.source.id}}" bindtap="selectInventory">调整库存</button>
+      <button wx:if="{{id === 'materials'}}" class="text-button" data-id="{{item.source.id}}" bindtap="selectMaterial">材料入库</button>
+      <block wx:if="{{id === 'site_content'}}">
+        <button class="text-button" data-id="{{item.source.id}}" bindtap="editCategory">编辑分类</button>
+        <button class="text-button danger-text-button" data-id="{{item.source.id}}" bindtap="deleteCategory">删除分类</button>
+      </block>
+      <block wx:if="{{id === 'vault' && item.source.status === 'pending'}}">
+        <button class="text-button" data-id="{{item.source.id}}" data-action="approve" bindtap="itemAction">批准</button>
+        <button class="text-button" data-id="{{item.source.id}}" data-action="reject" bindtap="itemAction">拒绝</button>
+      </block>
+      <block wx:if="{{id === 'returns' && (item.source.status === 'pending' || item.source.status === 'requested')}}">
+        <button class="text-button" data-id="{{item.source.id}}" data-action="approve" bindtap="itemAction">批准退货</button>
+        <button class="text-button" data-id="{{item.source.id}}" data-action="reject" bindtap="itemAction">拒绝退货</button>
+      </block>
+      <button wx:if="{{id === 'returns' && item.source.status === 'approved'}}" class="text-button" data-id="{{item.source.id}}" data-action="receive" bindtap="itemAction">确认收到退货</button>
+      <button wx:if="{{id === 'finance' && item.source.status === 'pending' && !item.source.merchantAcknowledgedAt}}" class="text-button" data-id="{{item.source.id}}" data-action="ack" bindtap="itemAction">确认对账</button>
+      <block wx:if="{{id === 'production'}}">
+        <button wx:if="{{item.source.status === 'draft'}}" class="text-button" data-id="{{item.source.id}}" data-action="release" bindtap="itemAction">释放工单</button>
+        <button wx:if="{{item.source.status === 'released'}}" class="text-button" data-id="{{item.source.id}}" data-action="start" bindtap="itemAction">开始生产</button>
+        <button wx:if="{{item.source.status === 'in_progress'}}" class="text-button" data-id="{{item.source.id}}" data-action="qc" bindtap="itemAction">提交质检</button>
+        <button wx:if="{{item.source.status === 'qc_hold'}}" class="text-button" data-id="{{item.source.id}}" data-action="resume" bindtap="itemAction">继续生产</button>
+      </block>
+      <block wx:if="{{id === 'procurement' && item.source.purchaseOrderNo}}">
+        <button wx:if="{{item.source.status === 'draft'}}" class="text-button" data-id="{{item.source.id}}" data-action="order" bindtap="itemAction">确认下单</button>
+        <button wx:if="{{item.source.status === 'ordered'}}" class="text-button" data-id="{{item.source.id}}" data-action="archive" bindtap="itemAction">取消采购单</button>
+        <button wx:if="{{item.source.status === 'ordered' || item.source.status === 'partially_received'}}" class="text-button" data-id="{{item.source.id}}" bindtap="beginReceipt">登记到货</button>
+      </block>
+      <block wx:if="{{id === 'notifications'}}">
+        <button wx:if="{{item.source.relatedEntityId || (item.source.payload && (item.source.payload.relatedEntityId || item.source.payload.orderId))}}" class="text-button" data-id="{{item.source.id}}" data-action="open" bindtap="itemAction">查看业务</button>
+        <button wx:if="{{!item.source.readAt}}" class="text-button" data-id="{{item.source.id}}" data-action="read" bindtap="itemAction">标记已读</button>
+        <button wx:if="{{item.source.businessStatus !== 'resolved'}}" class="text-button" data-id="{{item.source.id}}" data-action="resolve" bindtap="itemAction">标记已处理</button>
+      </block>
+      <button wx:if="{{id === 'customers'}}" class="text-button" data-id="{{item.source.id}}" data-action="{{item.source.status === 'suspended' ? 'enable' : 'suspend'}}" bindtap="itemAction">{{item.source.status === 'suspended' ? '恢复客户' : '停用客户'}}</button>
+      <button wx:if="{{id === 'team' && item.source.email}}" class="text-button" data-id="{{item.source.id}}" data-action="{{item.source.active ? 'suspend' : 'enable'}}" bindtap="itemAction">{{item.source.active ? '停用员工' : '恢复员工'}}</button>
+      <button wx:if="{{id === 'team' && item.source.email}}" class="text-button" data-id="{{item.source.id}}" bindtap="editEmployeePermissions">设置权限</button>
+      <button wx:if="{{id === 'ai_employees' && !item.source.installation && (item.source.status === 'available' || item.source.status === 'pilot')}}" class="text-button" data-id="{{item.source.id}}" data-action="request" bindtap="itemAction">申请开通</button>
+      <button wx:if="{{id === 'ai_employees' && item.source.installation && item.source.installation.status === 'active'}}" class="text-button" data-id="{{item.source.id}}" data-action="suspend" bindtap="itemAction">暂停 AI 员工</button>
+      <button wx:if="{{id === 'ai_employees' && item.source.installation && item.source.installation.status === 'paused'}}" class="text-button" data-id="{{item.source.id}}" data-action="enable" bindtap="itemAction">恢复 AI 员工</button>
+      <button wx:if="{{id === 'support'}}" class="text-button" data-id="{{item.source.id}}" bindtap="openSupportConversation">查看并回复</button>
+    </view>
+  </view>
+  </view>
+
+  <view wx:if="{{id === 'procurement' && purchaseSupplierRecords.length}}" class="supplier-record-section">
+    <view class="record-section-heading"><text>供应商</text><text>{{purchaseSupplierRecords.length}} 家</text></view>
+    <view wx:for="{{purchaseSupplierRecords}}" wx:key="index" class="supplier-record-row">
+      <view class="record-avatar record-avatar--supplier">{{item.title ? item.title[0] : '供'}}</view>
+      <view class="supplier-record-copy">
+        <text class="item-title">{{item.title}}</text>
+        <text class="item-meta">{{item.meta}}</text>
+      </view>
+      <text class="record-arrow">›</text>
+    </view>
+  </view>
+
+  <view wx:if="{{selectedPurchaseOrder}}" class="purchase-detail-overlay">
+    <view class="purchase-detail-sheet">
+      <view class="purchase-detail-heading">
+        <view>
+          <text class="detail-kicker">采购单详情</text>
+          <text class="purchase-detail-number">{{selectedPurchaseOrder.purchaseOrderNo}}</text>
+        </view>
+        <text class="detail-close" bindtap="closePurchaseOrder">×</text>
+      </view>
+      <view class="purchase-detail-overview">
+        <view class="purchase-detail-status">
+          <text class="status-pill">{{selectedPurchaseOrder.statusLabel || selectedPurchaseOrder.status}}</text>
+          <text class="detail-value">{{selectedPurchaseOrder.supplier && selectedPurchaseOrder.supplier.name || '未关联供应商'}}</text>
+        </view>
+        <view class="purchase-detail-summary">
+          <view><text class="detail-label">订单金额</text><text class="detail-value">€{{selectedPurchaseOrder.detailTotalAmount}}</text></view>
+          <view><text class="detail-label">已收金额</text><text class="detail-value">€{{selectedPurchaseOrder.receivedAmount}}</text></view>
+        </view>
+        <view class="purchase-progress-track">
+          <view class="purchase-progress-fill" style="width: {{selectedPurchaseOrder.receivedPercent}}%;"></view>
+        </view>
+        <view class="purchase-progress-caption">
+          <text>预计到货 {{selectedPurchaseOrder.expectedAt || '未设置'}}</text>
+          <text>{{selectedPurchaseOrder.receivedPercent}}%</text>
+        </view>
+      </view>
+      <view class="purchase-items-heading"><text>商品明细</text><text>{{selectedPurchaseOrder.items.length || 0}} 项</text></view>
+      <view wx:for="{{selectedPurchaseOrder.items}}" wx:key="id" class="purchase-item-row">
+        <view class="purchase-item-copy">
+          <text class="item-title">{{item.productName || (item.product && item.product.name) || item.sku}}</text>
+          <text class="item-meta">{{item.sku}} · 单价 €{{item.unitCost}}</text>
+        </view>
+        <view class="purchase-item-quantity">
+          <text>{{item.receivedQuantity || 0}} / {{item.orderedQuantity}}</text>
+          <text class="item-meta">已收 / 订购</text>
+        </view>
+      </view>
+      <view class="purchase-detail-actions">
+        <button wx:if="{{selectedPurchaseOrder.status === 'draft'}}" class="secondary-button" data-id="{{selectedPurchaseOrder.id}}" data-action="order" bindtap="itemAction">确认下单</button>
+        <button wx:if="{{selectedPurchaseOrder.status === 'ordered' || selectedPurchaseOrder.status === 'partially_received'}}" class="primary-button" data-id="{{selectedPurchaseOrder.id}}" bindtap="beginReceipt">登记到货</button>
+        <button wx:if="{{selectedPurchaseOrder.status === 'ordered'}}" class="secondary-button" data-id="{{selectedPurchaseOrder.id}}" data-action="archive" bindtap="itemAction">取消采购单</button>
+      </view>
+    </view>
+  </view>
+</view>

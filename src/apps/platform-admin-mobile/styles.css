@@ -1,0 +1,7 @@
+@import "../shared/mobile-design-system.css";
+@import "../platform-admin-common.css";
+
+html[data-ruda-app="platform-admin-mobile"] #root {
+  min-height: 100dvh;
+  overflow-x: clip;
+}

@@ -1,0 +1,19 @@
+{
+  "@context": "https://agenticresourcediscovery.org/context/v1",
+  "entries": [
+    {
+      "identifier": "urn:air:ruda.fashion:website:wholesale-fashion-marketplace",
+      "displayName": "RUDA Fashion B2B",
+      "type": "text/html",
+      "url": "https://ruda.fashion/it/",
+      "description": "Public European B2B fashion marketplace for professional buyers to discover verified suppliers, wholesale products, and merchant showrooms.",
+      "tags": ["fashion", "wholesale", "B2B", "Europe"],
+      "capabilities": ["public-product-discovery", "verified-showroom-discovery"],
+      "representativeQueries": [
+        "Find verified European wholesale fashion suppliers",
+        "Browse public ready-to-wear products for professional buyers",
+        "Discover a verified RUDA merchant showroom"
+      ]
+    }
+  ]
+}

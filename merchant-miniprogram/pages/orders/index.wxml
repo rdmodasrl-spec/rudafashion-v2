@@ -1,0 +1,258 @@
+<view class="screen order-list-screen animate-fade-in">
+  <!-- 标题与核心操作 -->
+  <view class="header-section">
+    <view class="title-group">
+      <text class="h2">订单中心</text>
+      <text class="caption">共 {{orders.length}} 笔</text>
+    </view>
+    <button class="btn ui-button ui-button--primary btn--primary add-btn" hover-class="ui-button-pressed" data-mode="wholesale" bindtap="createOrder">
+      <image class="button-icon-plus" src="/assets/icons/plus_light.png" mode="aspectFit" /> 开单
+    </button>
+  </view>
+
+  <view wx:if="{{orderSummary}}" class="mobile-summary-card order-summary-card">
+    <view class="order-summary-heading">
+      <text class="mobile-summary-heading">订单</text>
+      <text class="order-summary-total">{{orderSummary.total}}</text>
+    </view>
+    <view class="mobile-summary-grid">
+      <view class="mobile-summary-stat">
+        <text class="mobile-summary-label">待处理</text>
+        <text class="mobile-summary-value">{{orderSummary.actionCount}}</text>
+      </view>
+      <view class="mobile-summary-stat">
+        <text class="mobile-summary-label">退货</text>
+        <text class="mobile-summary-value">{{orderSummary.returnCount}}</text>
+      </view>
+      <view class="mobile-summary-stat">
+        <text class="mobile-summary-label">总额</text>
+        <text class="mobile-summary-value order-summary-revenue">€{{orderSummary.revenue}}</text>
+      </view>
+    </view>
+  </view>
+  <view wx:if="{{!orderSummary && loading}}" class="mobile-summary-skeleton">
+    <view class="mobile-summary-skeleton-line"></view>
+    <view class="mobile-summary-skeleton-grid"></view>
+  </view>
+
+  <!-- 快速通道 -->
+  <view class="quick-access">
+    <view class="access-item" hover-class="ruda-card--pressed" data-mode="wholesale" bindtap="createOrder">
+      <image class="access-icon pos" src="/assets/icons/wholesale.png" mode="aspectFit" />
+      <text>批发订货</text>
+    </view>
+    <view wx:if="{{canManageReservations}}" class="reservation-link" bindtap="openReservationRequests">
+      <view>
+        <text class="reservation-link-title">商品预订意向</text>
+        <text class="reservation-link-note">查看并确认买家的颜色、尺码和数量需求</text>
+      </view>
+      <text class="reservation-link-arrow">›</text>
+    </view>
+    <view class="access-item" hover-class="ruda-card--pressed" data-mode="pos" bindtap="createOrder">
+      <image class="access-icon quick" src="/assets/icons/pos.png" mode="aspectFit" />
+      <text>POS 开单</text>
+    </view>
+  </view>
+
+  <!-- 搜索与筛选 -->
+  <view class="search-container">
+    <view class="modern-search">
+      <image class="search-icon-inner" src="/assets/icons/search.png" mode="aspectFit" />
+      <input class="search-input-field" value="{{query}}" placeholder="搜索单号、客户或手机号" placeholder-class="placeholder" confirm-type="search" bindinput="onSearch" />
+    </view>
+  </view>
+
+  <scroll-view class="filter-scroll-view" scroll-x>
+    <view class="filter-chips">
+      <view wx:for="{{filters}}" wx:key="id" class="filter-chip ui-chip {{filter === item.id ? 'active' : ''}}" hover-class="ui-button-pressed" data-id="{{item.id}}" bindtap="selectFilter">
+        {{item.label}}
+      </view>
+    </view>
+  </scroll-view>
+
+  <!-- 状态提示 -->
+  <view wx:if="{{searchLoading}}" class="status-notice ui-status animate-fade-in">
+    <view class="loading-spinner"></view>
+    <text>正在同步云端订单...</text>
+  </view>
+  <view wx:if="{{searchError || error}}" class="status-notice ui-status error">
+    <text>{{searchError || error}}</text>
+  </view>
+
+  <!-- 订单列表 -->
+  <view class="order-grid">
+    <view wx:if="{{!visibleOrders.length && !loading}}" class="empty-view animate-fade-in">
+      <view class="empty-icon"><image class="empty-state-icon" src="/assets/icons/orders_empty.png" mode="aspectFit" /></view>
+      <text class="empty-text">暂无匹配订单</text>
+    </view>
+
+    <view wx:for="{{visibleOrders}}" wx:key="id" class="order-card ruda-card ui-card ui-list-row animate-fade-in">
+      <view class="order-header">
+        <view class="order-meta">
+          <text class="order-no">{{item.orderNo}}</text>
+          <text class="order-time">{{item.createdAt}}</text>
+        </view>
+        <view class="badge badge--neutral status-{{item.status}}">{{item.statusLabel}}</view>
+      </view>
+      
+      <view class="order-body">
+        <text class="order-customer">{{item.companyName}}</text>
+        <view class="order-financials">
+          <text class="order-qty">{{item.totalQty}} 件商品</text>
+          <view class="order-total">
+            <text class="currency">€</text>
+            <text class="amount">{{item.totalAmount}}</text>
+          </view>
+        </view>
+      </view>
+
+      <view wx:if="{{item.currentAgreement}}" class="order-agreement">
+        <view class="agreement-heading">
+          <text class="agreement-title">交易约定 v{{item.currentAgreement.version}}</text>
+          <text class="agreement-status">{{item.agreementStatusLabel}}</text>
+        </view>
+        <text class="agreement-line">€{{item.currentAgreement.terms.totalAmount}} · {{item.paymentPlanLabel}}</text>
+        <text class="agreement-line">余款条件：{{item.currentAgreement.terms.customPaymentCondition || item.currentAgreement.terms.remainingBalanceTrigger}}</text>
+        <text class="agreement-line">预计交期：{{item.currentAgreement.terms.expectedDeliveryAt || '待确认'}} · 供货：{{item.currentAgreement.terms.supplyMode}}</text>
+        <view wx:for="{{item.currentAgreement.terms.items}}" wx:key="orderItemId" class="agreement-item">
+          <text>{{item.orderItemId}} · {{item.quantity}} × €{{item.unitPrice}}</text>
+        </view>
+        <text class="agreement-task">当前任务：{{item.merchantTask.task}}</text>
+        <view wx:if="{{canManageReservations && (item.canReviewAgreement || item.canProposeAgreement)}}" class="agreement-actions">
+          <button wx:if="{{item.canReviewAgreement}}" class="btn ui-button ui-button--primary btn--primary flex-1" data-id="{{item.id}}" bindtap="confirmAgreement">确认本版本</button>
+          <button wx:if="{{item.canProposeAgreement}}" class="btn ui-button ui-button--secondary btn--secondary flex-1" data-id="{{item.id}}" bindtap="openAgreementProposal">提出新方案</button>
+        </view>
+        <button wx:if="{{canManageReservations && item.paymentStatus === 'pending' && item.bankTransferReference}}" class="btn ui-button ui-button--primary btn--primary agreement-payment-action" data-id="{{item.id}}" bindtap="confirmBankTransfer">核实银行到账</button>
+      </view>
+
+      <!-- 履约操作区 -->
+      <view wx:if="{{canFulfillOrders && item.nextStatus && (!item.currentAgreement || item.currentAgreement.status === 'active')}}" class="fulfillment-area">
+        <view class="divider"></view>
+        <view wx:if="{{item.nextStatus === 'shipped' && item.deliveryType === 'shipping'}}" class="shipping-inputs">
+          <input class="ruda-input sm" placeholder="承运商 (Carrier)" data-id="{{item.id}}" data-field="carrierInput" value="{{item.carrierInput}}" bindinput="onFulfillmentInput" />
+          <input class="ruda-input sm" placeholder="物流单号 (Tracking)" data-id="{{item.id}}" data-field="trackingInput" value="{{item.trackingInput}}" bindinput="onFulfillmentInput" />
+        </view>
+        <view class="action-btns">
+          <button class="btn ui-button ui-button--primary btn--primary flex-1" hover-class="ui-button-pressed" data-id="{{item.id}}" bindtap="advanceOrder">
+            {{item.nextStatus === 'confirmed' ? '确认接单' : item.nextStatus === 'picking' ? '开始配货' : item.nextStatus === 'shipped' ? (item.deliveryType === 'showroom_pickup' ? '设为待提货' : '确认发货') : '确认送达'}}
+          </button>
+          <button wx:if="{{canCreateShipments && (item.status === 'confirmed' || item.status === 'picking')}}" class="btn ui-button ui-button--secondary btn--secondary" hover-class="ui-button-pressed" data-id="{{item.id}}" bindtap="beginPartialShipment">
+            包裹
+          </button>
+        </view>
+      </view>
+
+      <view wx:if="{{canFulfillOrders && item.cancellable}}" class="fulfillment-area">
+        <view class="action-btns">
+          <button class="btn ui-button ui-button--secondary btn--secondary" hover-class="ui-button-pressed" data-id="{{item.id}}" bindtap="cancelOrder">取消订单</button>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 分包发货面板 (全屏或半屏模态) -->
+  <view wx:if="{{canCreateShipments && shipmentOrder}}" class="full-modal animate-fade-in">
+    <view class="modal-header">
+      <view class="modal-close" bindtap="cancelPartialShipment"><image class="modal-close-icon" src="/assets/icons/close.png" mode="aspectFit" /></view>
+      <text class="modal-title">包裹分拣</text>
+      <view class="modal-spacer"></view>
+    </view>
+    <scroll-view class="modal-content" scroll-y>
+      <view class="order-info-mini ruda-card ui-card">
+        <text class="h3">{{shipmentOrder.orderNo}}</text>
+        <text class="caption">请选择要装入本包裹的商品数量</text>
+      </view>
+
+      <view wx:if="{{shipmentLoading}}" class="status-notice">
+        <view class="loading-spinner"></view>
+        <text>加载发货历史...</text>
+      </view>
+      <block wx:if="{{!shipmentLoading}}">
+        <view class="shipment-items">
+          <view wx:for="{{shipmentDraftItems}}" wx:key="id" class="shipment-item-row ruda-card ui-card">
+            <view class="item-info">
+              <text class="item-name">{{item.productName || item.styleNo}}</text>
+              <text class="item-sku">{{item.sku}} · 待发 {{item.remaining}} / {{item.quantity}}</text>
+            </view>
+            <input wx:if="{{item.remaining > 0}}" class="ruda-input qty-input" type="number" value="{{item.shipmentQuantity}}" data-id="{{item.id}}" data-field="shipmentQuantity" placeholder="0" bindinput="onShipmentInput" />
+            <text wx:if="{{!(item.remaining > 0)}}" class="badge badge--neutral">已发完</text>
+          </view>
+        </view>
+
+        <view class="shipment-shipping-info ruda-card ui-card">
+          <text class="caption">物流信息</text>
+          <input class="ruda-input" value="{{shipmentCarrier}}" data-field="carrier" placeholder="物流公司 (Carrier)" bindinput="onShipmentInput" />
+          <input class="ruda-input" value="{{shipmentTrackingNumber}}" data-field="trackingNumber" placeholder="运单号 (Tracking No.)" bindinput="onShipmentInput" />
+        </view>
+
+        <view wx:if="{{shipments.length}}" class="shipment-history ruda-card ui-card">
+          <text class="caption">已发记录</text>
+          <view wx:for="{{shipments}}" wx:key="id" class="history-row">
+            <text class="history-no">{{item.shipmentNo}}</text>
+            <text class="history-meta">{{item.carrier}} · {{item.status}}</text>
+          </view>
+        </view>
+      </block>
+    </scroll-view>
+    
+    <view class="modal-footer">
+      <button class="btn ui-button ui-button--primary btn--primary" hover-class="ui-button-pressed" loading="{{shipmentSaving}}" disabled="{{shipmentSaving}}" bindtap="submitPartialShipment">确认并创建包裹</button>
+    </view>
+  </view>
+
+  <view wx:if="{{agreementDraft}}" class="full-modal animate-fade-in">
+    <view class="modal-header">
+      <view class="modal-close" bindtap="closeAgreementProposal"><image class="modal-close-icon" src="/assets/icons/close.png" mode="aspectFit" /></view>
+      <text class="modal-title">提出交易方案</text>
+      <view class="modal-spacer"></view>
+    </view>
+    <scroll-view class="modal-content" scroll-y>
+      <view class="agreement-form-section">
+        <text class="agreement-form-title">{{agreementDraft.order.orderNo}} · 商品与单价</text>
+        <view wx:for="{{agreementDraft.items}}" wx:key="orderItemId" class="agreement-form-item">
+          <text class="agreement-item-name">{{item.label}}</text>
+          <view class="agreement-input-row">
+            <label>数量<input type="number" min="1" value="{{item.quantity}}" data-index="{{index}}" data-field="quantity" bindinput="onAgreementDraftInput" /></label>
+            <label>单价 (€)<input type="digit" min="0.01" value="{{item.unitPrice}}" data-index="{{index}}" data-field="unitPrice" bindinput="onAgreementDraftInput" /></label>
+          </view>
+        </view>
+      </view>
+      <view class="agreement-form-section">
+        <text class="agreement-form-title">付款与供货</text>
+        <text class="agreement-form-label">付款计划</text>
+        <picker range="{{agreementPaymentPlanLabels}}" value="{{agreementDraft.paymentPlanIndex}}" data-field="paymentPlan" bindchange="onAgreementPickerChange">
+          <view class="agreement-picker">{{agreementPaymentPlanLabels[agreementDraft.paymentPlanIndex]}}</view>
+        </picker>
+        <text class="agreement-form-label">付款方式</text>
+        <picker range="{{agreementPaymentMethodLabels}}" value="{{agreementDraft.paymentMethodIndex}}" data-field="paymentMethod" bindchange="onAgreementPickerChange">
+          <view class="agreement-picker">{{agreementPaymentMethodLabels[agreementDraft.paymentMethodIndex]}}</view>
+        </picker>
+        <view wx:if="{{agreementDraft.paymentPlan === 'partial_prepayment' || agreementDraft.paymentPlan === 'custom'}}" class="agreement-input-row">
+          <label>预付款金额 / 比例<input type="digit" value="{{agreementDraft.prepaymentValue}}" data-field="prepaymentValue" bindinput="onAgreementDraftInput" /></label>
+          <picker wx:if="{{agreementDraft.paymentPlan === 'partial_prepayment'}}" range="{{agreementPrepaymentModeLabels}}" value="{{agreementDraft.prepaymentMode === 'percent' ? 1 : 0}}" bindchange="onAgreementPrepaymentModeChange">
+            <view class="agreement-picker">{{agreementDraft.prepaymentMode === 'percent' ? '百分比 (%)' : '固定金额 (€)'}}</view>
+          </picker>
+        </view>
+        <text class="agreement-form-label">余款触发条件</text>
+        <picker range="{{agreementBalanceTriggerLabels}}" value="{{agreementDraft.remainingBalanceTriggerIndex}}" data-field="remainingBalanceTrigger" bindchange="onAgreementPickerChange">
+          <view class="agreement-picker">{{agreementBalanceTriggerLabels[agreementDraft.remainingBalanceTriggerIndex]}}</view>
+        </picker>
+        <label wx:if="{{agreementDraft.remainingBalanceTrigger === 'date'}}" class="agreement-form-label">余款日期<input type="date" value="{{agreementDraft.remainingBalanceDueAt}}" data-field="remainingBalanceDueAt" bindinput="onAgreementDraftInput" /></label>
+        <label wx:if="{{agreementDraft.paymentPlan === 'custom' || agreementDraft.remainingBalanceTrigger === 'custom'}}" class="agreement-form-label">自定义付款条件<textarea value="{{agreementDraft.customPaymentCondition}}" data-field="customPaymentCondition" bindinput="onAgreementDraftInput" /></label>
+        <text class="agreement-form-label">供货方式</text>
+        <picker range="{{agreementSupplyModeLabels}}" value="{{agreementDraft.supplyModeIndex}}" data-field="supplyMode" bindchange="onAgreementPickerChange">
+          <view class="agreement-picker">{{agreementSupplyModeLabels[agreementDraft.supplyModeIndex]}}</view>
+        </picker>
+        <label class="agreement-form-label">预计交期<input type="date" value="{{agreementDraft.expectedDeliveryAt}}" data-field="expectedDeliveryAt" bindinput="onAgreementDraftInput" /></label>
+        <view class="agreement-input-row">
+          <label>运费 (€)<input type="digit" value="{{agreementDraft.shippingFee}}" data-field="shippingFee" bindinput="onAgreementDraftInput" /></label>
+          <label>折扣 (€)<input type="digit" value="{{agreementDraft.discountAmount}}" data-field="discountAmount" bindinput="onAgreementDraftInput" /></label>
+        </view>
+      </view>
+    </scroll-view>
+    <view class="modal-footer agreement-form-footer">
+      <button class="btn ui-button ui-button--secondary btn--secondary" bindtap="closeAgreementProposal" disabled="{{agreementSaving}}">取消</button>
+      <button class="btn ui-button ui-button--primary btn--primary" loading="{{agreementSaving}}" disabled="{{agreementSaving}}" bindtap="submitAgreementProposal">发送新方案</button>
+    </view>
+  </view>
+</view>

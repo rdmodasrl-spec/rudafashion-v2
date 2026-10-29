@@ -1,0 +1,3 @@
+html[data-ruda-app="frontend-web"] #root {
+  min-height: 100vh;
+}

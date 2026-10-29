@@ -1,0 +1,88 @@
+<view class="screen industry-screen">
+  <view class="industry-header" style="padding-top: {{statusBarHeight}}px;">
+    <view class="industry-header-row">
+      <text class="industry-merchant">{{merchantName}}</text>
+      <text wx:if="{{industryLabel}}" class="industry-industry-tag">{{industryLabel}}</text>
+    </view>
+    <text class="industry-title">{{title}}</text>
+    <text wx:if="{{summary}}" class="industry-summary">{{summary}}</text>
+    <text wx:if="{{storeScopeLabel}}" class="industry-scope">{{storeScopeLabel}}</text>
+  </view>
+
+  <view wx:if="{{loading}}" class="status-notice">
+    <view class="loading-spinner"></view>
+    <text>正在加载行业工作台…</text>
+  </view>
+
+  <view wx:elif="{{error}}" class="status-notice error">
+    <text>{{error}}</text>
+    <view class="retry-btn" bindtap="retry">重试</view>
+  </view>
+  <view wx:else>
+    <view class="industry-metrics">
+      <view
+        wx:for="{{metrics}}"
+        wx:key="key"
+        class="industry-metric {{item.emphasis ? 'industry-metric--emphasis' : ''}}"
+      >
+        <view class="industry-metric-value">
+          <text>{{item.value}}</text>
+          <text wx:if="{{item.suffix}}" class="industry-metric-suffix">{{item.suffix}}</text>
+        </view>
+        <text class="industry-metric-label">{{item.label}}</text>
+      </view>
+    </view>
+
+    <view wx:if="{{actions.length}}" class="industry-section">
+      <text class="industry-section-title">常用操作</text>
+      <view class="industry-actions ruda-card ui-card">
+        <view
+          wx:for="{{actions}}"
+          wx:key="id"
+          class="industry-action"
+          hover-class="ui-row-pressed"
+          data-type="{{item.target.type}}"
+          data-url="{{item.target.url}}"
+          data-module="{{item.target.module}}"
+          bindtap="openAction"
+        >
+          <image class="industry-action-icon" src="/assets/icons/{{item.icon}}.png" mode="aspectFit" />
+          <view class="industry-action-copy">
+            <text class="industry-action-label">{{item.label}}</text>
+            <text wx:if="{{item.description}}" class="industry-action-desc">{{item.description}}</text>
+          </view>
+          <image class="industry-action-arrow" src="/assets/icons/chevron_right.png" mode="aspectFit" />
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{canViewOrders}}" class="industry-section">
+      <view class="industry-section-head">
+        <text class="industry-section-title">待处理订单</text>
+        <text class="industry-section-link" bindtap="openOrders">全部订单</text>
+      </view>
+      <view class="industry-orders ruda-card ui-card">
+        <view wx:if="{{ordersError}}" class="industry-orders-state">{{ordersError}}</view>
+      <view wx:elif="{{!recentOrders.length}}" class="industry-orders-state">暂无待处理订单</view>
+      <view wx:else>
+          <view
+            wx:for="{{recentOrders}}"
+            wx:key="id"
+            class="industry-order"
+            hover-class="ui-row-pressed"
+            bindtap="openOrders"
+          >
+            <view class="industry-order-main">
+              <text class="industry-order-no">{{item.orderNo}}</text>
+              <text class="industry-order-customer">{{item.customerLabel}}</text>
+            </view>
+            <view class="industry-order-side">
+              <text class="industry-order-total">{{item.totalLabel}}</text>
+              <text class="industry-order-status">{{item.statusLabel}}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,119 @@
+{
+  "ranAt": "2026-10-28T18:07:43.916Z",
+  "base": "http://127.0.0.1:3011",
+  "checks": [
+    {
+      "label": "时尚开启 → /api/fashion/posts",
+      "path": "/api/fashion/posts?limit=1",
+      "status": 200,
+      "code": null
+    },
+    {
+      "label": "小程序特性（时尚开启）",
+      "path": "/api/miniprogram/features",
+      "status": 200,
+      "code": null,
+      "body": {
+        "success": true,
+        "features": {
+          "aiSectionEnabled": false,
+          "fashionSectionEnabled": true,
+          "tryOnEnabled": false
+        }
+      }
+    },
+    {
+      "label": "商家端开关（未登录）",
+      "path": "/api/merchant/feature-flags",
+      "status": 401,
+      "code": null,
+      "body": {
+        "success": false,
+        "error": {
+          "code": "MERCHANT_AUTH_REQUIRED",
+          "message": "Merchant authentication is required",
+          "retryable": false
+        },
+        "requestId": "2236adde-f311-493e-ab57-0ce781570057"
+      }
+    },
+    {
+      "label": "时尚关闭 → /api/fashion/posts",
+      "path": "/api/fashion/posts?limit=1",
+      "status": 403,
+      "code": "FASHION_MODULE_DISABLED"
+    },
+    {
+      "label": "小程序特性（时尚关闭）",
+      "path": "/api/miniprogram/features",
+      "status": 200,
+      "code": null,
+      "body": {
+        "success": true,
+        "features": {
+          "aiSectionEnabled": false,
+          "fashionSectionEnabled": false,
+          "tryOnEnabled": false
+        }
+      }
+    },
+    {
+      "label": "公开开关副本（时尚关闭）",
+      "path": "/api/public/feature-flags",
+      "status": 200,
+      "code": null,
+      "body": {
+        "success": true,
+        "version": "2026-10-28T18:07:25.507Z",
+        "flags": {
+          "fashion_enabled": false,
+          "modaui_enabled": true
+        }
+      }
+    },
+    {
+      "label": "时尚关闭 → 公共对话（不受影响）",
+      "path": "/api/modagpt/public/chat",
+      "status": 400,
+      "code": "MESSAGE_REQUIRED"
+    },
+    {
+      "label": "ModaUI 开启 → 公共对话",
+      "path": "/api/modagpt/public/chat",
+      "status": 400,
+      "code": "MESSAGE_REQUIRED"
+    },
+    {
+      "label": "ModaUI 关闭 → 公共对话",
+      "path": "/api/modagpt/public/chat",
+      "status": 403,
+      "code": "MODAUI_DISABLED"
+    },
+    {
+      "label": "ModaUI 关闭 → 时尚接口（不受影响）",
+      "path": "/api/fashion/posts?limit=1",
+      "status": 200,
+      "code": null
+    },
+    {
+      "label": "恢复后 → /api/fashion/posts",
+      "path": "/api/fashion/posts?limit=1",
+      "status": 200,
+      "code": null
+    },
+    {
+      "label": "恢复后 → 公共对话",
+      "path": "/api/modagpt/public/chat",
+      "status": 400,
+      "code": "MESSAGE_REQUIRED"
+    }
+  ],
+  "finalEnabled": {
+    "merchant_miniprogram_modaui_enabled": false,
+    "miniprogram_modaui_enabled": false,
+    "fashion_enabled": true,
+    "modaui_enabled": true
+  },
+  "pageErrors": [],
+  "failures": []
+}

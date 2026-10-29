@@ -1,0 +1,17 @@
+.git
+.env
+.env.*
+!.env.example
+node_modules
+dist
+coverage
+logs
+.kilo
+fu
+fashion-ingestion
+public/uploads
+public/downloads
+*.tar.gz
+*.zip
+*.dump
+*.bak

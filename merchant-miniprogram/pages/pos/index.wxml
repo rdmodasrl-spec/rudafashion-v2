@@ -1,0 +1,246 @@
+<view class="screen pos-screen">
+  <view class="pos-header">
+    <view class="pos-header-row">
+      <picker
+        wx:if="{{storeMode && !storeBound && stores.length}}"
+        mode="selector"
+        range="{{stores}}"
+        range-key="name"
+        value="{{storeIndex}}"
+        bindchange="onStoreChange"
+      >
+        <view class="pos-store-picker">
+          <text class="pos-store-name">{{storeName}}</text>
+          <text class="pos-store-hint">切换门店</text>
+        </view>
+      </picker>
+      <view wx:else class="pos-store-picker pos-store-picker--static">
+        <text class="pos-store-name">{{storeMode ? storeName : '中心仓'}}</text>
+        <text wx:if="{{storeBound}}" class="pos-store-hint">门店权限</text>
+      </view>
+      <view class="pos-shift-chip {{shift ? 'pos-shift-chip--open' : ''}}">
+        {{shift ? '班次进行中' : '未开班'}}
+      </view>
+    </view>
+    <text wx:if="{{notice}}" class="pos-notice">{{notice}}</text>
+    <text wx:if="{{error}}" class="pos-notice pos-notice--error">{{error}}</text>
+  </view>
+
+  <view wx:if="{{loading}}" class="status-notice">
+    <view class="loading-spinner"></view>
+    <text>正在加载收银数据…</text>
+  </view>
+
+  <block wx:else>
+    <view class="pos-section ruda-card ui-card">
+      <view class="pos-section-head">
+        <text class="pos-section-title">班次</text>
+        <text wx:if="{{shift}}" class="pos-section-meta">
+          {{shift.registerCode || 'main'}} · 备用金 € {{shift.openingCash || 0}}
+        </text>
+      </view>
+      <view wx:if="{{!shift}}" class="pos-shift-form">
+        <input
+          class="pos-input"
+          type="digit"
+          value="{{openingCash}}"
+          data-field="openingCash"
+          bindinput="onCashInput"
+          placeholder="开设备用金"
+        />
+        <view class="pos-primary-btn {{shiftBusy ? 'is-busy' : ''}}" bindtap="openShift">开班</view>
+      </view>
+      <view wx:else class="pos-shift-form">
+        <input
+          class="pos-input"
+          type="digit"
+          value="{{closingCash}}"
+          data-field="closingCash"
+          bindinput="onCashInput"
+          placeholder="交班现金"
+        />
+        <view class="pos-primary-btn {{shiftBusy ? 'is-busy' : ''}}" bindtap="closeShift">交班</view>
+      </view>
+    </view>
+
+    <view wx:if="{{shift}}" class="pos-section ruda-card ui-card">
+      <view class="pos-section-head">
+        <text class="pos-section-title">现金流水</text>
+        <text class="pos-section-meta">应存 € {{shift.expectedCash || 0}}</text>
+      </view>
+      <view class="pos-direction-row">
+        <view class="pos-direction-btn {{cashDirection === 'in' ? 'is-selected' : ''}}" data-direction="in" bindtap="setCashDirection">现金收入</view>
+        <view class="pos-direction-btn {{cashDirection === 'out' ? 'is-selected' : ''}}" data-direction="out" bindtap="setCashDirection">现金支出</view>
+      </view>
+      <view class="pos-cash-form">
+        <input class="pos-input" type="digit" value="{{cashAmount}}" data-field="cashAmount" bindinput="onCashMovementInput" placeholder="金额" />
+        <input class="pos-input" value="{{cashReason}}" data-field="cashReason" bindinput="onCashMovementInput" placeholder="用途/原因" />
+        <view class="pos-primary-btn {{cashBusy ? 'is-busy' : ''}}" bindtap="recordCashMovement">{{cashBusy ? '保存中…' : '记一笔'}}</view>
+      </view>
+      <view wx:if="{{shift.movements.length}}" class="pos-ledger-list">
+        <view wx:for="{{shift.movements}}" wx:key="id" class="pos-ledger-row">
+          <text>{{item.direction === 'in' ? '收入' : '支出'}} · {{item.reason || '未填写原因'}}</text>
+          <text>€ {{item.amount}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{lastCloseSummary}}" class="pos-section ruda-card ui-card">
+      <view class="pos-section-head">
+        <text class="pos-section-title">最近交班结果</text>
+        <text class="pos-section-meta">{{lastCloseSummary.salesCount}} 笔销售</text>
+      </view>
+      <view class="pos-ledger-row"><text>应交现金</text><text>€ {{lastCloseSummary.expectedCash}}</text></view>
+      <view class="pos-ledger-row"><text>实交现金</text><text>€ {{lastCloseSummary.closingCash}}</text></view>
+      <view class="pos-ledger-row"><text>差额</text><text>€ {{lastCloseSummary.difference}}</text></view>
+      <view class="pos-ledger-row"><text>现金销售 / 退款</text><text>€ {{lastCloseSummary.cashSales}} / € {{lastCloseSummary.cashRefunds}}</text></view>
+    </view>
+
+    <view class="pos-section">
+      <view class="pos-search">
+        <input
+          class="pos-search-input"
+          value="{{keyword}}"
+          bindinput="onKeywordInput"
+          placeholder="搜索商品名称 / 款号 / 条码"
+          confirm-type="search"
+        />
+        <view class="pos-scan-btn" bindtap="scanCode">扫码</view>
+      </view>
+    </view>
+
+    <view class="pos-section pos-products">
+      <view wx:if="{{!filteredProducts.length}}" class="pos-empty">没有匹配的在售商品</view>
+      <view wx:for="{{filteredProducts}}" wx:key="id" class="pos-product ruda-card ui-card">
+        <view class="pos-product-head">
+          <text class="pos-product-name">{{item.name}}</text>
+          <text class="pos-product-price">€ {{item.price}}</text>
+        </view>
+        <text wx:if="{{item.styleNo}}" class="pos-product-style">{{item.styleNo}}</text>
+        <view class="pos-sku-row">
+          <view
+            wx:for="{{item.skus}}"
+            wx:for-item="sku"
+            wx:key="sku"
+            class="pos-sku-chip"
+            data-product="{{item.id}}"
+            data-sku="{{sku.sku}}"
+            bindtap="addToCart"
+          >{{sku.label}}</view>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{cart.length}}" class="pos-section ruda-card ui-card">
+      <view class="pos-section-head">
+        <text class="pos-section-title">销售清单</text>
+        <text class="pos-section-meta">{{cartCount}} 件</text>
+      </view>
+      <view wx:for="{{cart}}" wx:key="key" class="pos-cart-line">
+        <view class="pos-cart-main">
+          <text class="pos-cart-name">{{item.name}}</text>
+          <text class="pos-cart-variant">{{item.variantLabel}} · € {{item.unitPrice}}</text>
+        </view>
+        <view class="pos-qty">
+          <view class="pos-qty-btn" data-key="{{item.key}}" data-delta="-1" bindtap="changeQuantity">−</view>
+          <text class="pos-qty-value">{{item.quantity}}</text>
+          <view class="pos-qty-btn" data-key="{{item.key}}" data-delta="1" bindtap="changeQuantity">+</view>
+        </view>
+        <view class="pos-cart-remove" data-key="{{item.key}}" bindtap="removeLine">删除</view>
+      </view>
+      <view class="pos-total-row">
+        <text class="pos-total-label">预估金额（以服务端结算为准）</text>
+        <text class="pos-total-value">€ {{estimatedTotal}}</text>
+      </view>
+
+      <radio-group class="pos-payment" bindchange="onPaymentChange">
+        <label wx:for="{{paymentMethods}}" wx:key="value" class="pos-payment-item">
+          <radio value="{{item.value}}" checked="{{paymentMethod === item.value}}" color="#1d1b19" />
+          <text>{{item.label}}</text>
+        </label>
+      </radio-group>
+
+      <view class="pos-confirm-row">
+        <checkbox-group bindchange="onPaymentConfirmedChange">
+          <label class="pos-confirm">
+            <checkbox value="confirmed" checked="{{paymentConfirmed}}" color="#1d1b19" />
+            <text>已收到顾客付款</text>
+          </label>
+        </checkbox-group>
+      </view>
+
+      <view class="pos-submit {{submitting ? 'is-busy' : ''}}" bindtap="submitSale">
+        {{submitting ? '正在出单…' : '完成收款'}}
+      </view>
+    </view>
+
+    <view wx:if="{{sales.length}}" class="pos-section">
+      <text class="pos-section-title">最近销售</text>
+      <view class="pos-sales ruda-card ui-card">
+        <view wx:for="{{sales}}" wx:key="id" class="pos-sale" data-sale-id="{{item.id}}" bindtap="selectSale">
+          <text class="pos-sale-no">{{item.saleNo}}</text>
+          <text class="pos-sale-meta">{{item.createdAt}}{{item.storeName ? ' · ' + item.storeName : ''}}</text>
+          <text class="pos-sale-total">€ {{item.totalLabel}}</text>
+          <text class="pos-sale-meta">已退款 € {{item.refundedLabel}} · {{item.paymentStatus}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{selectedSale}}" class="pos-section ruda-card ui-card">
+      <view class="pos-section-head">
+        <text class="pos-section-title">销售详情 · {{selectedSale.saleNo}}</text>
+        <view class="pos-inline-action" bindtap="copySaleReceipt">复制小票</view>
+      </view>
+      <text class="pos-sale-meta">{{selectedSale.createdAt}}{{selectedSale.storeName ? ' · ' + selectedSale.storeName : ''}}</text>
+      <view wx:for="{{selectedSale.items}}" wx:key="sku" class="pos-ledger-row pos-sale-item">
+        <view class="pos-cart-main">
+          <text>{{item.productName}} · {{item.sku}}</text>
+          <text class="pos-sale-meta">{{item.quantity}} 件 · € {{item.unitPrice}}</text>
+        </view>
+        <view
+          wx:if="{{selectedSale.returnable && item.returnableQuantity > 0}}"
+          class="pos-inline-action"
+          data-product-id="{{item.productId}}"
+          data-sku="{{item.sku}}"
+          bindtap="returnSaleItem"
+        >{{returnBusy ? '处理中…' : '退货'}}</view>
+      </view>
+      <view class="pos-ledger-row"><text>实收 / 已退款</text><text>€ {{selectedSale.totalLabel}} / € {{selectedSale.refundedLabel}}</text></view>
+      <view wx:if="{{saleDetailLoading}}" class="pos-sale-meta">正在读取退款记录…</view>
+      <view wx:if="{{saleRefunds.length}}" class="pos-refund-list">
+        <text class="pos-section-meta">退款记录</text>
+        <view wx:for="{{saleRefunds}}" wx:key="id" class="pos-ledger-row">
+          <text>{{item.reason || '退货退款'}} · {{item.status}}</text>
+          <text>€ {{item.amount}}</text>
+        </view>
+      </view>
+      <view wx:if="{{!selectedSale.returnable}}" class="pos-sale-meta">该历史收银单不支持在线退货，请按线下流程核实。</view>
+    </view>
+
+    <view class="pos-section">
+      <view class="pos-section-head">
+        <text class="pos-section-title">历史班次</text>
+        <view class="pos-inline-action" bindtap="toggleShiftHistory">{{shiftHistoryOpen ? '收起' : '查看记录'}}</view>
+      </view>
+      <view wx:if="{{shiftHistoryOpen}}">
+        <view wx:if="{{shiftHistoryLoading}}" class="pos-sale-meta">正在读取班次…</view>
+        <view wx:for="{{shiftHistory}}" wx:key="id" class="pos-history-row ruda-card ui-card" data-shift-id="{{item.id}}" bindtap="selectHistoryShift">
+          <text class="pos-sale-no">{{item.openedAt}} · {{item.storeName || '中心仓'}}</text>
+          <text class="pos-sale-meta">{{item.employeeName || '商家'}} · {{item.salesCount}} 笔 · 应交 € {{item.expectedCash}}</text>
+        </view>
+        <view wx:if="{{selectedHistory}}" class="pos-section ruda-card ui-card">
+          <view class="pos-section-title">班次明细 · {{selectedHistory.shift.id}}</view>
+          <view wx:for="{{selectedHistory.sales}}" wx:key="id" class="pos-ledger-row">
+            <text>{{item.saleNo}} · {{item.paymentStatus}}</text><text>€ {{item.totalAmount}}</text>
+          </view>
+          <view wx:for="{{selectedHistory.refunds}}" wx:key="id" class="pos-ledger-row">
+            <text>退款 · {{item.reason || item.status}}</text><text>€ {{item.amount}}</text>
+          </view>
+          <view wx:for="{{selectedHistory.movements}}" wx:key="id" class="pos-ledger-row">
+            <text>{{item.direction === 'in' ? '收入' : '支出'}} · {{item.reason}}</text><text>€ {{item.amount}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </block>
+</view>

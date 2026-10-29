@@ -1,0 +1,197 @@
+import type { ModaGptTask as PrismaModaGptTask, Prisma, PrismaClient } from '@prisma/client';
+
+export type ModaGptImageQueueTask = Pick<
+  PrismaModaGptTask,
+  | 'id'
+  | 'merchantId'
+  | 'tenantId'
+  | 'context'
+  | 'taskType'
+  | 'status'
+  | 'payload'
+  | 'result'
+  | 'idempotencyKey'
+  | 'attempts'
+  | 'maxAttempts'
+  | 'lastErrorCode'
+  | 'requestPayloadHash'
+  | 'provider'
+  | 'model'
+  | 'providerRequestId'
+  | 'providerCostMinor'
+  | 'executionPhase'
+  | 'resultStorageKey'
+  | 'resultStorageBucket'
+  | 'resultExpiresAt'
+  | 'billingMode'
+  | 'billingStatus'
+  | 'billingUsageKey'
+  | 'billingPlanId'
+  | 'billingSubscriptionId'
+  | 'billingFeature'
+  | 'billingCredits'
+  | 'legacyQuotaFeature'
+  | 'legacyQuotaPeriod'
+  | 'legacyQuotaPlan'
+  | 'creditReservationId'
+>;
+
+export type ModaGptImageTaskBillingData = Pick<
+  Prisma.ModaGptTaskUncheckedUpdateInput,
+  | 'billingMode'
+  | 'billingStatus'
+  | 'billingUsageKey'
+  | 'billingPlanId'
+  | 'billingSubscriptionId'
+  | 'billingFeature'
+  | 'billingCredits'
+  | 'legacyQuotaFeature'
+  | 'legacyQuotaPeriod'
+  | 'legacyQuotaPlan'
+  | 'creditReservationId'
+>;
+
+export type CreateModaGptImageQueueTaskInput = {
+  id: string;
+  merchantId: string;
+  actorId: string | null;
+  task: 'imageGeneration' | 'tryOn';
+  clientIdempotencyKey: string;
+  queueIdempotencyKey: string;
+  requestPayloadHash: string;
+  provider: string;
+  model: string;
+  payload: string;
+  resultStorageKey: string;
+  resultStorageBucket: string;
+  garmentStorageKey?: string;
+  now: Date;
+};
+
+export async function createOrReplayModaGptImageQueueTask(
+  prisma: PrismaClient,
+  input: CreateModaGptImageQueueTaskInput,
+  reserveBilling: (
+    transaction: Prisma.TransactionClient,
+    taskId: string
+  ) => Promise<ModaGptImageTaskBillingData>
+): Promise<{ task: ModaGptImageQueueTask; deduplicated: boolean }> {
+  if (!/^[0-9a-f-]{36}$/i.test(input.id)
+    || !/^[A-Za-z0-9_-]{1,120}$/.test(input.merchantId)
+    || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/.test(input.queueIdempotencyKey)
+    || !/^[a-f0-9]{64}$/.test(input.requestPayloadHash)
+    || !/^[a-z][a-z0-9_-]{0,31}$/.test(input.provider)
+    || input.model.length < 1
+    || input.model.length > 160
+    || Buffer.byteLength(input.payload, 'utf8') > 64 * 1024
+    || /data:image\/(?:jpeg|png|webp);base64,/i.test(input.payload)
+    || (input.garmentStorageKey !== undefined
+      && (input.task !== 'tryOn'
+        || !input.garmentStorageKey.startsWith(`merchants/${input.merchantId}/storefront/images/`)))) {
+    throw new Error('MODAGPT_IMAGE_TASK_INPUT_INVALID');
+  }
+  let parsedPayload: unknown;
+  try {
+    parsedPayload = JSON.parse(input.payload) as unknown;
+  } catch {
+    throw new Error('MODAGPT_IMAGE_TASK_INPUT_INVALID');
+  }
+  if (!parsedPayload || typeof parsedPayload !== 'object' || Array.isArray(parsedPayload)) {
+    throw new Error('MODAGPT_IMAGE_TASK_INPUT_INVALID');
+  }
+
+  return prisma.$transaction(async transaction => {
+    const taskType = input.task === 'tryOn' ? 'ai.image.try_on' : 'ai.image.generate';
+    const inserted = await transaction.modaGptTask.createMany({
+      data: [{
+        id: input.id,
+        merchantId: input.merchantId,
+        tenantId: input.merchantId,
+        actorId: input.actorId,
+        traceId: `modagpt-image-${input.id}`,
+        parentTaskId: null,
+        goal: input.task === 'tryOn' ? 'Generate a temporary virtual try-on image' : 'Generate a temporary fashion image',
+        taskType,
+        status: 'queued',
+        priority: 20,
+        agentId: null,
+        payload: input.payload,
+        context: JSON.stringify({
+          version: 1,
+          task: input.task,
+          ...(input.garmentStorageKey ? { garmentStorageKey: input.garmentStorageKey } : {})
+        }),
+        plan: null,
+        idempotencyKey: input.queueIdempotencyKey,
+        maxAttempts: 10,
+        availableAt: input.now,
+        requestPayloadHash: input.requestPayloadHash,
+        provider: input.provider,
+        model: input.model,
+        executionPhase: 'ready',
+        resultStorageKey: input.resultStorageKey,
+        resultStorageBucket: input.resultStorageBucket,
+        resultExpiresAt: new Date(input.now.getTime() + 24 * 60 * 60 * 1000)
+      }],
+      skipDuplicates: true
+    });
+
+    let task = await transaction.modaGptTask.findUnique({
+      where: { idempotencyKey: input.queueIdempotencyKey }
+    });
+    if (!task) throw new Error('MODAGPT_IMAGE_TASK_CREATE_FAILED');
+    if (task.merchantId !== input.merchantId
+      || task.tenantId !== input.merchantId
+      || task.taskType !== taskType
+      || task.requestPayloadHash !== input.requestPayloadHash) {
+      throw new Error('MODAGPT_IMAGE_TASK_IDEMPOTENCY_CONFLICT');
+    }
+    if (inserted.count === 0) return { task, deduplicated: true };
+
+    const billing = await reserveBilling(transaction, input.id);
+    task = await transaction.modaGptTask.update({
+      where: { id: input.id },
+      data: billing
+    });
+    return { task, deduplicated: false };
+  });
+}
+
+export async function persistModaGptImageTaskExecutionState(
+  prisma: PrismaClient,
+  input: {
+    id: string;
+    workerId: string;
+    executionPhase: string;
+    providerRequestId?: string;
+    resultExpiresAt?: Date;
+    payload?: string;
+  }
+): Promise<boolean> {
+  if (!/^[0-9a-f-]{36}$/i.test(input.id)
+    || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/.test(input.workerId)
+    || !/^[a-z_]{1,40}$/.test(input.executionPhase)
+    || (input.providerRequestId !== undefined
+      && (input.providerRequestId.length < 1 || input.providerRequestId.length > 180))
+    || (input.payload !== undefined
+      && (Buffer.byteLength(input.payload, 'utf8') > 64 * 1024
+        || /data:image\/(?:jpeg|png|webp);base64,/i.test(input.payload)))) {
+    throw new Error('MODAGPT_IMAGE_TASK_EXECUTION_STATE_INVALID');
+  }
+  const updated = await prisma.modaGptTask.updateMany({
+    where: {
+      id: input.id,
+      taskType: { in: ['ai.image.generate', 'ai.image.try_on'] },
+      status: { in: ['planning', 'running', 'verifying'] },
+      lockedBy: input.workerId,
+      lockedUntil: { gt: new Date() }
+    },
+    data: {
+      executionPhase: input.executionPhase,
+      ...(input.providerRequestId === undefined ? {} : { providerRequestId: input.providerRequestId }),
+      ...(input.resultExpiresAt === undefined ? {} : { resultExpiresAt: input.resultExpiresAt }),
+      ...(input.payload === undefined ? {} : { payload: input.payload })
+    }
+  });
+  return updated.count === 1;
+}

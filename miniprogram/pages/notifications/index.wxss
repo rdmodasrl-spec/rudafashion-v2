@@ -1,0 +1,103 @@
+.notifications-page {
+  min-height: 100vh;
+  padding: 28rpx 32rpx 60rpx;
+  box-sizing: border-box;
+  background: #f7f6f3;
+}
+
+.notifications-summary {
+  display: block;
+  margin-bottom: 20rpx;
+  color: #89847e;
+  font-size: 22rpx;
+}
+
+.state {
+  display: flex;
+  min-height: 320rpx;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
+  padding: 32rpx;
+  border: 1rpx dashed #d9d4ce;
+  border-radius: 24rpx;
+  color: #89847e;
+  font-size: 24rpx;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.state-title {
+  color: #1d1b19;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.state-error {
+  color: #1d1b19;
+}
+
+.state-retry {
+  padding: 12rpx 28rpx;
+  border: 1rpx solid #1d1b19;
+  border-radius: 8rpx;
+  color: #1d1b19;
+  font-size: 24rpx;
+}
+
+.notification-list {
+  border: 1rpx solid #ebe7e1;
+  border-radius: 24rpx;
+  background: #fff;
+}
+
+.notification-item {
+  padding: 26rpx;
+  border-bottom: 1rpx solid #f0ede8;
+}
+
+.notification-item:last-child {
+  border-bottom: 0;
+}
+
+.notification-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.notification-label {
+  flex: 1;
+  color: #1d1b19;
+  font-size: 26rpx;
+  font-weight: 500;
+}
+
+.notification-item-unread .notification-label {
+  font-weight: 600;
+}
+
+.notification-dot {
+  width: 12rpx;
+  height: 12rpx;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #1d1b19;
+}
+
+.notification-detail {
+  display: block;
+  margin-top: 10rpx;
+  color: #6b6660;
+  font-size: 22rpx;
+  line-height: 1.6;
+}
+
+.notification-time {
+  display: block;
+  margin-top: 10rpx;
+  color: #a9a49d;
+  font-size: 20rpx;
+}

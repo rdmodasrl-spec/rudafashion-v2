@@ -1,0 +1,420 @@
+@import "tailwindcss";
+
+@keyframes homepage-card-enter {
+  from {
+    opacity: 0;
+    translate: 0 14px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+.homepage-card-enter {
+  animation: homepage-card-enter 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .homepage-card-enter {
+    animation: none;
+  }
+}
+
+/* 商户入驻：AI 团队集结动画（提交成功后播放） */
+@keyframes onboarding-roster-enter {
+  from {
+    opacity: 0;
+    translate: 0 16px;
+    scale: 0.97;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+  }
+}
+
+.onboarding-roster-enter {
+  animation: onboarding-roster-enter 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes onboarding-checkmark-pop {
+  0% {
+    scale: 0.4;
+    opacity: 0;
+  }
+  60% {
+    scale: 1.15;
+    opacity: 1;
+  }
+  100% {
+    scale: 1;
+    opacity: 1;
+  }
+}
+
+.onboarding-checkmark-pop {
+  animation: onboarding-checkmark-pop 420ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes onboarding-badge-pulse {
+  0%,
+  100% {
+    scale: 1;
+  }
+  50% {
+    scale: 1.08;
+  }
+}
+
+.onboarding-badge-pulse {
+  animation: onboarding-badge-pulse 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onboarding-roster-enter,
+  .onboarding-checkmark-pop,
+  .onboarding-badge-pulse {
+    animation: none;
+  }
+}
+
+@theme {
+  --font-sans: "Manrope Variable", "Manrope", "Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+  --font-serif: "Bodoni Moda Variable", "Bodoni Moda", "Didot", "Bodoni 72", "Noto Serif CJK SC", "Songti SC", "SimSun", Georgia, serif;
+  --font-editorial: "Cormorant Garamond Variable", "Cormorant Garamond", "Noto Serif CJK SC", "Songti SC", "SimSun", Georgia, serif;
+  --color-neutral-50: #fbfaf8;
+  --color-neutral-100: #f5f3ef;
+  --color-neutral-200: #e9e6df;
+  --color-neutral-300: #d9d5cc;
+  --color-neutral-400: #aaa49a;
+  --color-neutral-500: #777167;
+  --color-neutral-600: #5e594f;
+  --color-neutral-700: #454139;
+  --color-neutral-800: #302d27;
+  --color-neutral-900: #201e1a;
+  --color-neutral-950: #12110f;
+  /* RUDA shape tokens. Web keeps the existing sharp baseline; mobile targets
+     override these values in src/apps/shared/mobile-design-system.css. */
+  --radius-ruda-control: 2px;
+  --radius-ruda-card: 2px;
+  --radius-ruda-input: 2px;
+  --radius-ruda-modal: 2px;
+  --radius-ruda-tag: 2px;
+}
+
+.font-brand-display {
+  font-family: Didot, "Bodoni 72", "Bodoni Moda Variable", "Bodoni Moda", "Noto Serif CJK SC", Georgia, serif;
+}
+
+@layer base {
+  :root {
+    --sat: env(safe-area-inset-top, 0px);
+    --sar: env(safe-area-inset-right, 0px);
+    --sab: env(safe-area-inset-bottom, 0px);
+    --sal: env(safe-area-inset-left, 0px);
+    --ruda-paper: #fbfaf8;
+    --ruda-ink: #12110f;
+    --ruda-line: #e9e6df;
+    --ruda-focus: #777167;
+    /* Runtime aliases keep Web on the existing sharp baseline even if a
+       consumer CSS build omits unused @theme variables. */
+    --radius-ruda-control: 2px;
+    --radius-ruda-card: 2px;
+    --radius-ruda-input: 2px;
+    --radius-ruda-modal: 2px;
+    --radius-ruda-tag: 2px;
+  }
+
+  /* One RUDA accent keeps every portal visually related; status colors stay semantic. */
+  .portal-theme-buyer {
+    --portal-accent: #201e1a;
+    --portal-accent-soft: #f5f3ef;
+    --portal-accent-contrast: #ffffff;
+  }
+
+  .portal-theme-merchant {
+    --portal-accent: #201e1a;
+    --portal-accent-soft: #f5f3ef;
+    --portal-accent-contrast: #ffffff;
+    --font-serif: var(--font-sans);
+    --font-editorial: var(--font-sans);
+  }
+
+  .portal-theme-employee {
+    --portal-accent: #201e1a;
+    --portal-accent-soft: #f5f3ef;
+    --portal-accent-contrast: #ffffff;
+    --font-serif: var(--font-sans);
+    --font-editorial: var(--font-sans);
+  }
+
+  .portal-theme-admin {
+    --portal-accent: #201e1a;
+    --portal-accent-soft: #f5f3ef;
+    --portal-accent-contrast: #ffffff;
+    --font-serif: var(--font-sans);
+    --font-editorial: var(--font-sans);
+  }
+
+  .portal-theme-buyer,
+  .portal-theme-merchant,
+  .portal-theme-employee,
+  .portal-theme-admin {
+    background: var(--ruda-paper) !important;
+    color: var(--ruda-ink);
+  }
+
+  .portal-logo-mark {
+    background: var(--portal-accent);
+    color: var(--portal-accent-contrast);
+  }
+
+  .portal-accent-text {
+    color: var(--portal-accent);
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    scroll-behavior: smooth;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    background: var(--ruda-paper);
+    color: var(--ruda-ink);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    font-optical-sizing: auto;
+    overscroll-behavior-y: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body.ruda-monochrome {
+    filter: grayscale(1);
+  }
+
+  h1 {
+    font-family: var(--font-serif);
+    letter-spacing: -0.025em;
+    line-height: 1.08;
+  }
+
+  h2:not(.font-serif),
+  h3:not(.font-serif),
+  h4:not(.font-serif) {
+    font-family: var(--font-editorial);
+    letter-spacing: -0.015em;
+  }
+
+  nav {
+    font-family: var(--font-sans);
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font-family: var(--font-sans);
+  }
+
+  button:not([role="switch"]) {
+    border-radius: var(--radius-ruda-control) !important;
+    box-shadow: none !important;
+    transition-duration: 160ms;
+  }
+
+  button.homepage-ai-send:not([role="switch"]) {
+    border-radius: 9999px !important;
+  }
+
+  button.modagpt-rounded-control:not([role="switch"]) {
+    border-radius: 9999px !important;
+  }
+
+  input.modagpt-rounded-input {
+    border-radius: 9999px !important;
+  }
+
+  input,
+  select,
+  textarea {
+    border-color: var(--ruda-line);
+    border-radius: var(--radius-ruda-input);
+    box-shadow: none;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: #8b857b;
+  }
+
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  summary:focus-visible {
+    outline: 2px solid var(--ruda-focus);
+    outline-offset: 2px;
+  }
+
+  a {
+    text-underline-offset: 0.18em;
+  }
+
+  table {
+    border-collapse: collapse;
+  }
+
+  th {
+    font-family: var(--font-sans);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+
+  /* Prevent mobile Safari iOS auto-zoom on inputs */
+  @media screen and (max-width: 767px) {
+    input, select, textarea {
+      font-size: 16px !important;
+    }
+
+    button, a, select, input, textarea {
+      transition-duration: 180ms;
+    }
+  }
+
+  ::selection {
+    background-color: #201e1a;
+    color: #ffffff;
+  }
+
+  /* Desktop/tablet legacy density. Mobile targets set their own icon scale in
+     src/apps/shared/mobile-design-system.css. */
+  html:not([data-ruda-app$="-mobile"]) svg.lucide {
+    width: 0.875rem !important;
+    height: 0.875rem !important;
+    flex-shrink: 0;
+    stroke-width: 1.6;
+  }
+}
+
+/* App-style touch targets & utility classes */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.safe-area-bottom {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+}
+
+/* The mobile/PWA shell uses the fixed bottom navigation instead of the web footer. */
+@media screen and (max-width: 767px), (display-mode: standalone) {
+  .app-footer {
+    display: none;
+  }
+}
+
+/* Hide horizontal scrollbar while keeping momentum scroll */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Active touch feedback for mobile app buttons */
+.tap-active:active {
+  transform: scale(0.97);
+  transition: transform 0.08s ease;
+}
+
+@layer components {
+  .ui-card {
+    @apply border border-neutral-200 bg-white;
+    border-radius: var(--radius-ruda-card);
+    box-shadow: none;
+  }
+
+  .ui-card-hover {
+    @apply transition-colors duration-150 hover:border-neutral-400;
+  }
+
+  .ui-section-title {
+    @apply text-[11px] font-semibold uppercase tracking-[0.08em] text-neutral-500;
+    font-family: var(--font-sans);
+  }
+
+  .ui-primary-button {
+    @apply bg-neutral-950 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-neutral-800;
+    border-radius: var(--radius-ruda-control);
+    letter-spacing: 0.01em;
+  }
+
+  .ui-secondary-button {
+    @apply border border-neutral-200 bg-white px-4 py-2.5 text-sm font-semibold text-neutral-800 transition-colors hover:border-neutral-400 hover:bg-neutral-50;
+    border-radius: var(--radius-ruda-control);
+    letter-spacing: 0.01em;
+  }
+
+  .ui-page-shell {
+    @apply mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8;
+  }
+
+  .ui-page-header {
+    @apply mb-6 flex flex-col gap-3 border-b border-neutral-200/80 pb-5 sm:flex-row sm:items-end sm:justify-between;
+  }
+
+  .ui-page-title {
+    @apply text-xl font-bold tracking-tight text-neutral-950 sm:text-2xl;
+  }
+
+  .ui-page-subtitle {
+    @apply mt-1 max-w-2xl text-xs leading-5 text-neutral-500 sm:text-sm;
+  }
+
+  .ui-empty-state {
+    @apply mx-auto flex max-w-lg flex-col items-center justify-center border border-dashed border-neutral-300 bg-white px-6 py-10 text-center;
+    border-radius: var(--radius-ruda-card);
+  }
+
+  .ui-tab-list {
+    @apply flex gap-1.5 overflow-x-auto border-b border-neutral-200/80 pb-2;
+  }
+
+  .ui-tab {
+    @apply shrink-0 px-4 py-2 text-xs font-semibold transition-colors;
+    border-radius: var(--radius-ruda-control);
+    font-family: var(--font-sans);
+  }
+
+  @layer utilities {
+    h1[class*="text-4xl"],
+    h1[class*="text-5xl"],
+    h1[class*="text-6xl"] {
+      font-size: clamp(1.5rem, 3.2vw, 2rem);
+    }
+
+    h2[class*="text-3xl"],
+    h2[class*="text-4xl"],
+    h2[class*="text-5xl"],
+    h2[class*="text-6xl"] {
+      font-size: clamp(1.25rem, 2.4vw, 1.5rem);
+    }
+
+    h3[class*="text-3xl"],
+    h3[class*="text-4xl"],
+    h3[class*="text-5xl"],
+    h3[class*="text-6xl"] {
+      font-size: clamp(1.125rem, 2vw, 1.25rem);
+    }
+  }
+
+}

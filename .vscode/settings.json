@@ -1,0 +1,48 @@
+{
+    "python.terminal.useEnvFile": true,
+    "css.lint.unknownAtRules": "ignore",
+    "files.exclude": {
+        "dist": true,
+        "release": true,
+        "logs": true,
+        "var": true,
+        "fu/build": true,
+        "fu/.dart_tool": true
+    },
+    "files.watcherExclude": {
+        "**/.git/objects/**": true,
+        "**/.git/subtree-cache/**": true,
+        "**/node_modules/**": true,
+        "**/dist/**": true,
+        "**/release/**": true,
+        "**/logs/**": true,
+        "**/var/**": true,
+        "**/fu/build/**": true,
+        "**/fu/.dart_tool/**": true,
+        "**/fu/android/.gradle/**": true,
+        "**/fu/ios/Pods/**": true,
+        "**/public/downloads/**": true,
+        "**/public/fashion/**": true,
+        "**/public/videos/**": true,
+        "**/.tmp-*/**": true
+    },
+    "search.exclude": {
+        "**/node_modules": true,
+        "**/dist": true,
+        "**/release": true,
+        "**/logs": true,
+        "**/var": true,
+        "**/fu/build": true,
+        "**/fu/.dart_tool": true,
+        "**/fu/_resource": true,
+        "**/public/downloads": true,
+        "**/public/fashion": true,
+        "**/public/videos": true,
+        "**/public/uploads": true,
+        "**/*.min.js": true,
+        "**/package-lock.json": true,
+        "**/bun.lock": true
+    },
+    "typescript.tsserver.maxTsServerMemory": 4096,
+    "typescript.disableAutomaticTypeAcquisition": true
+}

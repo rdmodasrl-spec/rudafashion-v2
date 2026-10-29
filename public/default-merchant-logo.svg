@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title>RUDA Fashion merchant</title>
+  <desc>Default RUDA Fashion merchant logo</desc>
+  <rect width="512" height="512" rx="72" fill="#171717"/>
+  <text x="256" y="285" text-anchor="middle" fill="#fff" font-family="Georgia,serif" font-size="142" font-weight="700">R</text>
+  <path d="M130 350h252" stroke="#14edfc" stroke-width="8"/>
+  <text x="256" y="395" text-anchor="middle" fill="#fff" font-family="Arial,sans-serif" font-size="22" letter-spacing="6">FASHION</text>
+</svg>

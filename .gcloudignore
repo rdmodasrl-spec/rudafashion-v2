@@ -1,0 +1,18 @@
+.git/
+.gitignore
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+coverage/
+logs/
+.kilo/
+fu/
+fashion-ingestion/
+public/uploads/
+public/downloads/
+*.tar.gz
+*.bak
+ruda.mp4
+Dior Uomo Autunno 2026  Moda Uomo di Lusso IT  DIOR (2).mp4

@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a0a0a" />
+      <stop offset="100%" stop-color="#171717" />
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f5e6c8" />
+      <stop offset="50%" stop-color="#d4af37" />
+      <stop offset="100%" stop-color="#aa7c11" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Background Canvas -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+  <rect width="504" height="504" x="4" y="4" rx="108" fill="none" stroke="url(#goldGrad)" stroke-width="2" stroke-opacity="0.3" />
+
+  <!-- Geometric Luxury Fashion Crest -->
+  <g transform="translate(256, 230)">
+    <!-- Outer diamond / hanger crest -->
+    <path d="M 0,-140 L 120,-20 L 0,100 L -120,-20 Z" fill="none" stroke="url(#goldGrad)" stroke-width="3" stroke-dasharray="6,4" opacity="0.4" />
+    
+    <!-- Stylized Tailoring Lines -->
+    <line x1="-80" y1="-20" x2="80" y2="-20" stroke="url(#goldGrad)" stroke-width="2" opacity="0.6" />
+    <circle cx="0" cy="-140" r="8" fill="url(#goldGrad)" />
+    
+    <!-- Bold Luxury 'R' Monogram -->
+    <path d="M -50,-80 L 10,-80 C 45,-80 65,-60 65,-30 C 65,0 45,20 10,20 L -25,20 L -25,80 L -50,80 Z M -25,-55 L -25,-5 L 5,-5 C 22,-5 35,-15 35,-30 C 35,-45 22,-55 5,-55 Z" fill="url(#goldGrad)" />
+    
+    <!-- R Leg Tailoring Slash -->
+    <path d="M 5,10 L 55,80 L 25,80 L -15,18 Z" fill="url(#goldGrad)" />
+  </g>
+
+  <!-- Brand Typography -->
+  <text x="256" y="380" font-family="'Cinzel', 'Playfair Display', 'Didot', 'Georgia', serif" font-size="52" font-weight="800" letter-spacing="10" fill="url(#goldGrad)" text-anchor="middle">
+    RUDA
+  </text>
+  <text x="256" y="415" font-family="'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif" font-size="16" font-weight="600" letter-spacing="6" fill="#a3a3a3" text-anchor="middle">
+    PRONTO MODA B2B
+  </text>
+</svg>

@@ -1,0 +1,13 @@
+<view class="tab-bar {{hidden ? 'tab-bar-hidden' : ''}}">
+  <view
+    wx:for="{{list}}"
+    wx:key="id"
+    class="tab-item {{selected === item.id ? 'tab-item-selected' : ''}}"
+    data-id="{{item.id}}"
+    data-path="{{item.pagePath}}"
+    bindtap="switchTab"
+  >
+    <image class="tab-icon" src="{{selected === item.id ? item.iconPath : item.mutedIconPath}}" mode="aspectFit" />
+    <text>{{item.text}}</text>
+  </view>
+</view>

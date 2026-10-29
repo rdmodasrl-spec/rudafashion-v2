@@ -1,0 +1,7 @@
+{
+  "name": "ruda-merchant-miniprogram",
+  "private": true,
+  "dependencies": {
+    "qrcode-generator": "^1.5.2"
+  }
+}

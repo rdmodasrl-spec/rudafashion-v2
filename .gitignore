@@ -1,0 +1,38 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+logs/
+fu/
+fashion-ingestion/
+public/uploads/
+var/fashion-studio/audio/
+public/downloads/
+*.tar.gz
+ruda.mp4
+logs/ai-support-config.json
+logs/merchant-support-knowledge-index.json
+release/
+
+# Impeccable 前端 UI 技能：引擎二进制按平台分发，首次运行时校验并自动下载，不提交
+.agents/skills/impeccable/scripts/bin/
+.claude/skills/impeccable/scripts/bin/
+# 代理工具本机设置（含 hooks 配置），由各开发者本地生成
+.claude/settings.local.json
+
+# 备份与临时产物（2026-10-29 新仓库整理）
+var/backups/
+var/*.log
+tmp-*.mjs
+*.bak
+*.bak-*
+.PAI/**/*.log
+.pai/*.log
+.impeccable/hook.cache.json
+merchant-miniprogram/.git/
+*.sql.gz
+*.dump

@@ -1,0 +1,82 @@
+[
+  {
+    "target": "desktop-1440",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "capabilityButtons": 10,
+    "overflow": 0,
+    "core": "webgl",
+    "resultCount": 1,
+    "videoNotice": true,
+    "planIncludesRecolor": true,
+    "planMentionsNotIntegrated": true,
+    "inspectorVisible": true,
+    "tryOnSlots": {
+      "person": true,
+      "garment": true
+    },
+    "errors": []
+  },
+  {
+    "target": "laptop-1024",
+    "viewport": {
+      "width": 1024,
+      "height": 768
+    },
+    "capabilityButtons": 10,
+    "overflow": 0,
+    "core": "webgl",
+    "resultCount": 1,
+    "videoNotice": true,
+    "planIncludesRecolor": true,
+    "planMentionsNotIntegrated": true,
+    "inspectorVisible": null,
+    "tryOnSlots": {
+      "person": true,
+      "garment": true
+    },
+    "errors": []
+  },
+  {
+    "target": "mobile-390",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "capabilityButtons": 10,
+    "overflow": 0,
+    "core": "webgl",
+    "resultCount": 1,
+    "videoNotice": true,
+    "planIncludesRecolor": true,
+    "planMentionsNotIntegrated": true,
+    "inspectorVisible": null,
+    "tryOnSlots": {
+      "person": true,
+      "garment": true
+    },
+    "errors": []
+  },
+  {
+    "target": "mobile-320",
+    "viewport": {
+      "width": 320,
+      "height": 640
+    },
+    "capabilityButtons": 10,
+    "overflow": 0,
+    "core": "webgl",
+    "resultCount": 1,
+    "videoNotice": true,
+    "planIncludesRecolor": true,
+    "planMentionsNotIntegrated": true,
+    "inspectorVisible": null,
+    "tryOnSlots": {
+      "person": true,
+      "garment": true
+    },
+    "errors": []
+  }
+]

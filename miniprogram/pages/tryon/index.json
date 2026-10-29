@@ -1,0 +1,7 @@
+{
+  "navigationBarTitleText": "虚拟试衣",
+  "navigationStyle": "custom",
+  "usingComponents": {
+    "site-header": "/components/site-header/index"
+  }
+}

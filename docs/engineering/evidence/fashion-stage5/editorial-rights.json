@@ -1,0 +1,103 @@
+{
+  "generatedAt": "2026-10-28T15:28:07.346Z",
+  "policy": "无法核实商用授权的第三方图片/视频一律替换为自有素材或暂时下架，原始来源保留在记录中",
+  "replacedCount": 10,
+  "withdrawnCount": 4,
+  "replaced": [
+    {
+      "id": "fashion-demo-1",
+      "previousImage": "/fashion/editorial/ruda-editorial-01.jpg",
+      "image": "/fashion/editorial/ruda-editorial-2026-01.jpg",
+      "reason": "原图为第三方秀场/图库素材，授权无法核实；已替换为 RUDA 自有版式封面"
+    },
+    {
+      "id": "fashion-demo-10",
+      "previousImage": "/fashion/editorial/ruda-editorial-02.jpg",
+      "image": "/fashion/editorial/ruda-editorial-2026-02.jpg",
+      "reason": "原图为第三方秀场/图库素材，授权无法核实；已替换为 RUDA 自有版式封面"
+    },
+    {
+      "id": "fashion-demo-2",
+      "previousImage": "/fashion/editorial/ruda-editorial-03.jpg",
+      "image": "/fashion/editorial/ruda-editorial-2026-03.jpg",
+      "reason": "原图为第三方秀场/图库素材，授权无法核实；已替换为 RUDA 自有版式封面"
+    },
+    {
+      "id": "fashion-demo-3",
+      "previousImage": "/fashion/editorial/ruda-editorial-04.jpg",
+      "image": "/fashion/editorial/ruda-editorial-2026-04.jpg",
+      "reason": "原图为第三方秀场/图库素材，授权无法核实；已替换为 RUDA 自有版式封面"
+    },
+    {
+      "id": "fashion-demo-4",
+      "previousImage": "/fashion/editorial/ruda-editorial-05.jpg",
+      "image": "/fashion/editorial/ruda-editorial-2026-05.jpg",
+      "reason": "原图为第三方秀场/图库素材，授权无法核实；已替换为 RUDA 自有版式封面"
+    },
+    {
+      "id": "fashion-demo-5",
+      "previousImage": "/fashion/editorial/ruda-editorial-06.jpg",
+      "image": "/fashion/editorial/ruda-editorial-2026-06.jpg",
+      "reason": "原图为第三方秀场/图库素材，授权无法核实；已替换为 RUDA 自有版式封面"
+    },
+    {
+      "id": "fashion-demo-6",
+      "previousImage": "/fashion/editorial/ruda-editorial-07.jpg",
+      "image": "/fashion/editorial/ruda-editorial-2026-07.jpg",
+      "reason": "原图为第三方秀场/图库素材，授权无法核实；已替换为 RUDA 自有版式封面"
+    },
+    {
+      "id": "fashion-demo-7",
+      "previousImage": "/fashion/editorial/ruda-editorial-08.jpg",
+      "image": "/fashion/editorial/ruda-editorial-2026-08.jpg",
+      "reason": "原图为第三方秀场/图库素材，授权无法核实；已替换为 RUDA 自有版式封面"
+    },
+    {
+      "id": "fashion-demo-8",
+      "previousImage": "/fashion/editorial/ruda-editorial-09.jpg",
+      "image": "/fashion/editorial/ruda-editorial-2026-09.jpg",
+      "reason": "原图为第三方秀场/图库素材，授权无法核实；已替换为 RUDA 自有版式封面"
+    },
+    {
+      "id": "fashion-demo-9",
+      "previousImage": "/fashion/editorial/ruda-editorial-10.jpg",
+      "image": "/fashion/editorial/ruda-editorial-2026-10.jpg",
+      "reason": "原图为第三方秀场/图库素材，授权无法核实；已替换为 RUDA 自有版式封面"
+    }
+  ],
+  "withdrawn": [
+    {
+      "id": "fashion-demo-video-1",
+      "previousStatus": "unpublished",
+      "previousRights": "unverified",
+      "newStatus": "unpublished",
+      "videoUrl": "/fashion/FSH-1777540455327-desktop-075.webm",
+      "reason": "视频来源为第三方平台抓取，无法核实商用授权，已下架待替换"
+    },
+    {
+      "id": "fashion-demo-video-2",
+      "previousStatus": "unpublished",
+      "previousRights": "unverified",
+      "newStatus": "unpublished",
+      "videoUrl": "/fashion/TikSave.io_7688494568387513614.mp4",
+      "reason": "视频来源为第三方平台抓取，无法核实商用授权，已下架待替换"
+    },
+    {
+      "id": "fashion-demo-video-3",
+      "previousStatus": "unpublished",
+      "previousRights": "unverified",
+      "newStatus": "unpublished",
+      "videoUrl": "/fashion/FSH-1777540446333-desktop-016%20(1).webm",
+      "reason": "视频来源为第三方平台抓取，无法核实商用授权，已下架待替换"
+    },
+    {
+      "id": "fashion-demo-video-4",
+      "previousStatus": "unpublished",
+      "previousRights": "unverified",
+      "newStatus": "unpublished",
+      "videoUrl": "/fashion/FSH-1776973690241-desktop-Header3.webm",
+      "reason": "视频来源为第三方平台抓取，无法核实商用授权，已下架待替换"
+    }
+  ],
+  "skipped": []
+}

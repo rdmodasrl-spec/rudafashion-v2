@@ -1,0 +1,6 @@
+@import "../shared/mobile-design-system.css";
+
+html[data-ruda-app="frontend-mobile"] #root {
+  min-height: 100dvh;
+  overflow-x: clip;
+}

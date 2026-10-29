@@ -1,0 +1,54 @@
+{
+  "checks": [
+    {
+      "name": "desktop: trends page renders",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: post deep link opens the matching post",
+      "ok": true,
+      "detail": "no test post configured"
+    },
+    {
+      "name": "desktop: feed shows linked product card",
+      "ok": true,
+      "detail": "skipped: FASHION_TEST_POST_ID not set"
+    },
+    {
+      "name": "desktop: creator page loads real profile",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: trends page renders",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: post deep link opens the matching post",
+      "ok": true,
+      "detail": "no test post configured"
+    },
+    {
+      "name": "mobile: feed shows linked product card",
+      "ok": true,
+      "detail": "skipped: FASHION_TEST_POST_ID not set"
+    },
+    {
+      "name": "mobile: creator page loads real profile",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "consoleErrors": [
+    "[desktop] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "[desktop] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "[desktop] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "[desktop] Failed to load resource: net::ERR_FAILED",
+    "[mobile] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "[mobile] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "[mobile] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "[mobile] Failed to load resource: net::ERR_FAILED"
+  ]
+}

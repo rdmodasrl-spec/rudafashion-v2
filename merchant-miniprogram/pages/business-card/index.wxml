@@ -1,0 +1,61 @@
+<view class="card-overlay" catchtap="closeCard">
+  <view wx:if="{{loading}}" class="modal-state" catchtap="stopTap">正在加载企业名片…</view>
+  <view wx:elif="{{error}}" class="modal-error" catchtap="stopTap">
+    <text>{{error}}</text>
+    <button class="retry-button" bindtap="retry">重试</button>
+  </view>
+  <view wx:else class="card-popup" catchtap="stopTap">
+    <view class="business-card">
+      <text class="close-button" catchtap="closeCard">×</text>
+      <view class="card-layout">
+        <view class="brand-panel">
+          <image wx:if="{{logoUrl}}" class="brand-logo" src="{{logoUrl}}" mode="aspectFit" binderror="onLogoError" />
+          <image wx:else class="brand-logo" src="/assets/default-merchant-logo.jpg" mode="aspectFit" />
+        </view>
+        <view class="card-divider"></view>
+        <view class="info-panel">
+          <text class="company-name">{{displayName}}</text>
+          <text wx:if="{{merchant.contactPerson}}" class="contact-person">{{merchant.contactPerson}}</text>
+          <view class="contact-list">
+            <view wx:if="{{merchant.contactPhone}}" class="contact-row" data-value="{{merchant.contactPhone}}" data-action="phone" bindtap="contactAction">
+              <view class="contact-icon icon-phone" aria-label="电话"></view>
+              <text class="contact-value">{{merchant.contactPhone}}</text>
+            </view>
+            <view wx:if="{{whatsappLink}}" class="contact-row" data-value="{{whatsappLink}}" data-action="copy" bindtap="contactAction">
+              <view class="contact-icon icon-whatsapp" aria-label="WhatsApp"><text>☎</text></view>
+              <text class="contact-value">{{merchant.whatsapp || merchant.contactPhone}}</text>
+            </view>
+            <view wx:if="{{merchant.wechat}}" class="contact-row" data-value="{{merchant.wechat}}" data-action="copy" bindtap="contactAction">
+              <view class="contact-icon icon-wechat" aria-label="微信"><view></view></view>
+              <text class="contact-value">{{merchant.wechat}}</text>
+            </view>
+            <view wx:if="{{merchant.contactEmail}}" class="contact-row" data-value="{{merchant.contactEmail}}" data-action="copy" bindtap="contactAction">
+              <view class="contact-icon icon-email" aria-label="公司邮箱"></view>
+              <text class="contact-value">{{merchant.contactEmail}}</text>
+            </view>
+            <view wx:if="{{publicUrl}}" class="contact-row" data-value="{{publicUrl}}" data-action="copy" bindtap="contactAction">
+              <view class="contact-icon icon-website" aria-label="官方网站"></view>
+              <text class="contact-value">{{publicUrl}}</text>
+            </view>
+            <view wx:if="{{merchant.vatNumber}}" class="contact-row" data-value="{{merchant.vatNumber}}" data-action="copy" bindtap="contactAction">
+              <view class="contact-icon icon-tax" aria-label="税号">№</view>
+              <text class="contact-value">{{merchant.vatNumber}}</text>
+            </view>
+            <view wx:if="{{merchant.publicBankAccount}}" class="contact-row" data-value="{{merchant.publicBankAccount}}" bindtap="copyText">
+              <view class="contact-icon icon-bank" aria-label="银行账户"></view>
+              <text class="contact-value">{{merchant.publicBankAccount}}</text>
+            </view>
+            <view wx:if="{{merchant.showroomAddress || merchant.city || merchant.country}}" class="contact-row address-row" data-value="{{merchant.showroomAddress}} {{merchant.city}} {{merchant.country}}" bindtap="copyText">
+              <view class="contact-icon icon-address" aria-label="公司地址"></view>
+              <text class="contact-value">{{merchant.showroomAddress}} {{merchant.city}} {{merchant.country}}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+    <view class="card-actions">
+      <button wx:if="{{shareable}}" class="action-button" open-type="share">分享</button>
+      <button wx:if="{{merchant.contactPhone || merchant.contactEmail}}" class="action-button" bindtap="saveContact">保存</button>
+    </view>
+  </view>
+</view>

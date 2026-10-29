@@ -1,0 +1,54 @@
+ALTER TABLE "Merchant"
+ADD COLUMN "industrySource" VARCHAR(32) NOT NULL DEFAULT 'LEGACY_INFERENCE';
+
+UPDATE "Merchant"
+SET "industry" = CASE LOWER("businessType")
+  WHEN 'apparel' THEN 'FASHION_COMPANY'
+  WHEN 'leather' THEN 'FASHION_COMPANY'
+  WHEN 'tailor' THEN 'FASHION_COMPANY'
+  WHEN 'atelier' THEN 'FASHION_COMPANY'
+  WHEN 'brand_supplier' THEN 'FASHION_COMPANY'
+  WHEN 'manufacturer' THEN 'FASHION_COMPANY'
+  WHEN 'fashion_wholesale' THEN 'FASHION_WHOLESALE'
+  WHEN 'department' THEN 'DEPARTMENT_STORE'
+  WHEN 'department_store' THEN 'DEPARTMENT_STORE'
+  WHEN 'retail' THEN 'RETAIL_STORE'
+  WHEN 'retailer' THEN 'RETAIL_STORE'
+  WHEN 'boutique' THEN 'RETAIL_STORE'
+  WHEN 'trading' THEN 'TRADING_COMPANY'
+  WHEN 'trader' THEN 'TRADING_COMPANY'
+  WHEN 'import_export' THEN 'TRADING_COMPANY'
+  WHEN 'wholesale' THEN 'WHOLESALE_COMPANY'
+  WHEN 'wholesaler' THEN 'WHOLESALE_COMPANY'
+  WHEN 'distributor' THEN 'WHOLESALE_COMPANY'
+  WHEN 'restaurant' THEN 'RESTAURANT'
+  WHEN 'food_service' THEN 'RESTAURANT'
+  ELSE 'OTHER'
+END
+WHERE "industry" = 'OTHER';
+
+ALTER TABLE "Merchant"
+ALTER COLUMN "industry" DROP DEFAULT;
+
+ALTER TABLE "Merchant"
+ADD CONSTRAINT "Merchant_industry_check"
+CHECK ("industry" IN (
+  'FASHION_COMPANY',
+  'FASHION_WHOLESALE',
+  'DEPARTMENT_STORE',
+  'RETAIL_STORE',
+  'TRADING_COMPANY',
+  'WHOLESALE_COMPANY',
+  'RESTAURANT',
+  'OTHER'
+));
+
+ALTER TABLE "Merchant"
+ADD CONSTRAINT "Merchant_industrySource_check"
+CHECK ("industrySource" IN (
+  'SELF_SELECTED',
+  'GOOGLE_ONBOARDING',
+  'ADMIN',
+  'MERCHANT_UPDATED',
+  'LEGACY_INFERENCE'
+));

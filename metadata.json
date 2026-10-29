@@ -1,0 +1,8 @@
+{
+  "name": "RUDA Fashion B2B - 欧洲快时尚现货批发与展厅",
+  "description": "RUDA 欧洲快时尚现货批发 B2B 多商户平台，支持多商户展厅、公开现货与 Private Collection 授权专属商品、智能配码下单与移动端采购。",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

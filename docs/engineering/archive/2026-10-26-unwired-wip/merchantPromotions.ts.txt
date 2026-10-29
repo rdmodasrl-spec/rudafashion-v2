@@ -1,0 +1,283 @@
+import { Prisma, type PrismaClient } from '@prisma/client';
+import { grantModaGptCredits } from './modagptBilling';
+
+type PromotionTransaction = Prisma.TransactionClient;
+
+export function addUtcMonths(date: Date, months: number): Date {
+  const target = new Date(date);
+  const originalDay = target.getUTCDate();
+  target.setUTCDate(1);
+  target.setUTCMonth(target.getUTCMonth() + months);
+  const finalDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+  target.setUTCDate(Math.min(originalDay, finalDay));
+  return target;
+}
+
+export function merchantGrowthReferralQualificationStatus(input: {
+  now: Date;
+  deadline: Date;
+  emailVerified: boolean;
+  profileComplete: boolean;
+  productCount: number;
+  coreActionCount: number;
+}): 'pending' | 'qualified' | 'expired' {
+  if (input.now > input.deadline) return 'expired';
+  if (!input.emailVerified || !input.profileComplete || input.productCount < 3 || input.coreActionCount < 1) {
+    return 'pending';
+  }
+  return 'qualified';
+}
+
+async function lockMerchant(tx: PromotionTransaction, merchantId: string) {
+  const rows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    SELECT "id" FROM "Merchant" WHERE "id" = ${merchantId} FOR UPDATE
+  `);
+  if (!rows.length) throw new Error('MERCHANT_PROMOTION_MERCHANT_NOT_FOUND');
+}
+
+async function applyFreePlusMonths(
+  tx: PromotionTransaction,
+  input: {
+    merchantId: string;
+    months: number;
+    sourceType: 'registration_trial' | 'merchant_referral';
+    sourceId: string;
+    sourceMerchantId?: string | null;
+    idempotencyKey: string;
+    now: Date;
+  }
+) {
+  if (!Number.isSafeInteger(input.months) || input.months < 1 || input.months > 120) {
+    throw new Error('MERCHANT_PROMOTION_MONTHS_INVALID');
+  }
+  await lockMerchant(tx, input.merchantId);
+  const existingBenefit = await tx.merchantPromotionBenefit.findUnique({
+    where: { idempotencyKey: input.idempotencyKey }
+  });
+  if (existingBenefit) return existingBenefit;
+
+  const plan = await tx.modaGptBillingPlan.findUnique({ where: { id: 'PLUS' } });
+  if (!plan || plan.status !== 'active' || !Number.isSafeInteger(plan.monthlyCredits) || !plan.monthlyCredits) {
+    throw new Error('MERCHANT_PROMOTION_STARTER_PLAN_UNAVAILABLE');
+  }
+
+  const freeTrials = await tx.modaGptBillingSubscription.findMany({
+    where: {
+      merchantId: input.merchantId,
+      planId: 'PLUS',
+      status: 'TRIAL',
+      provider: null,
+      currentPeriodEnd: { gt: input.now }
+    },
+    orderBy: { currentPeriodEnd: 'desc' },
+    take: 1
+  });
+  const currentTrial = freeTrials[0];
+  const paidSubscription = currentTrial ? null : await tx.modaGptBillingSubscription.findFirst({
+    where: {
+      merchantId: input.merchantId,
+      status: { in: ['ACTIVE', 'GRACE_PERIOD', 'TRIAL'] },
+      currentPeriodEnd: { gt: input.now },
+      provider: { not: null }
+    },
+    orderBy: { currentPeriodEnd: 'desc' }
+  });
+  const startsAt = currentTrial?.currentPeriodEnd || paidSubscription?.currentPeriodEnd || input.now;
+  const baseEnd = currentTrial?.currentPeriodEnd || startsAt;
+  const endsAt = addUtcMonths(baseEnd, input.months);
+  const benefit = await tx.merchantPromotionBenefit.create({
+    data: {
+      merchantId: input.merchantId,
+      sourceMerchantId: input.sourceMerchantId || null,
+      sourceType: input.sourceType,
+      sourceId: input.sourceId,
+      months: input.months,
+      status: startsAt > input.now ? 'scheduled' : 'applied',
+      startsAt,
+      endsAt,
+      idempotencyKey: input.idempotencyKey
+    }
+  });
+
+  let subscriptionId: string;
+  if (currentTrial) {
+    const updated = await tx.modaGptBillingSubscription.update({
+      where: { id: currentTrial.id },
+      data: { currentPeriodEnd: endsAt }
+    });
+    subscriptionId = updated.id;
+  } else {
+    const subscription = await tx.modaGptBillingSubscription.create({
+      data: {
+        merchantId: input.merchantId,
+        planId: plan.id,
+        status: 'TRIAL',
+        provider: null,
+        idempotencyKey: `promotion:${benefit.id}`,
+        currentPeriodStart: startsAt,
+        currentPeriodEnd: endsAt,
+        planSnapshot: JSON.stringify({
+          id: plan.id,
+          displayName: plan.displayName,
+          monthlyPriceMinor: plan.monthlyPriceMinor,
+          monthlyCredits: plan.monthlyCredits,
+          currency: plan.currency,
+          interval: plan.interval,
+          version: plan.version
+        }),
+        startedAt: startsAt
+      }
+    });
+    subscriptionId = subscription.id;
+  }
+
+  await tx.merchantPromotionBenefit.update({
+    where: { id: benefit.id },
+    data: { subscriptionId }
+  });
+  await grantModaGptCredits(tx, {
+    merchantId: input.merchantId,
+    amount: plan.monthlyCredits * input.months,
+    referenceType: 'promotion_benefit',
+    referenceId: benefit.id,
+    idempotencyKey: `promotion-benefit:${benefit.id}`,
+    metadata: { sourceType: input.sourceType, sourceId: input.sourceId, months: input.months }
+  });
+  return { ...benefit, subscriptionId };
+}
+
+export async function createMerchantRegistrationTrial(
+  tx: PromotionTransaction,
+  merchantId: string,
+  now = new Date()
+) {
+  return applyFreePlusMonths(tx, {
+    merchantId,
+    months: 3,
+    sourceType: 'registration_trial',
+    sourceId: merchantId,
+    idempotencyKey: `merchant-registration-trial:${merchantId}`,
+    now
+  });
+}
+
+export async function createMerchantGrowthReferralAttribution(
+  tx: PromotionTransaction,
+  input: { referrerMerchantId: string; referredMerchantId: string; code: string; now?: Date }
+) {
+  const now = input.now || new Date();
+  if (input.referrerMerchantId === input.referredMerchantId) return false;
+  const [referrer, referred, partnerReferral] = await Promise.all([
+    tx.merchant.findUnique({
+      where: { id: input.referrerMerchantId },
+      select: { id: true, contactEmail: true }
+    }),
+    tx.merchant.findUnique({
+      where: { id: input.referredMerchantId },
+      select: { id: true, contactEmail: true }
+    }),
+    tx.partnerMerchantReferral.findUnique({
+      where: { merchantId: input.referredMerchantId },
+      select: { id: true }
+    })
+  ]);
+  if (!referrer || !referred || partnerReferral
+    || referrer.contactEmail.trim().toLowerCase() === referred.contactEmail.trim().toLowerCase()) return false;
+
+  const result = await tx.merchantGrowthReferral.createMany({
+    data: [{
+      id: crypto.randomUUID(),
+      referrerMerchantId: referrer.id,
+      referredMerchantId: referred.id,
+      referralCodeSnapshot: input.code.slice(0, 120),
+      qualificationDeadline: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+    }],
+    skipDuplicates: true
+  });
+  return result.count === 1;
+}
+
+export async function evaluateMerchantGrowthReferral(prisma: PrismaClient, referredMerchantId: string, now = new Date()) {
+  return prisma.$transaction(async tx => {
+    const referral = await tx.merchantGrowthReferral.findUnique({
+      where: { referredMerchantId },
+      include: {
+        referred: true,
+        referrer: { select: { id: true } }
+      }
+    });
+    if (!referral || referral.status !== 'pending') return { status: referral?.status || 'none' };
+    const lockRows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT "id" FROM "MerchantGrowthReferral" WHERE "id" = ${referral.id} FOR UPDATE
+    `);
+    if (!lockRows.length) throw new Error('MERCHANT_GROWTH_REFERRAL_NOT_FOUND');
+    const merchant = referral.referred;
+    const [verifiedAccount, productCount, coreActionCount] = await Promise.all([
+      tx.authAccount.count({
+        where: { role: 'merchant', merchantId: referredMerchantId, emailVerifiedAt: { not: null } }
+      }),
+      tx.product.count({
+        where: { merchantId: referredMerchantId, createdAt: { lte: referral.qualificationDeadline } }
+      }),
+      Promise.all([
+        tx.merchantCustomerLink.count({
+          where: { merchantId: referredMerchantId, createdAt: { lte: referral.qualificationDeadline } }
+        }),
+        tx.inventoryMovement.count({
+          where: { merchantId: referredMerchantId, createdAt: { lte: referral.qualificationDeadline } }
+        }),
+        tx.order.count({
+          where: {
+            merchantId: referredMerchantId,
+            status: { not: 'cancelled' },
+            createdAt: { lte: referral.qualificationDeadline }
+          }
+        })
+      ]).then(counts => counts.reduce((sum, count) => sum + count, 0))
+    ]);
+    const profileComplete = Boolean(
+      merchant.companyLegalName.trim()
+      && merchant.country.trim()
+      && merchant.city.trim()
+      && merchant.contactPerson.trim()
+    ) && !['待完善', 'unknown', 'n/a'].includes(merchant.country.trim().toLowerCase())
+      && !['待完善', 'unknown', 'n/a'].includes(merchant.city.trim().toLowerCase());
+    const qualificationStatus = merchantGrowthReferralQualificationStatus({
+      now,
+      deadline: referral.qualificationDeadline,
+      emailVerified: verifiedAccount > 0,
+      profileComplete,
+      productCount,
+      coreActionCount
+    });
+    if (qualificationStatus === 'expired') {
+      await tx.merchantGrowthReferral.update({
+        where: { id: referral.id },
+        data: { status: 'expired' }
+      });
+      return { status: 'expired' };
+    }
+    if (qualificationStatus === 'pending') {
+      return { status: 'pending', verified: verifiedAccount > 0, profileComplete, productCount, coreActionCount };
+    }
+
+    const benefit = await applyFreePlusMonths(tx, {
+      merchantId: referral.referrerMerchantId,
+      sourceMerchantId: referredMerchantId,
+      sourceType: 'merchant_referral',
+      sourceId: referral.id,
+      months: 3,
+      idempotencyKey: `merchant-referral-reward:${referral.id}`,
+      now
+    });
+    await tx.merchantGrowthReferral.update({
+      where: { id: referral.id },
+      data: { status: 'qualified', qualifiedAt: now, rewardBenefitId: benefit.id }
+    });
+    return { status: 'qualified', benefitId: benefit.id };
+  });
+}
+
+export function merchantReferralEligibilityWindow(registrationDate: Date, now: Date): boolean {
+  return now.getTime() <= registrationDate.getTime() + 30 * 24 * 60 * 60 * 1000;
+}

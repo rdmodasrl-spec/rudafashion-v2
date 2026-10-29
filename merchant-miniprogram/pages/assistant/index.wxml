@@ -1,0 +1,269 @@
+<view class="modaui-page {{navigationOpen ? 'modaui-page--nav-open' : ''}}">
+  <view class="topbar" style="padding-top: {{statusBarHeight}}px;">
+    <view class="topbar-content">
+      <view class="topbar-side">
+        <button class="topbar-action back-action" bindtap="goBack" aria-label="返回">‹</button>
+      </view>
+      <view class="topbar-center"><text class="topbar-title">{{section === 'chat' ? 'ModaUI' : section === 'create' ? '创作中心' : section === 'designs' ? '我的作品' : '店铺知识库'}}</text></view>
+      <view class="topbar-side topbar-side-right">
+        <button class="topbar-action" bindtap="toggleMenu" aria-label="更多操作" aria-expanded="{{menuOpen}}">
+          <view class="more-glyph"><view></view><view></view><view></view></view>
+        </button>
+      </view>
+    </view>
+  </view>
+
+  <scroll-view wx:if="{{section === 'chat'}}" class="chat-scroll" scroll-y scroll-into-view="message-bottom" scroll-with-animation>
+    <view wx:if="{{messages.length === 0}}" class="welcome">
+      <view class="core-stage">
+        <canvas type="2d" id="modaui-core" class="core-canvas"></canvas>
+        <view class="core-greeting">
+          <text class="core-greeting-line">你好，</text>
+          <text class="core-greeting-line">我是 MODAUI。</text>
+          <text class="core-subcopy">我可以帮你处理商品、订单、库存、数据分析，并提供时尚行业的专业建议。</text>
+        </view>
+      </view>
+      <view class="feature-list">
+        <view wx:for="{{visibleHomeModes}}" wx:key="id" class="feature-row {{item.unavailable ? 'feature-disabled' : ''}}" data-mode="{{item.id}}" bindtap="selectMode">
+          <text class="feature-chat-text">{{item.welcomeText}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view wx:else class="message-list">
+      <view wx:for="{{messages}}" wx:key="index" class="message-row {{item.role === 'user' ? 'user-row' : 'assistant-row'}}">
+        <view class="message-content {{item.role === 'user' ? 'user-content' : 'assistant-content'}}">
+          <view wx:if="{{item.role !== 'user'}}" class="assistant-label"><view class="assistant-mark">✦</view><text>ModaUI</text></view>
+          <text class="message-text">{{item.content}}</text>
+          <image wx:if="{{item.imagePath}}" class="generated-image" src="{{item.imagePath}}" mode="aspectFit" />
+          <view wx:if="{{item.imagePath && item.designCategory && !item.designId}}" class="message-actions">
+            <button class="save-design-button" data-index="{{index}}" loading="{{savingDesign}}" disabled="{{savingDesign}}" bindtap="saveDesign">保存到作品库</button>
+          </view>
+          <text wx:if="{{item.imagePath && item.designId}}" class="saved-label">已保存到作品库</text>
+          <view wx:if="{{item.actions.length}}" class="suggested-actions">
+            <button wx:for="{{item.actions}}" wx:key="target" class="suggested-action" data-target="{{item.target}}" bindtap="navigateAction">{{item.label}}　›</button>
+          </view>
+          <view wx:if="{{item.role !== 'user'}}" class="reply-actions">
+            <button class="reply-action reply-action-copy" data-index="{{index}}" bindtap="copyReply" aria-label="复制回答"></button>
+            <button class="reply-action reply-action-delete" data-index="{{index}}" bindtap="deleteReply" aria-label="删除回答"></button>
+          </view>
+        </view>
+      </view>
+      <view wx:if="{{loading}}" class="thinking"><view class="thinking-dot"></view><text>ModaUI 正在思考…</text></view>
+      <view id="message-bottom" class="scroll-bottom"></view>
+    </view>
+  </scroll-view>
+
+  <scroll-view wx:elif="{{section === 'create'}}" class="section-scroll" scroll-y>
+    <view class="section-heading">
+      <text class="section-title">创作</text>
+    </view>
+    <view class="create-list">
+      <view wx:for="{{modes}}" wx:key="id" class="create-card {{item.unavailable ? 'create-card-disabled' : ''}}" data-mode="{{item.id}}" bindtap="selectMode">
+        <view class="feature-icon"><image src="{{item.icon}}" mode="aspectFit" /></view>
+        <view class="feature-copy"><text class="feature-title">{{item.title}}</text><text class="feature-description">{{item.description}}</text></view>
+        <text class="feature-arrow">›</text>
+      </view>
+    </view>
+  </scroll-view>
+
+  <scroll-view wx:elif="{{section === 'designs'}}" class="section-scroll" scroll-y>
+    <view class="section-heading">
+      <text class="section-title">我的作品</text>
+    </view>
+    <scroll-view class="filter-scroll" scroll-x>
+      <view class="filter-list">
+        <button wx:for="{{designFilters}}" wx:key="id" class="filter-chip {{designFilter === item.id ? 'filter-active' : ''}}" data-filter="{{item.id}}" bindtap="onDesignFilter">{{item.label}}</button>
+      </view>
+    </scroll-view>
+    <view wx:if="{{designsLoading}}" class="state-card">正在加载作品…</view>
+    <view wx:elif="{{designNotice}}" class="state-card state-error">{{designNotice}}<button class="retry-button" bindtap="loadDesigns">重试</button></view>
+    <view wx:elif="{{designs.length === 0}}" class="state-card">还没有作品，先从创作开始吧。</view>
+    <view wx:else class="design-grid">
+      <view wx:for="{{designs}}" wx:key="id" class="design-card" data-index="{{index}}" bindtap="openDesign">
+        <view class="design-image-placeholder"><text>RUDA</text><text wx:if="{{designLoadingId === item.id}}" class="thumbnail-loading">载入中</text></view>
+        <view class="design-meta"><text class="design-title">{{item.title}}</text><button class="favorite-button" data-index="{{index}}" catchtap="toggleFavorite">{{item.isFavorite ? '♥' : '♡'}}</button></view>
+      </view>
+    </view>
+  </scroll-view>
+
+  <scroll-view wx:elif="{{section === 'knowledge'}}" class="section-scroll knowledge-scroll" scroll-y>
+    <view class="section-heading">
+      <text class="section-title">店铺智库</text>
+      <text class="section-description">审核通过后才使用</text>
+    </view>
+    <view wx:if="{{knowledgeError}}" class="knowledge-notice knowledge-error">{{knowledgeError}}<button wx:if="{{!knowledgeFeatureDisabled}}" class="retry-button" bindtap="loadKnowledgeDocuments">重试</button></view>
+    <view wx:if="{{knowledgeNotice}}" class="knowledge-notice">{{knowledgeNotice}}</view>
+    <view wx:if="{{!knowledgeFeatureDisabled}}" class="knowledge-form">
+      <text class="knowledge-form-title">添加知识文档</text>
+      <input class="knowledge-input" value="{{knowledgeTitle}}" maxlength="240" placeholder="文档标题" bindinput="onKnowledgeTitleInput" />
+      <input class="knowledge-input" value="{{knowledgeSourceId}}" maxlength="160" placeholder="来源编号（可选，更新版本时可复用）" bindinput="onKnowledgeSourceInput" />
+      <picker range="{{knowledgeFormats}}" range-key="label" value="{{knowledgeFormatIndex}}" bindchange="onKnowledgeFormatChange">
+        <view class="knowledge-format">{{knowledgeFormats[knowledgeFormatIndex].label}}<text>⌄</text></view>
+      </picker>
+      <textarea class="knowledge-textarea" value="{{knowledgeContent}}" maxlength="524288" placeholder="粘贴已确认的商品说明、尺寸规则、店铺政策或常见问答…" bindinput="onKnowledgeContentInput" />
+      <text class="knowledge-footnote">最多 512 KB。聊天内容不会自动变成知识；审核通过前，AI 不会使用新资料。</text>
+      <button class="candidate-button knowledge-submit" loading="{{knowledgeBusy}}" disabled="{{knowledgeBusy || !knowledgeTitle || !knowledgeContent}}" bindtap="submitKnowledgeDocument">提交审核</button>
+    </view>
+    <view wx:if="{{!knowledgeFeatureDisabled}}" class="knowledge-list-heading"><text>知识文档</text><text>{{knowledgeDocuments.length}} / 100</text></view>
+    <view wx:if="{{knowledgeLoading && !knowledgeFeatureDisabled}}" class="state-card">正在读取知识库…</view>
+    <view wx:elif="{{!knowledgeFeatureDisabled && !knowledgeError && knowledgeDocuments.length === 0}}" class="state-card">还没有知识文档。添加并提交审核后，ModaUI 才能引用这些资料。</view>
+    <view wx:elif="{{!knowledgeFeatureDisabled && knowledgeDocuments.length > 0}}" class="knowledge-list">
+      <view wx:for="{{knowledgeDocuments}}" wx:key="id" class="knowledge-document" data-id="{{item.id}}" bindtap="openKnowledgeDocument">
+        <view class="knowledge-document-copy"><text class="knowledge-document-title">{{item.title}}</text><text class="knowledge-document-meta">版本 {{item.version}} · {{item.statusLabel}}</text></view>
+        <text class="feature-arrow">›</text>
+      </view>
+    </view>
+  </scroll-view>
+
+  <view wx:if="{{activeMode && section === 'chat'}}" class="mode-panel">
+    <view class="mode-heading">
+      <text class="mode-name">{{selectedMode.title}}</text>
+      <text wx:if="{{entitlements && activeMode === 'generate'}}" class="mode-quota">剩余 {{entitlements.remaining.imageGeneration}} 次</text>
+      <text wx:if="{{entitlements && activeMode === 'tryon'}}" class="mode-quota">剩余 {{entitlements.remaining.tryOn}} 次</text>
+      <button class="mode-close" bindtap="exitMode">关闭</button>
+    </view>
+    <view wx:if="{{activeMode === 'tryon'}}" class="tryon-panel">
+      <view class="tryon-images">
+        <view class="tryon-upload" data-field="person" bindtap="chooseTryOnImage">
+          <image wx:if="{{personPath}}" src="{{personPath}}" mode="aspectFill" />
+          <text wx:else>＋</text><label>人物照片</label>
+        </view>
+        <view class="tryon-upload" data-field="garment" bindtap="chooseTryOnImage">
+          <image wx:if="{{garmentPath}}" src="{{garmentPath}}" mode="aspectFill" />
+          <text wx:else>＋</text><label>服装图片</label>
+        </view>
+      </view>
+      <picker range="{{categories}}" range-key="label" value="{{categoryIndex}}" bindchange="onCategoryChange">
+        <view class="category-picker">{{categories[categoryIndex].label}}<text>⌄</text></view>
+      </picker>
+      <checkbox-group bindchange="onConsentChange"><label class="consent-label"><checkbox value="agree" checked="{{consent}}" color="#171717" />我同意将这两张图片发送给 AI 服务进行试衣处理</label></checkbox-group>
+    </view>
+    <view wx:if="{{activeMode === 'edit'}}" class="recolor-panel">
+      <view class="mode-hint">本机选区，原图不变</view>
+      <button class="recolor-upload-button" bindtap="chooseRecolorImage">{{recolorImageReady ? '更换服装图片' : '选择服装图片'}}</button>
+      <view wx:if="{{recolorImageReady}}" class="recolor-canvas-wrap" style="height: {{recolorCanvasHeight}}px;">
+        <canvas type="2d" id="recolor-source" class="recolor-canvas" style="height: {{recolorCanvasHeight}}px;" />
+        <canvas type="2d" id="recolor-mask" class="recolor-canvas recolor-mask" style="height: {{recolorCanvasHeight}}px;" bindtouchstart="onRecolorTouchStart" catchtouchmove="onRecolorTouchMove" bindtouchend="onRecolorTouchEnd" bindtouchcancel="onRecolorTouchEnd" />
+      </view>
+      <view wx:if="{{recolorImageReady}}" class="recolor-controls">
+        <view class="recolor-tool-row">
+          <button class="recolor-tool {{!recolorErasing ? 'recolor-tool-active' : ''}}" data-value="0" bindtap="setRecolorEraser">画笔</button>
+          <button class="recolor-tool {{recolorErasing ? 'recolor-tool-active' : ''}}" data-value="1" bindtap="setRecolorEraser">橡皮擦</button>
+          <button class="recolor-tool" bindtap="undoRecolorStroke">撤销</button>
+          <button class="recolor-tool" bindtap="clearRecolorSelection">清除选区</button>
+        </view>
+        <view class="recolor-brush-label">画笔大小　{{recolorBrushSize}}</view>
+        <slider min="8" max="100" step="2" value="{{recolorBrushSize}}" activeColor="#171717" backgroundColor="#e8e6e3" block-size="18" bindchanging="onRecolorBrushSizeChange" bindchange="onRecolorBrushSizeChange" />
+        <view class="recolor-color-label">换成哪种颜色</view>
+        <view class="recolor-color-list">
+          <button wx:for="{{recolorColors}}" wx:key="value" class="recolor-color {{recolorColor === item.value ? 'recolor-color-active' : ''}}" data-color="{{item.value}}" bindtap="selectRecolorColor">
+            <view class="recolor-color-dot" style="background-color: {{item.value}};" /><text>{{item.name}}</text>
+          </button>
+        </view>
+        <button class="candidate-button recolor-generate" loading="{{loading}}" disabled="{{loading || !recolorHasSelection}}" bindtap="generateRecolor">生成局部换色预览</button>
+        <text wx:if="{{recolorProgress}}" class="generation-progress">{{recolorProgress}}</text>
+        <text class="recolor-footnote">本地预览，保留纹理；保存前检查边缘。</text>
+      </view>
+    </view>
+    <view wx:if="{{activeMode === 'design'}}" class="mode-hint">确认需求后出方案</view>
+    <view wx:if="{{activeMode === 'design'}}" class="candidate-controls">
+      <text>概念图数量</text>
+      <picker range="{{candidateCounts}}" value="{{candidateCountIndex}}" bindchange="onCandidateCountChange"><view class="count-picker">{{candidateCounts[candidateCountIndex]}} 张　⌄</view></picker>
+      <button class="candidate-button" loading="{{loading}}" disabled="{{loading}}" bindtap="generateDesignCandidates">生成候选图</button>
+    </view>
+    <view wx:if="{{activeMode === 'generate'}}" class="mode-hint">需核对，不自动发布</view>
+    <view wx:if="{{activeMode === 'productLaunch'}}">
+      <view class="mode-hint">需核对，不自动发布</view>
+      <view class="candidate-controls"><text>商品图片数量</text><picker range="{{launchCounts}}" value="{{launchCountIndex}}" bindchange="onLaunchCountChange"><view class="count-picker">{{launchCounts[launchCountIndex]}} 张　⌄</view></picker></view>
+    </view>
+    <text wx:if="{{productLaunchProgress}}" class="generation-progress">{{productLaunchProgress}}</text>
+  </view>
+
+  <view wx:if="{{error}}" class="error-note">{{error}}</view>
+  <view wx:if="{{section === 'chat'}}" class="composer-dock">
+    <view wx:if="{{!activeMode && !toolsOpen}}" class="quick-actions">
+      <button wx:for="{{quickModes}}" wx:key="id" class="quick-action" data-mode="{{item.id}}" bindtap="selectMode">{{item.title}}</button>
+    </view>
+    <view wx:if="{{toolsOpen}}" class="tools-menu">
+      <button class="tool-option" data-section="create" bindtap="openSection">创作中心</button>
+      <button class="tool-option" data-section="designs" bindtap="openSection">我的作品</button>
+      <button wx:for="{{modes}}" wx:key="id" class="tool-option" data-mode="{{item.id}}" bindtap="selectMode">{{item.title}}</button>
+    </view>
+    <view class="composer">
+      <button class="composer-tool {{toolsOpen ? 'composer-tool-active' : ''}}" bindtap="toggleTools" aria-label="创作工具">
+        <text class="composer-plus">＋</text>
+      </button>
+      <textarea class="composer-input" value="{{input}}" placeholder="{{activeMode === 'tryon' ? '补充描述（可选）' : '询问 ModaUI'}}" placeholder-class="composer-placeholder" maxlength="500" auto-height adjust-position="{{true}}" bindinput="onInput" />
+      <button class="voice-button" bindtap="showVoiceNotice" aria-label="语音输入">
+        <view class="voice-glyph"><view class="voice-head"></view><view class="voice-stem"></view><view class="voice-base"></view></view>
+      </button>
+      <button class="send-button {{canSend && !loading ? 'send-button-active' : ''}}" bindtap="sendMessage" loading="{{loading}}" disabled="{{loading || (!canSend && activeMode !== 'tryon')}}" aria-label="发送消息">↑</button>
+    </view>
+    <button wx:if="{{navigationAvailable}}" class="nav-handle" bindtap="toggleNavigation" bindtouchstart="onNavTouchStart" catchtouchmove="onNavTouchMove" bindtouchend="onNavTouchEnd" bindtouchcancel="onNavTouchCancel" aria-label="{{navigationOpen ? '收起商家导航' : '展开商家导航'}}" aria-expanded="{{navigationOpen}}">
+      <view class="nav-handle-bar {{navigationOpen ? 'nav-handle-bar--open' : ''}}"></view>
+    </button>
+  </view>
+
+  <view wx:if="{{historyOpen}}" class="overlay" bindtap="closeOverlays">
+    <view class="drawer history-drawer" catchtap="stopPropagation">
+      <view class="drawer-heading"><text>聊天历史</text><button bindtap="toggleHistory">×</button></view>
+      <button class="drawer-primary" bindtap="startNewConversation">＋　新建对话</button>
+      <input class="history-search" value="{{historySearch}}" placeholder="搜索聊天" bindinput="onHistorySearch" />
+      <scroll-view class="history-list" scroll-y>
+        <view wx:for="{{filteredConversations}}" wx:key="id" class="history-item" data-id="{{item.id}}" bindtap="openConversation">
+          <text class="history-title">{{item.title}}</text><text class="history-meta">{{item.messageCount}} 条消息</text>
+        </view>
+        <text wx:if="{{filteredConversations.length === 0}}" class="history-empty">没有找到聊天记录</text>
+      </scroll-view>
+      <text class="drawer-footnote">聊天记录与网页商家端 ModaUI 共用</text>
+    </view>
+  </view>
+
+  <view wx:if="{{menuOpen}}" class="menu-backdrop" bindtap="closeOverlays">
+    <view class="menu-panel" style="top: calc({{statusBarHeight}}px + 120rpx);" catchtap="stopPropagation">
+      <view class="menu-group-label">对话</view>
+      <button class="menu-row" bindtap="startNewConversation">新建对话</button>
+      <button class="menu-row" bindtap="toggleHistory">历史对话</button>
+      <view class="menu-divider"></view>
+      <view class="menu-group-label">创作工具</view>
+      <button class="menu-row" data-section="create" bindtap="openSection">创作中心</button>
+      <button class="menu-row" data-section="designs" bindtap="openSection">我的作品</button>
+      <button class="menu-row" data-mode="edit" bindtap="selectMode">服装换色</button>
+      <button class="menu-row" data-mode="productLaunch" bindtap="selectMode">商业模特</button>
+      <view class="menu-divider"></view>
+      <view class="menu-group-label">其他</view>
+      <button class="menu-row" data-section="knowledge" bindtap="openSection">店铺知识库</button>
+      <button class="menu-row" bindtap="showPricing">套餐与额度</button>
+      <button class="menu-row menu-row-danger" bindtap="logout">退出登录</button>
+    </view>
+  </view>
+
+  <view wx:if="{{selectedKnowledgeDocument}}" class="overlay design-overlay" bindtap="closeKnowledgeDocument">
+    <view class="design-detail knowledge-detail" catchtap="stopPropagation">
+      <button class="detail-close" bindtap="closeKnowledgeDocument">×</button>
+      <text class="detail-title">{{selectedKnowledgeDocument.title}}</text>
+      <text class="knowledge-detail-meta">{{selectedKnowledgeDocument.statusLabel}} · 版本 {{selectedKnowledgeDocument.version}}</text>
+      <view wx:for="{{selectedKnowledgeDocument.chunks}}" wx:key="id" class="knowledge-chunk">{{item.content}}</view>
+      <view wx:if="{{selectedKnowledgeDocument.status === 'ingested'}}" class="knowledge-review-actions">
+        <button class="knowledge-review-button knowledge-review-reject" data-decision="reject" bindtap="reviewKnowledgeDocument" loading="{{knowledgeBusy}}" disabled="{{knowledgeBusy}}">拒绝</button>
+        <button class="knowledge-review-button knowledge-review-approve" data-decision="approve" bindtap="reviewKnowledgeDocument" loading="{{knowledgeBusy}}" disabled="{{knowledgeBusy}}">审核通过</button>
+      </view>
+      <button wx:if="{{selectedKnowledgeDocument.status === 'published'}}" class="knowledge-review-button knowledge-review-reject" bindtap="invalidateKnowledgeDocument" loading="{{knowledgeBusy}}" disabled="{{knowledgeBusy}}">将文档标记为失效</button>
+    </view>
+  </view>
+
+  <view wx:if="{{selectedDesign}}" class="overlay design-overlay" bindtap="closeDesign">
+    <view class="design-detail" catchtap="stopPropagation">
+      <button class="detail-close" bindtap="closeDesign">×</button>
+      <image src="{{selectedDesign.imageUrl}}" mode="widthFix" />
+      <text class="detail-title">{{selectedDesign.title}}</text>
+      <text class="detail-prompt">{{selectedDesign.prompt}}</text>
+    </view>
+  </view>
+
+  <view wx:if="{{modauiBlocked}}" class="modaui-blocked" catchtouchmove="stopPropagation">
+    <text class="modaui-blocked-title">该功能暂未开放</text>
+    <button class="modaui-blocked-back" bindtap="goBack">返回</button>
+  </view>
+</view>

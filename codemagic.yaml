@@ -1,0 +1,111 @@
+workflows:
+  merchant-ios-testflight:
+    name: RUDA Merchant iOS TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+    integrations:
+      app_store_connect: RUDA App Store Connect
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: fashion.ruda.merchant
+      groups:
+        - ruda_ios_testflight
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Restore protected iOS build configuration
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/fu"
+
+          : "${RUDA_IOS_BUILD_CONFIG:?Add the sanitized iOS env.props contents to the encrypted ruda_ios_testflight group}"
+          : "${RUDA_IOS_GOOGLE_SERVICE_INFO:?Add the merchant GoogleService-Info.plist contents to the encrypted ruda_ios_testflight group}"
+
+          mkdir -p configs
+          printf '%s\n' "$RUDA_IOS_BUILD_CONFIG" > configs/env.props
+          printf '%s\n' "$RUDA_IOS_GOOGLE_SERVICE_INFO" > configs/GoogleService-Info.plist
+
+          python3 - <<'PY'
+          import plistlib
+          from pathlib import Path
+
+          config = {}
+          for line in Path("configs/env.props").read_text().splitlines():
+              if line.strip() and not line.lstrip().startswith("#") and "=" in line:
+                  key, value = line.split("=", 1)
+                  config[key.strip()] = value.strip()
+
+          allowed = {
+              "adMobAppIdIos",
+              "appName",
+              "branchKeyLive",
+              "branchKeyTest",
+              "branchLiveAlternateLinkDomain",
+              "branchLiveLinkDomain",
+              "branchTestAlternateLinkDomain",
+              "branchTestLinkDomain",
+              "customScheme",
+              "envatoPurchaseCode",
+              "facebookAppId",
+              "facebookClientToken",
+              "facebookLoginProtocolScheme",
+              "fluxDynamicLinkHost",
+              "fluxDynamicLinkScheme",
+              "googleApiKeyIos",
+              "googleReversedClientId",
+              "iosApsEnvironment",
+              "iosAppGroups",
+              "iosBundleId",
+              "iosBundleIdFirebase",
+              "iosBundleIdOneSignal",
+              "iosMerchantId",
+              "websiteDomain",
+          }
+          if config.keys() - allowed:
+              raise SystemExit("RUDA_IOS_BUILD_CONFIG must contain only the allow-listed iOS keys.")
+          if allowed - config.keys():
+              raise SystemExit("RUDA_IOS_BUILD_CONFIG is missing required iOS keys.")
+
+          expected = {
+              "iosBundleId": "fashion.ruda.merchant",
+              "iosBundleIdFirebase": "fashion.ruda.merchant.FirebaseNotificationServiceExtension",
+              "iosBundleIdOneSignal": "fashion.ruda.merchant.onesignal",
+          }
+          if any(config.get(key) != value for key, value in expected.items()):
+              raise SystemExit("iOS build config must use the RUDA merchant bundle IDs.")
+          if config["iosApsEnvironment"] != "production":
+              raise SystemExit("App Store builds require iosApsEnvironment=production.")
+          if not config["iosAppGroups"] or not config["iosMerchantId"]:
+              raise SystemExit("Configure the merchant App Group and Apple Pay Merchant ID.")
+
+          with Path("configs/GoogleService-Info.plist").open("rb") as file:
+              firebase = plistlib.load(file)
+          if firebase.get("BUNDLE_ID") != expected["iosBundleId"]:
+              raise SystemExit("GoogleService-Info.plist must be registered for fashion.ruda.merchant.")
+          PY
+      - name: Install Flutter dependencies
+        script: |
+          cd "$CM_BUILD_DIR/fu"
+          flutter pub get
+      - name: Configure iOS code signing
+        script: |
+          cd "$CM_BUILD_DIR/fu"
+          xcode-project use-profiles --custom-export-options='{"testFlightInternalTestingOnly": true}'
+      - name: Build merchant IPA
+        script: |
+          cd "$CM_BUILD_DIR/fu"
+          flutter build ipa \
+            --release \
+            --dart-define=RUDA_APP=merchant \
+            --build-number="$BUILD_NUMBER" \
+            --export-method app-store
+    artifacts:
+      - fu/build/ios/ipa/*.ipa
+      - fu/build/ios/archive/*.xcarchive
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true

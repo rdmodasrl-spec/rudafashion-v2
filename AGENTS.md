@@ -290,7 +290,9 @@ RUDA 是持续扩展的多端、多商户产品。必须以当前仓库真实结
 
 ## 11.1 发布默认约定（用户 2026-10-29 确认）
 
-- 代码修改通过 `tsc`、`test:unit`、`build` 后**直接发布上线**，无需逐次征询；使用 `scripts/deploy-release.sh --confirm`。
+- **代码仓库唯一权威**：`rdmodasrl-spec/rudafashion-v2`（本地 `/home/moda/ruda-fashion-new`，分支 `main`）。
+- **每次改完代码必须立即提交并推送到该远程仓库**，不得只留在本地工作区。
+- 推送后通过 `tsc`、`test:unit`、`build` 即**直接发布上线**，无需逐次征询；使用 `scripts/deploy-release.sh --confirm`。
 - 只重启 `ruda-fashion`（`pm2 startOrRestart ... --only ruda-fashion`），不得被同文件内已停用的其它应用阻塞。
 - 破坏性数据库变更（删列、改类型、数据重写）仍需先给出回滚方案并取得确认。
 

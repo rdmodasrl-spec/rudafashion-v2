@@ -119,6 +119,7 @@
 
 ## 默认发布约定（2026-10-29 用户确认）
 
+- **代码改动一律提交并推送到 `rdmodasrl-spec/rudafashion-v2` 的 `main`**，不允许只留在本地。
 - **每次代码改好并通过 `tsc` + `test:unit` + `build` 后，直接部署上线**，不再逐次询问。
 - 必须走 `bash scripts/deploy-release.sh --confirm`：备份 → `prisma generate` → `migrate deploy` → `build` → `pm2 startOrRestart --only ruda-fashion` → `smoke:post-deploy`。
 - 只重启 `ruda-fashion`。`ecosystem.config.cjs` 里的 `openmontage-backlot` 依赖一个不存在的 Python venv，属既有问题，不得因它中断发布。

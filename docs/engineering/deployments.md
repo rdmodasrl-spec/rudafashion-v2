@@ -105,3 +105,14 @@
 4. 如果前面还有 CDN 或其他代理，把 `TRUST_PROXY_HOPS` 设为实际代理层数（1-5，默认 1），否则 `req.ip` 只会取到上一跳地址；非法值会被忽略并回退到 1，同时打印 `[security] Ignoring invalid TRUST_PROXY_HOPS=...`。
 5. 相关实现：`src/server/clientIp.ts`（取址）、`src/server/adminIpAllowlist.ts`（白名单解析与匹配）、`src/server/trustedProxy.ts`（跳数解析）、`server.ts`（`trust proxy` 设置与 `requireAdminAuth`）。
 
+
+## 发布闸门与本次新增迁移（2026-10-29）
+
+- 发布脚本：`scripts/deploy-release.sh`（`--dry-run` 预检 / `--confirm` 执行）。
+- 顺序：数据库预发布备份 → `prisma migrate deploy` → `npm run build` → `pm2 startOrRestart ecosystem.config.js` → `smoke:post-deploy`。
+- 本次待应用迁移：
+  - `20261029120000_consumer_account_closure`：新增 `ConsumerWishlistItem` 表、`Order.consumerId` 列与索引。
+  - `20261029230000_notification_business_status`：新增 `NotificationEvent.businessStatus` 列与索引。
+- 两条迁移都是**只增结构**，旧代码可继续运行；回滚脚本末尾有逆向 SQL。
+- 发布前必须确认 `prisma migrate status` 只列出这两条，且已安排维护窗口。
+- 生产发布需要显式授权：脚本在无 `--confirm` 时不会改动任何数据。

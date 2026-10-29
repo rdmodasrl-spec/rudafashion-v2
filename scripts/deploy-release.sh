@@ -29,6 +29,18 @@ PM2_BIN="$(command -v pm2 || true)"
 if [[ -z "$PM2_BIN" && -x node_modules/.bin/pm2 ]]; then PM2_BIN="node_modules/.bin/pm2"; fi
 [[ -n "$PM2_BIN" ]] || die "未找到 pm2（npm i -D pm2 或全局安装）"
 
+log "0/6 同步权威仓库 rdmodasrl-spec/rudafashion-v2（main）"
+if [[ -d .git ]] && git remote get-url v2 >/dev/null 2>&1; then
+  if [[ -n "$(git status --porcelain)" ]]; then
+    die "生产目录存在未提交改动，请先处理后再发布（避免覆盖线上手工修改）"
+  fi
+  git fetch v2 --quiet
+  git reset --hard v2/main >/dev/null
+  log "已切换到 $(git --no-pager log --oneline -1)"
+else
+  log "未配置 v2 远程，跳过同步（沿用当前工作区代码）"
+fi
+
 log "1/6 预检：工作区状态"
 status_file="$(mktemp)"
 git status --porcelain >"$status_file" 2>/dev/null || true
@@ -46,6 +58,7 @@ fi
 if [[ "$mode" == "--dry-run" ]]; then
   cat <<'PLAN'
 [deploy][dry-run] 将依次执行：
+  1/6 预检（含待应用迁移）
   2/6 npm run db:backup:predeploy      （预发布数据库备份）
   3/6 npx prisma migrate deploy        （仅新增结构，向后兼容）
   4/6 npm run build                    （vite + esbuild server.cjs）

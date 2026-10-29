@@ -1,6 +1,6 @@
 # 生态应用商店（Ecosystem App Store）
 
-- 状态：部分完成（平台后台与商家 Web/手机端已修复并隔离环境验证；生产部署与小程序发布待确认）
+- 状态：已完成（平台后台与商家 Web/手机端已修复，隔离环境 + 生产环境均验证；商家小程序本次未改、未发布）
 - 归属运行面：平台总后台（Web/手机共用组件）、商家电脑 Web、商家手机 Web
 - 权威数据源：PostgreSQL `App` / `AppCategory` / `AppVersion` / `AppInstallation`（Prisma）
 - 服务端：`src/server/appStore*.ts`、`server.ts` 内 `/api/admin/apps*`、`/api/merchant/apps*`
@@ -116,7 +116,16 @@ if (appsData.error) throw new Error(appsData.error);   // ← error 是对象
 | 平台后台 `_count.installations` | 1（与商家端一致） |
 | 页面运行时报错 | 0 |
 
-截图：`docs/engineering/evidence/app-store/01..06.png`。
+截图：`docs/engineering/evidence/app-store/01..06.png`（隔离环境，含强制失败的错误面板 `07`、重试恢复 `08`），`09/10` 为生产后台实拍。
+
+## 7.1 生产上线记录
+
+- 提交：`7bc109a`（代码）、`aebd72d`（发布脏检查排除构建产物）、`ec9914d`（审计文档归档）。
+- 迁移：`20261029234500_app_installation_updated_at` 已随 `deploy-release.sh` 在生产 `xversal` 库应用，`prisma migrate status` 显示 158 个迁移、`Database schema is up to date`。
+- 生产库核对：应用 2 个（`ruda-production-chain` 已上架、`ruda-business-email` 已上架），分类 9 个，安装记录 0 条；未新增任何应用或演示数据。
+- 生产实拍：平台后台「生态应用」正常渲染 2 个应用，无 `[object Object]`、无加载失败面板。
+- 生产包核对：`merchant-admin-web` 含 `#merchant-sidebar-tab-app-store`，`merchant-admin-mobile` 含「安装与管理应用」，`platform-admin-web` 含错误面板文案。
+- 生产入口实拍限制：生产未开启七行业一键演示登录（`DEMO_LOGIN_UNAVAILABLE`），商家账号口令不可代用，因此商家 Web/手机入口的实拍来自隔离环境（同一提交构建）；生产以构建产物内容核对为证据，待商家自行登录验收。
 
 ## 8. 已知缺口
 

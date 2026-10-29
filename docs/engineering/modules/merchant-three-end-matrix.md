@@ -38,7 +38,7 @@
 | 七行业演示登录入口 | 共用旧版 `MerchantLogin`；`industryDemo=001..007` 直达固定行业 | 同 Web，沿用旧版手机登录布局 | 未新增演示入口 | Web/Mobile 使用共享编号映射与现有演示 API，自动登录固定 `demo-industry-*` 商家；不传密码/令牌/商家 ID。页面布局不变；直达 URL 的会话切换、七账号密码登录与正式/演示隔离待本轮隔离实测及生产核验 |
 | 小程序 POS 销售明细/退货/现金流水/历史班次 | Web 有 | Mobile 有 | 代码补齐，运行待验收 | 复用 `/api/merchant/pos/*` 现有接口，已有销售详情/复制小票/退货确认和退款/现金收支/班次历史及详情；退货库存和现金账由服务端事务核算。微信开发者工具实际运行和门店权限验收仍待完成 |
 | 客户列表/资料/备注 | 有 | 有 | 只读/部分 | 客户编辑未在全部端对等，标“部分” |
-| 生态应用商店 | 有（左侧主导航一级「应用商店」，位于「系统设置」上方） | 有（「更多」菜单「应用商店」，底部 Tab 不变） | 缺失（本次未改导航、未发布） | Web/手机共用 `MerchantAppStore` 与 `/api/merchant/apps*`；隔离环境验证安装→启用→停用闭环与平台后台计数一致；详见 [ecosystem-app-store.md](./ecosystem-app-store.md) |
+| 生态应用商店 | 有（左侧主导航一级「应用商店」，位于「系统设置」上方；生产已上线 `ec9914d`） | 有（「更多」菜单「应用商店」，底部 Tab 不变；生产已上线） | 缺失（本次未改导航、未发布） | Web/手机共用 `MerchantAppStore` 与 `/api/merchant/apps*`；隔离环境验证安装→启用→停用闭环与平台后台计数一致；生产入口以构建产物核对为准（演示登录在生产关闭）；详见 [ecosystem-app-store.md](./ecosystem-app-store.md) |
 | 客户停用/启用 | 待接入（沿用资料编辑，不含停用） | 待接入 | 有 | 本轮新增 `PATCH /api/merchant/customers/:id/status`，只改 `MerchantCustomerLink.status`（不影响平台 KYC）；隔离库实测幂等、跨租户 404、无权限 403 |
 | 通知业务处理状态 | 有（`businessStatus`） | 有 | 有（已处理/待处理筛选） | 本轮新增 `NotificationEvent.businessStatus` 与 `POST /api/merchant/notifications/:id/resolve`；按商家收件邮箱隔离，幂等 |
 | 往来单位（客户/供应商档案） | 组件存在但未挂载 | 未挂载 | 有 | 本轮新增 `GET/POST/PATCH /api/merchant/counterparties`，租户隔离 + 重名 409；Web 组件仍待决定挂载或删除 |

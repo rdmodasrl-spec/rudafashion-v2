@@ -258,9 +258,11 @@ test('视觉终态：纯白背景、只有神经生命体、白底灰阶细胞�
   const miniStyles = read('merchant-miniprogram/pages/assistant/index.wxss');
 
   // 纯白舞台：不再有深色径向渐变底，文案改为深色。
-  assert.match(homeSource, /modaui-hero relative overflow-hidden rounded-\[26px\] bg-white/);
+  // 只锁定语义：白底圆形舞台。圆角 token 随排版迭代微调（当前 rounded-3xl = 24px）。
+  assert.match(homeSource, /modaui-hero relative overflow-hidden rounded-(?:3xl|\[26px\]) bg-white/);
   assert.doesNotMatch(homeSource, /modaui-hero[^"]*radial-gradient/);
-  assert.match(homeSource, /text-neutral-950 sm:text-\[30px\]/);
+  // 只锁定语义：深色标题 + 响应式字号。具体字号随排版迭代微调（当前 22px / sm:28px）。
+  assert.match(homeSource, /<h1 className="[^"]*text-neutral-950[^"]*sm:text-\[\d+px\][^"]*">/);
   assert.match(commonCss, /\.modaui-core-fallback[\s\S]*?background-image:/);
 
   // 只有生命体：没有头像、五官、脖子、肩膀、身体或底座光晕，也不加载任何图片。

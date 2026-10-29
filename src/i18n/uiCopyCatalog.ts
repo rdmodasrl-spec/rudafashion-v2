@@ -1220,6 +1220,7 @@ const UI_COPY_SOURCE_PAIRS: ReadonlyArray<{ zh: string; it: string }> = [
   { zh: "家", it: "partner" },
   { zh: "该分区暂时没有批发商。", it: "Nessun produttore in questa zona." },
   { zh: "演示商家", it: "Demo showroom" },
+  { zh: "演示商家暂不可用，请稍后重试。", it: "Demo non disponibile. Riprova più tardi." },
   { zh: "认证源头工坊", it: "Atelier Certificato" },
   { zh: "主营品类：", it: "Specialità: " },
   { zh: "进入店铺", it: "Enter showroom" },

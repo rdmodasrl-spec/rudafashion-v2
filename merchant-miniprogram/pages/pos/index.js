@@ -254,15 +254,16 @@ Page({
   copySaleReceipt() {
     const sale = this.data.selectedSale;
     if (!sale) return;
+    const itemLines = (sale.items || []).map(item => `${item.productName} ${item.sku} × ${item.quantity} · € ${item.unitPrice}`);
     const lines = [
       `RUDA 收银小票`,
       `单号：${sale.saleNo}`,
       `时间：${sale.createdAt}`,
-      sale.storeName ? `门店：${sale.storeName}` : '',
-      ...(sale.items || []).map(item => `${item.productName} ${item.sku} × ${item.quantity} · € ${item.unitPrice}`),
+      sale.storeName ? `门店：${sale.storeName}` : ''
+    ].concat(itemLines, [
       `实收：€ ${sale.totalLabel}`,
       `已退款：€ ${sale.refundedLabel}`
-    ].filter(Boolean);
+    ]).filter(Boolean);
     wx.setClipboardData({
       data: lines.join('\n'),
       success: () => wx.showToast({ title: '小票已复制', icon: 'success' }),

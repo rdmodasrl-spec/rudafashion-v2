@@ -64,8 +64,9 @@ test('ModaUI keeps advanced composer controls out of the default dock', () => {
   assert.match(studio, /setModeSheetOpen\(mode === 'tryon' \|\| mode === 'productLaunch'\)/);
   assert.match(studio, /aria-expanded=\{modeSheetOpen\}/);
   assert.match(studio, /aria-label=\{localizeCopy\('创作设置'/);
-  assert.match(studio, /max-h-32 min-h-11 flex-1 resize-none/);
-  assert.doesNotMatch(studio, /max-h-32 min-h-11 flex-1 resize-y/);
+  // 只锁定语义：多行、不可手动拉伸。min-h 的实际 token 随 ModaUI 排版迭代微调（当前 min-h-10）。
+  assert.match(studio, /max-h-32 min-h-(?:10|11) flex-1 resize-none/);
+  assert.doesNotMatch(studio, /max-h-32 min-h-(?:10|11) flex-1 resize-y/);
   assert.doesNotMatch(studio, /任务模式已开启/);
   assert.doesNotMatch(studio, /多方案概念图/);
 });

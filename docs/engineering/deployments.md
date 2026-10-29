@@ -126,3 +126,21 @@
 - 只重启 `ruda-fashion`。`ecosystem.config.cjs` 里的 `openmontage-backlot` 依赖一个不存在的 Python venv，属既有问题，不得因它中断发布。
 - 发布后必须核对：`pm2 status` 显示 online、`/api/products` 返回 200、目标接口返回预期状态码、`smoke:post-deploy` 通过。
 - 迁移若为破坏性（删列/改类型），仍必须先说明回滚方案再执行。
+
+## 自动化保护网（2026-10-29）
+
+| 环节 | 命令 | 作用 |
+|---|---|---|
+| 一键同步 | `npm run sync -- "说明"` | 类型检查 → 单元测试 → 构建 → 提交 → 推送 `origin/main` |
+| 一键同步并上线 | `npm run sync -- "说明" -- --deploy` | 上面全部 + 生产目录自同步 + 迁移 + 重启 + 冒烟 |
+| 推送闸门 | `npm run hooks:install`（已启用） | `pre-push` 钩子跑 `tsc` + `test:unit`，失败则阻止推送 |
+| 发布自动回滚 | 内置 | 冒烟失败自动回到上一提交、重建、重启、再冒烟；仍失败则告警人工介入 |
+| 发布历史 | `npm run rollback -- --list` | 每次发布记录 `release/deploy-history/YYYYMM.jsonl`（from/to/结果） |
+| 手动回滚 | `npm run rollback` 或 `npm run rollback -- <commit>` | 回到上次成功发布或指定提交，重建+重启+冒烟 |
+| 仓库备份 | `npm run backup` | 全历史 bundle 到 `~/ruda-git-backup`，保留最近 14 份 |
+| 定时备份 | `npm run backup -- --install-cron`（已安装） | 每天 03:30 自动备份一次 |
+
+安全边界：
+- 迁移只增结构时可直接上线；**破坏性迁移**（删列/改类型/数据重写）必须先给出回滚方案并取得确认。
+- 出现密钥文件（`.env`/`*.pem`/`*.key`）会被 sync 脚本中止；`.env` 与数据库备份始终被 `.gitignore` 排除。
+- 生产目录存在未提交改动时，发布脚本拒绝执行，避免覆盖线上手工修改。

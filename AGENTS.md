@@ -293,9 +293,12 @@ RUDA 是持续扩展的多端、多商户产品。必须以当前仓库真实结
 - **代码仓库唯一权威**：`rdmodasrl-spec/rudafashion-v2`（本地 `/home/moda/ruda-fashion-new`，分支 `main`）。
 - **每次改完代码必须立即提交并推送到该远程仓库**，不得只留在本地工作区。
 - 推送后通过 `tsc`、`test:unit`、`build` 即**直接发布上线**，无需逐次征询。
-- 标准命令（二选一）：
+- 标准命令：
   - 一条命令完成「校验 → 提交 → 推送 → 上线」：`npm run sync -- "改了什么" -- --deploy`
-  - 仅同步仓库：`npm run sync -- "改了什么"`；仅发布：`bash scripts/deploy-release.sh --confirm`
+  - 仅同步仓库：`npm run sync -- "改了什么"`
+  - 回滚：`npm run rollback -- --list` 查看历史，`npm run rollback` 回到上次成功发布
+  - 备份：`npm run backup`（每日 03:30 已由 cron 自动执行，保留 14 份）
+- 自动化保护：`pre-push` 钩子跑 `tsc` + `test:unit`，失败不得推送；发布冒烟失败自动回滚到上一提交。
 - 只重启 `ruda-fashion`（`pm2 startOrRestart ... --only ruda-fashion`），不得被同文件内已停用的其它应用阻塞。
 - 破坏性数据库变更（删列、改类型、数据重写）仍需先给出回滚方案并取得确认。
 

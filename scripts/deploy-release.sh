@@ -29,6 +29,10 @@ PM2_BIN="$(command -v pm2 || true)"
 if [[ -z "$PM2_BIN" && -x node_modules/.bin/pm2 ]]; then PM2_BIN="node_modules/.bin/pm2"; fi
 [[ -n "$PM2_BIN" ]] || die "未找到 pm2（npm i -D pm2 或全局安装）"
 
+PREV_COMMIT="$(git rev-parse HEAD 2>/dev/null || true)"
+HISTORY_DIR="release/deploy-history"
+mkdir -p "$HISTORY_DIR"
+
 log "0/6 同步权威仓库 rdmodasrl-spec/rudafashion-v2（main）"
 if [[ -d .git ]] && git remote get-url v2 >/dev/null 2>&1; then
   if [[ -n "$(git status --porcelain)" ]]; then
@@ -40,6 +44,7 @@ if [[ -d .git ]] && git remote get-url v2 >/dev/null 2>&1; then
 else
   log "未配置 v2 远程，跳过同步（沿用当前工作区代码）"
 fi
+CURRENT_COMMIT="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
 
 log "1/6 预检：工作区状态"
 status_file="$(mktemp)"
@@ -91,7 +96,32 @@ if ! "$PM2_BIN" jlist 2>/dev/null | grep -q '"name":"ruda-fashion","namespace":"
 fi
 
 log "6/6 冒烟"
-SMOKE_BASE_URL="${SMOKE_BASE_URL:-https://modaui.com}" npm run smoke:post-deploy
+record_history() {
+  printf '{"at":"%s","from":"%s","to":"%s","result":"%s"}\n' \
+    "$(date -Iseconds)" "${PREV_COMMIT:-none}" "${CURRENT_COMMIT:-unknown}" "$1" \
+    >>"$HISTORY_DIR/$(date +%Y%m).jsonl"
+}
+if ! SMOKE_BASE_URL="${SMOKE_BASE_URL:-https://modaui.com}" npm run smoke:post-deploy; then
+  record_history "smoke-failed"
+  if [[ -n "$PREV_COMMIT" && "$PREV_COMMIT" != "$CURRENT_COMMIT" ]]; then
+    echo "[deploy][rollback] 冒烟失败，自动回滚到 $PREV_COMMIT" >&2
+    git reset --hard "$PREV_COMMIT" >/dev/null
+    npx prisma generate >/dev/null 2>&1 || true
+    npm run build >/dev/null 2>&1 || echo "[deploy][rollback] 回滚构建失败，需人工介入" >&2
+    "$PM2_BIN" startOrRestart ecosystem.config.cjs --only ruda-fashion --update-env >/dev/null 2>&1 || true
+    "$PM2_BIN" save >/dev/null 2>&1 || true
+    sleep 5
+    if SMOKE_BASE_URL="${SMOKE_BASE_URL:-https://modaui.com}" npm run smoke:post-deploy; then
+      echo "[deploy][rollback] 已回滚并恢复服务（$PREV_COMMIT）" >&2
+    else
+      echo "[deploy][rollback][critical] 回滚后冒烟仍失败，请立即人工检查" >&2
+    fi
+    record_history "rolled-back"
+    exit 1
+  fi
+  die "冒烟失败且无可回滚的历史版本"
+fi
+record_history "success"
 
 cat <<'ROLLBACK'
 

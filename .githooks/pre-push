@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# 推送前闸门：类型检查 + 单元测试。失败则阻止推送，避免把坏代码推到远端。
+# 紧急跳过：RUDA_SKIP_HOOKS=1 git push ...
+set -euo pipefail
+
+if [[ "${RUDA_SKIP_HOOKS:-}" == "1" ]]; then
+  echo "[pre-push] 已通过 RUDA_SKIP_HOOKS=1 跳过检查"
+  exit 0
+fi
+[[ -f package.json ]] || exit 0
+
+echo "[pre-push] npx tsc --noEmit"
+npx tsc --noEmit
+
+echo "[pre-push] npm run test:unit"
+log_file="$(mktemp)"
+if ! npm run test:unit >"$log_file" 2>&1; then
+  tail -40 "$log_file" >&2
+  rm -f "$log_file"
+  echo "[pre-push] 单元测试失败，推送已阻止（确认无风险可用 RUDA_SKIP_HOOKS=1 跳过）" >&2
+  exit 1
+fi
+grep -E '^# (tests|pass|fail)' "$log_file" || true
+rm -f "$log_file"
+echo "[pre-push] 检查通过"

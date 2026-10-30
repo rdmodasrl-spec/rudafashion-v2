@@ -439,7 +439,8 @@ export function resolveAiToolAccess(input: {
       continue;
     }
     if (!usableInstallationStatuses.has(app.installationStatus ?? '')) {
-      denyAll('app_not_installed');
+      // 有安装记录但状态为 disabled/paused 时属于「应用已停用」；完全没有安装记录才是「未安装」。
+      denyAll(app.installationStatus ? 'app_disabled' : 'app_not_installed');
       continue;
     }
     for (const tool of manifest.tools) {

@@ -1,6 +1,6 @@
 # MODAUI AI TOOLS PLATFORM —— 专业 AI 创作与营销平台（协议、门禁与能力范围）
 
-> **文档状态**：v0.2。协议与门禁（P0）已实施并验证；专业工作中心（图片/视频/语音/发布/分析）为**规划**，未接通前不提供任何入口或假结果。
+> **文档状态**：v0.3。协议与门禁（P0）已实施、已上线并在生产完成真实调用验证；专业工作中心（图片/视频/语音/发布/分析）为**规划**，未接通前不提供任何入口或假结果。
 > **基线日期**：2026-10-30。**代码基线**：分支 `main`。
 > **适用范围**：MODAUI / ModaGPT 商家侧 AI 能力、App Store 安装机制、工具执行、计费与租户隔离。
 > **不适用范围**：已冻结的服装生产批发、服装批发行业 AI 行为（只允许"不改变行为地"接入本协议）。
@@ -486,9 +486,26 @@ resolveMerchantToolset({
 | 4 | 商家 A 的授权对商家 B 不可见 | 已完成（`MerchantToolGrant` 唯一键 `(merchantId, toolId)` + 按商家查询测试） |
 | 5 | 未安装应用的工具从运行时工具集剔除，核心工具保留 | 已完成（`removeBlockedToolDefinitions` + 执行器接入） |
 | 6 | Manifest 保存冲突（跨应用同一 toolId）不写入并保留上一版 | 已完成 |
-| 7 | `tsc` 0 错误；`tests/ai-tools-manifest.test.ts` 13 项通过 | 已完成（见交付记录） |
-| 8 | 商家安装后真实调用两个工具并返回模型结果 | **待验证**（需线上凭据与真实商家；单测只覆盖契约与门禁） |
+| 7 | `tsc` 0 错误；`npm run test:unit` 1180 项通过（含本模块 13 项） | 已完成（2026-10-30 发布前实测） |
+| 8 | 商家安装后真实调用两个工具并返回模型结果 | **已完成**（2026-10-30 生产实测，见下） |
 | 9 | 图片/视频/发布中心 | **未接通**（无供应商凭据，不提供入口） |
+
+**P0 生产实测记录（2026-10-30，`https://modaui.com`，演示商家 `demo-industry-apparel-production`，命令 `npm run smoke:ai-tools`）**
+
+| 步骤 | 请求 | 实测结果 |
+|---|---|---|
+| 1 | `GET /api/merchant/ai-tools`（未安装） | 200，可用工具 0 个 |
+| 2 | `POST /api/app-store/installations {appId:'modaui-ai-tools'}` | 201，安装版本 1.0.0 |
+| 3 | `GET /api/merchant/ai-tools`（已安装） | 200，`ai_tools_write_copy`、`ai_tools_translate` 均 `available` |
+| 4 | `POST /api/merchant/ai-tools/ai_tools_write_copy/invoke` | 200，返回真实模型文案（标题「自然优雅，初夏通勤优选」+ 正文 + 3 个话题标签） |
+| 5 | `POST /api/merchant/ai-tools/ai_tools_translate/invoke` | 200，返回真实意大利语译文 |
+| 6 | `POST /api/app-store/installations/modaui-ai-tools/disable` | 200，工具全部转为 `blocked`（原因 `app_disabled`） |
+| 7 | 停用后再次 `invoke` | 403 `AI_TOOL_NOT_AVAILABLE`（`reason: app_disabled`），核心 MODAGPT 聊天不受影响 |
+| 8 | `enable` → `GET` | 200，两个工具恢复 `available` |
+| 9 | `DELETE /api/app-store/installations/modaui-ai-tools` | 200，工具清单归 0，`MerchantToolGrant` 全部 `revoked` |
+
+> 该记录证明 P0 的「安装—调用—停用—恢复—卸载」是真实闭环，不是接口名占位。图片/视频/发布仍为未接通，不在本记录范围内。
+
 
 
 ### P1｜付费与额度
@@ -587,5 +604,6 @@ grep -n "model App\b" -A 40 prisma/schema.prisma                           # App
 |---|---|---|---|
 | 2026-10-30 | v0.1 | 初版：只读审计 + Tool Manifest v1 协议 + 分阶段计划 | 未写任何功能代码；P0 需评审通过后才实施 |
 | 2026-10-30 | v0.2 | 产品定位升级为专业 AI 创作与营销平台；新增 §1.1 六个工作中心、§1.2 能力状态矩阵、§1.3 Provider Adapter 契约与自动路由；P0 协议与门禁已实施（Manifest v1、7 天试用授权、安装/停用/卸载联动、运行时门禁、管理端与商家端接口、2 个真实工具）；P4 改为按闭环交付 | 未接通能力（图片/视频/语音/发布/分析）明确标记，不提供入口；核心 MODAGPT 工具不注册到本应用 |
+| 2026-10-30 | v0.3 | 上线生产（提交 `bf6d3acc`，迁移已应用，App Store 已种入 `modaui-ai-tools`）；新增 `npm run smoke:ai-tools` 生产闭环冒烟；停用应用的拒绝原因细分为 `app_disabled`（有安装记录但停用）与 `app_not_installed`（无安装记录） | 生产实测已完成第 8 项验收；图片/视频/发布仍为未接通，等供应商凭据 |
 
 **维护要求**：实施 P0 时，必须同步更新本文 §2（现状）与模块登记表 `modaui-ai-tools-platform` 行；代码与本文不一致时以代码为准并立即修正本文，不得让设计文档停留在旧行为。

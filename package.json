@@ -35,6 +35,7 @@
     "test:e2e": "bash scripts/test-pos-e2e-isolated.sh",
     "test:e2e:seed": "bash scripts/test-pos-e2e-isolated.sh --seed-only",
     "smoke:post-deploy": "tsx scripts/post-deploy-smoke.ts",
+    "smoke:ai-tools": "tsx scripts/ai-tools-smoke.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",

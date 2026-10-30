@@ -157,6 +157,14 @@ test('uninstalled, disabled, paused and expired grants block only the app tools'
   assert.deepEqual(notInstalled.blockedToolIds, ['ai_tools_write_copy']);
   assert.equal(notInstalled.denied[0].reason, 'app_not_installed');
 
+  const disabledInstallation = resolveAiToolAccess({
+    apps: [{ ...baseApp, installationStatus: 'disabled' }],
+    actorPermissions: permissions,
+    now
+  });
+  assert.deepEqual(disabledInstallation.allowedToolIds, []);
+  assert.equal(disabledInstallation.denied[0].reason, 'app_disabled');
+
   const active = resolveAiToolAccess({
     apps: [{ ...baseApp, installationStatus: 'active' }],
     actorPermissions: permissions,

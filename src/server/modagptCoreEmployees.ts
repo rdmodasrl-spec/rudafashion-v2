@@ -1,5 +1,6 @@
 import type { ModaGptAgentRole } from './modagptRuntime';
 import type { MerchantIndustry } from '../constants/merchantIndustries';
+import type { MerchantIndustryTemplateId } from '../constants/merchantIndustryTemplates';
 
 export type ModaGptIndustry =
   | MerchantIndustry
@@ -37,6 +38,63 @@ export type ModaGptIndustryPack = {
     status: 'pilot';
   }>;
 };
+
+export type ModaGptIndustryTemplateAssistantProfile = {
+  templateId: MerchantIndustryTemplateId;
+  agentId: ModaGptAgentRole;
+  displayName: string;
+  skills: readonly string[];
+  tools: readonly [string];
+  knowledgeTags: readonly string[];
+  intentPattern: RegExp;
+};
+
+const templateAssistantProfiles: Partial<Record<MerchantIndustryTemplateId, ModaGptIndustryTemplateAssistantProfile>> = {
+  department_wholesale: {
+    templateId: 'department_wholesale',
+    agentId: 'business-manager',
+    displayName: '百货批发商品资料分析助手',
+    skills: ['assortment_data_quality', 'packaging_and_unit_analysis', 'barcode_catalog_review'],
+    tools: ['department_wholesale_catalog_analysis'],
+    knowledgeTags: ['department_wholesale', 'packaging', 'units', 'barcode', 'assortment'],
+    intentPattern: /(?:百货.{0,12}(?:商品|包装|规格|单位|目录)|商品.{0,12}(?:包装规格|计量单位|资料完整)|包装规格|计量单位|混批资料|条码资料)/i
+  },
+  bags_wholesale: {
+    templateId: 'bags_wholesale',
+    agentId: 'business-manager',
+    displayName: '箱包商品资料分析助手',
+    skills: ['bag_material_and_dimension_review', 'sku_catalog_quality', 'wholesale_assortment_analysis'],
+    tools: ['bags_wholesale_catalog_analysis'],
+    knowledgeTags: ['bags', 'leather_goods', 'materials', 'dimensions', 'capacity', 'sku'],
+    intentPattern: /(?:箱包|手袋|皮具|包袋).{0,24}(?:分析|材质|尺寸|容量|SKU|商品资料|目录)|(?:材质|尺寸|容量).{0,16}(?:箱包|手袋|皮具|包袋)|箱包商品资料/i
+  },
+  department_chain_retail: {
+    templateId: 'department_chain_retail',
+    agentId: 'business-manager',
+    displayName: '百货连锁门店经营分析助手',
+    skills: ['multi_store_performance', 'store_stock_distribution', 'transfer_recommendation'],
+    tools: ['department_chain_store_analysis'],
+    knowledgeTags: ['department_chain_retail', 'stores', 'pos', 'store_stock', 'transfer'],
+    intentPattern: /(?:门店|分店|连锁|跨店|调拨建议).{0,24}(?:分析|销售|库存|补货|表现|对比|建议)?|(?:分析|比较|对比).{0,20}(?:门店|分店|连锁)|门店.{0,12}调拨/i
+  },
+  general_retail: {
+    templateId: 'general_retail',
+    agentId: 'business-manager',
+    displayName: '综合零售 POS 经营分析助手',
+    skills: ['pos_sales_analysis', 'barcode_catalog_quality', 'retail_replenishment_review'],
+    tools: ['general_retail_pos_analysis'],
+    knowledgeTags: ['general_retail', 'pos', 'barcode', 'sales', 'replenishment'],
+    intentPattern: /(?:POS|收银|条码|零售).{0,24}(?:分析|销售|商品|补货|表现|经营)?|(?:分析|查看).{0,20}(?:零售销售|收银|条码)|零售.{0,12}(?:补货|销售)/i
+  }
+};
+
+export function getModaGptIndustryTemplateAssistantProfile(
+  templateId: unknown
+): ModaGptIndustryTemplateAssistantProfile | null {
+  if (typeof templateId !== 'string'
+    || !Object.prototype.hasOwnProperty.call(templateAssistantProfiles, templateId)) return null;
+  return templateAssistantProfiles[templateId as MerchantIndustryTemplateId] || null;
+}
 
 const coreAgentRoles: readonly ModaGptAgentRole[] = [
   'business-manager',

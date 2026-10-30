@@ -62,7 +62,15 @@ import {
   setAppToolGrantState,
   setMerchantToolGrantStatus
 } from './src/server/aiToolRegistry';
-import { AI_TOOLS_USE_PERMISSION, createModauiAiTools } from './src/server/modauiAiTools';
+import { AI_TOOLS_USE_PERMISSION, createModauiAiTools, createModauiAiToolsManifest } from './src/server/modauiAiTools';
+import {
+  AI_TOOL_USAGE_FEATURE,
+  buildAiToolUsageRecord,
+  evaluateAiToolQuota,
+  getAiToolUsageWindows,
+  parseAiToolQuotaLimits
+} from './src/server/aiToolQuota';
+import { resolveAiToolCenters, resolveAiToolEngines } from './src/server/aiToolCapabilities';
 import { meetsMinimumPasswordLength } from './src/shared/passwordPolicy';
 import { normalizeMerchantWebsiteUrl } from './src/shared/merchantWebsiteUrl';
 import {
@@ -338,6 +346,10 @@ import {
 } from './src/server/modagptCoreEmployees';
 import { provisionModaGptIndustryTeam } from './src/server/modagptIndustryProvisioning';
 import {
+  createModaGptIndustryTools,
+  resolveModaGptIndustryTemplate
+} from './src/server/modagptIndustryTools';
+import {
   defaultMerchantIndustryTemplateId,
   isMerchantWorkspaceAccessible,
   resolveAdminMerchantTemplateAssignment,
@@ -416,6 +428,7 @@ import {
 } from './src/server/modagptDesignIdempotency';
 import {
   canUseModaGptBillingFeature,
+  getModaGptBillingPlanForMerchant,
   grantModaGptCredits,
   isModaGptBillingCheckoutReady,
   loadModaGptBillingCatalog,
@@ -19377,6 +19390,72 @@ async function startServer() {
     }
   );
 
+  /**
+   * MODAUI AI Tools 额度快照：套餐决定上限，ModaGptBillingFeature('ai.tools').config 可覆盖，
+   * 已用量来自 ModaGptAiUsageRecord（成功调用才计数），不新增表也不新增缓存。
+   */
+  async function loadMerchantAiToolQuota(merchantId: string) {
+    const merchant = await prisma.merchant.findUnique({ where: { id: merchantId }, select: { settings: true } });
+    if (!merchant) throw new Error('MODAGPT_MERCHANT_NOT_FOUND');
+    const legacyPlan = parseModaGptPlanState(merchant.settings).plan;
+    let planId: (typeof modaGptPlanCodes)[number] = legacyPlan === 'pro' ? 'PRO' : 'FREE';
+    try {
+      const billing = await getModaGptBillingPlanForMerchant(prisma, merchantId, legacyPlan);
+      planId = billing.plan.id;
+    } catch (error) {
+      // 计费目录未初始化时只影响档位判定，不能因此阻断工具调用。
+      console.error('[ai-tools-quota-plan]', error instanceof Error ? error.message : 'unknown error');
+    }
+    const feature = await prisma.modaGptBillingFeature.findUnique({
+      where: { featureKey: AI_TOOL_USAGE_FEATURE },
+      select: { config: true, enabled: true, creditCost: true }
+    });
+    const limits = parseAiToolQuotaLimits(feature?.config ?? null, planId);
+    const { dayStart, monthStart } = getAiToolUsageWindows();
+    const usageWhere = { merchantId, feature: AI_TOOL_USAGE_FEATURE, status: 'succeeded' } as const;
+    const [daily, monthly] = await Promise.all([
+      prisma.modaGptAiUsageRecord.count({ where: { ...usageWhere, createdAt: { gte: dayStart } } }),
+      prisma.modaGptAiUsageRecord.count({ where: { ...usageWhere, createdAt: { gte: monthStart } } })
+    ]);
+    const evaluation = evaluateAiToolQuota({ planId, limits, used: { daily, monthly } });
+    return {
+      planId,
+      limits,
+      used: { daily, monthly },
+      remaining: evaluation.remaining,
+      allowed: evaluation.allowed,
+      reason: evaluation.reason,
+      billingEnabled: Boolean(feature?.enabled && feature.creditCost !== null)
+    };
+  }
+
+  /** 写一条工具用量记录；失败只记日志，不改变已经成功返回给商家的结果。 */
+  async function recordAiToolUsage(input: {
+    merchantId: string;
+    planId: (typeof modaGptPlanCodes)[number];
+    toolId: string;
+    taskId: string;
+    startedAt: number;
+    status: 'succeeded' | 'failed';
+  }) {
+    try {
+      const declaredCredits = createModauiAiToolsManifest().tools
+        .find(tool => tool.toolId === input.toolId)?.cost.credits ?? 0;
+      await recordModaGptAiUsage(prisma, buildAiToolUsageRecord({
+        merchantId: input.merchantId,
+        planId: input.planId,
+        toolId: input.toolId,
+        taskId: input.taskId,
+        credits: declaredCredits,
+        latencyMs: Date.now() - input.startedAt,
+        status: input.status,
+        agentId: 'product-creative-manager'
+      }));
+    } catch (error) {
+      console.error('[ai-tools-usage-record]', error instanceof Error ? error.message : 'unknown error');
+    }
+  }
+
   // MODAUI AI Tools：商家侧工具清单。只列出已安装应用在 Manifest 中声明的工具及其真实可用状态。
   app.get('/api/merchant/ai-tools', requireMerchantTenant, async (req: AuthRequest, res) => {
     try {
@@ -19412,7 +19491,28 @@ async function startServer() {
           };
         });
       });
-      return res.json({ success: true, manifestEnabled: access.manifestEnabled, apps: access.appIds, tools });
+      const quota = await loadMerchantAiToolQuota(merchantId);
+      const providerSettings = getAiEmployeeProviderSettings();
+      const capabilities = resolveAiToolCenters(
+        resolveAiToolEngines({
+          textProvider: providerSettings.reasoning,
+          imageProvider: providerSettings.image
+        }),
+        tools.map(tool => tool.toolId)
+      );
+      const activeExpiries = tools
+        .filter(tool => tool.grantStatus === 'active' && tool.grantExpiresAt)
+        .map(tool => (tool.grantExpiresAt as Date).getTime());
+      const trialExpiresAt = activeExpiries.length ? new Date(Math.max(...activeExpiries)).toISOString() : null;
+      return res.json({
+        success: true,
+        manifestEnabled: access.manifestEnabled,
+        apps: access.appIds,
+        tools,
+        quota,
+        trialExpiresAt,
+        capabilities
+      });
     } catch (error) {
       return sendInternalError(res, error, 'merchant-ai-tools-read');
     }
@@ -19461,6 +19561,7 @@ async function startServer() {
       const toolId = appStoreString(req.params.toolId, 120);
       if (!toolId) return res.status(400).json({ success: false, error: 'AI_TOOL_ID_INVALID' });
       const merchantId = req.merchant!.merchantId;
+      let usageContext: { planId: (typeof modaGptPlanCodes)[number]; toolId: string; taskId: string; startedAt: number } | null = null;
       try {
         const actorPermissions = merchantEffectivePermissions(req);
         const access = await loadMerchantAiToolAccess(prisma, { merchantId, actorPermissions });
@@ -19479,7 +19580,19 @@ async function startServer() {
         if (!aiTools.handlers[toolId]) {
           return res.status(404).json({ success: false, error: 'AI_TOOL_HANDLER_MISSING' });
         }
+        // 额度门禁放在真实调用之前：超额直接拒绝，不产生模型费用，也不写用量。
+        const quota = await loadMerchantAiToolQuota(merchantId);
+        if (!quota.allowed) {
+          return res.status(429).json({
+            success: false,
+            error: 'AI_TOOL_QUOTA_EXCEEDED',
+            reason: quota.reason,
+            quota
+          });
+        }
         const taskId = `ai-tools:${crypto.randomUUID()}`;
+        const startedAt = Date.now();
+        usageContext = { planId: quota.planId, toolId, taskId, startedAt };
         const runtime = createModaGptToolRuntime({
           principal: {
             tenantId: merchantId,
@@ -19521,9 +19634,41 @@ async function startServer() {
           input: (req.body as { input?: unknown } | undefined)?.input,
           tenantId: merchantId
         });
-        return res.json({ success: true, taskId, toolId, result: execution.result });
+        await recordAiToolUsage({
+          merchantId,
+          planId: quota.planId,
+          toolId,
+          taskId,
+          startedAt,
+          status: 'succeeded'
+        });
+        return res.json({
+          success: true,
+          taskId,
+          toolId,
+          result: execution.result,
+          quota: {
+            planId: quota.planId,
+            limits: quota.limits,
+            used: { daily: quota.used.daily + 1, monthly: quota.used.monthly + 1 },
+            remaining: {
+              daily: Math.max(0, quota.remaining.daily - 1),
+              monthly: Math.max(0, quota.remaining.monthly - 1)
+            }
+          }
+        });
       } catch (error) {
         const code = error instanceof Error ? error.message : '';
+        if (usageContext) {
+          await recordAiToolUsage({
+            merchantId,
+            planId: usageContext.planId,
+            toolId: usageContext.toolId,
+            taskId: usageContext.taskId,
+            startedAt: usageContext.startedAt,
+            status: 'failed'
+          });
+        }
         if (code.startsWith('MODAGPT_') || code.startsWith('AI_TOOLS_')) {
           return res.status(400).json({ success: false, error: code });
         }
@@ -35347,7 +35492,7 @@ async function startServer() {
       });
       try {
         const [merchant, assignments] = await Promise.all([
-          prisma.merchant.findUnique({ where: { id: merchantId }, select: { industry: true } }),
+          prisma.merchant.findUnique({ where: { id: merchantId }, select: { industry: true, industryTemplate: true } }),
           prisma.merchantAiTeamAssignment.findMany({
             where: { merchantId },
             select: { agentId: true, industry: true }
@@ -35355,12 +35500,18 @@ async function startServer() {
         ]);
         if (!merchant) return res.status(404).json({ success: false, error: 'MERCHANT_NOT_FOUND' });
         const industry = requireModaGptIndustry(merchant.industry);
+        const industryTemplate = resolveModaGptIndustryTemplate(merchant);
+        const industryTools = createModaGptIndustryTools({ prisma, industryTemplate });
         const industryAssignments = assignments.filter(assignment => assignment.industry === industry);
         const route = superviseModaGptCoreTask({
           request: body.message.trim(),
           assignedAgents: industryAssignments.map(assignment => assignment.agentId),
           registeredWorkflows: executableModaGptMerchantWorkflowIds,
-          registeredTools: merchantTools.definitions.map(definition => definition.name)
+          registeredTools: [
+            ...merchantTools.definitions.map(definition => definition.name),
+            ...industryTools.definitions.map(definition => definition.name)
+          ],
+          industryTemplate
         });
         if (!route) return res.status(422).json({ success: false, error: 'MODAGPT_TASK_INTENT_UNSUPPORTED' });
         if (route.execution !== 'ready') {
@@ -35445,7 +35596,7 @@ async function startServer() {
       });
       try {
         const [merchant, assignments] = await Promise.all([
-          prisma.merchant.findUnique({ where: { id: merchantId }, select: { industry: true } }),
+          prisma.merchant.findUnique({ where: { id: merchantId }, select: { industry: true, industryTemplate: true } }),
           prisma.merchantAiTeamAssignment.findMany({
             where: { merchantId },
             select: { agentId: true, industry: true, configuration: true }
@@ -35453,13 +35604,19 @@ async function startServer() {
         ]);
         if (!merchant) return res.status(404).json({ success: false, error: 'MERCHANT_NOT_FOUND' });
         const industry = requireModaGptIndustry(merchant.industry);
+        const industryTemplate = resolveModaGptIndustryTemplate(merchant);
+        const industryTools = createModaGptIndustryTools({ prisma, industryTemplate });
         const industryAssignments = assignments.filter(assignment => assignment.industry === industry);
         const agentIds = industryAssignments.map(assignment => assignment.agentId);
         const route = superviseModaGptCoreTask({
           request: body.message,
           assignedAgents: agentIds,
           registeredWorkflows: executableModaGptMerchantWorkflowIds,
-          registeredTools: merchantTools.definitions.map(definition => definition.name)
+          registeredTools: [
+            ...merchantTools.definitions.map(definition => definition.name),
+            ...industryTools.definitions.map(definition => definition.name)
+          ],
+          industryTemplate
         });
         if (!route) return res.status(422).json({ success: false, error: 'MODAGPT_TASK_INTENT_UNSUPPORTED' });
         if (route.execution !== 'ready') {
@@ -35505,7 +35662,8 @@ async function startServer() {
             employeeId,
             message: body.message.trim(),
             conversationId: typeof body.conversationId === 'string' ? body.conversationId : null,
-            inputs: taskInputs
+            inputs: taskInputs,
+            industryTemplate
           }
         });
         const employee = industryAssignments.find(assignment => assignment.agentId === route.agents[0]);
@@ -48498,10 +48656,11 @@ async function startServer() {
             }
             const merchantProfile = await prisma.merchant.findUnique({
               where: { id: task.merchantId },
-              select: { industry: true }
+              select: { industry: true, industryTemplate: true }
             });
             if (!merchantProfile) throw new Error('MODAGPT_WORKFLOW_MERCHANT_NOT_FOUND');
             const workflowIndustry = requireModaGptIndustry(merchantProfile.industry);
+            const industryTemplate = resolveModaGptIndustryTemplate(merchantProfile);
             let teamAssignments = await prisma.merchantAiTeamAssignment.findMany({
               where: { merchantId: task.merchantId, industry: workflowIndustry },
               orderBy: { agentId: 'asc' }
@@ -48551,6 +48710,9 @@ async function startServer() {
                 || !isPlainRecord(payload.inputs)) {
                 throw new Error('MODAGPT_MERCHANT_TASK_INVALID');
               }
+              if (payload.industryTemplate !== undefined && payload.industryTemplate !== industryTemplate) {
+                throw new Error('MODAGPT_MERCHANT_TASK_INDUSTRY_CHANGED');
+              }
               const taskEmployeeId = typeof payload.employeeId === 'string' ? payload.employeeId : null;
               const merchantTools = createModaGptMerchantTools({
                 prisma,
@@ -48561,11 +48723,16 @@ async function startServer() {
                 signal: execution.signal,
                 assertLease: execution.assertLease
               });
+              const industryTools = createModaGptIndustryTools({ prisma, industryTemplate });
               const supervisorRoute = superviseModaGptCoreTask({
                 request: payload.message,
                 assignedAgents: teamProfiles.map(profile => profile.agentId),
                 registeredWorkflows: executableModaGptMerchantWorkflowIds,
-                registeredTools: merchantTools.definitions.map(definition => definition.name)
+                registeredTools: [
+                  ...merchantTools.definitions.map(definition => definition.name),
+                  ...industryTools.definitions.map(definition => definition.name)
+                ],
+                industryTemplate
               });
               if (!supervisorRoute || supervisorRoute.execution !== 'ready'
                 || !isExecutableModaGptMerchantWorkflow(supervisorRoute.workflow)) {

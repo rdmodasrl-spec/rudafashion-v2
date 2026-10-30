@@ -34,6 +34,7 @@ const workspacePermissions = {
   pos: ['sales.order.create'],
   returns: ['return.manage'],
   ai_home: ['brain.read'],
+  ai_tools: ['ai.tools.use'],
   tryon: ['brain.read']
 };
 

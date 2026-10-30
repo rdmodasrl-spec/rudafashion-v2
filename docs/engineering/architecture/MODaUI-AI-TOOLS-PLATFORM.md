@@ -1,9 +1,13 @@
 # MODAUI AI TOOLS PLATFORM —— 专业 AI 创作与营销平台（协议、门禁与能力范围）
 
-> **文档状态**：v0.3。协议与门禁（P0）已实施、已上线并在生产完成真实调用验证；专业工作中心（图片/视频/语音/发布/分析）为**规划**，未接通前不提供任何入口或假结果。
+> **文档状态**：v0.4。协议与门禁（P0）已实施上线并完成生产真实调用验证；**P1 额度与用量记账、能力真值、三端工具中心 UI 已实施**（2026-10-30）。专业工作中心（图片/视频/语音/发布/分析）仍为**未接通**，接口未接通前不提供可点击入口，也不返回假结果。
 > **基线日期**：2026-10-30。**代码基线**：分支 `main`。
 > **适用范围**：MODAUI / ModaGPT 商家侧 AI 能力、App Store 安装机制、工具执行、计费与租户隔离。
 > **不适用范围**：已冻结的服装生产批发、服装批发行业 AI 行为（只允许"不改变行为地"接入本协议）。
+
+> **当前工程补充**：本文后续“现状审计”保留了早期设计阶段的历史记录，不能单独代表当前代码状态。Tool Manifest、应用安装授权和商家工具运行时已有后续实现；具体以 `src/server/aiToolManifest.ts`、`src/server/aiToolRegistry.ts`、`src/server/modauiAiTools.ts`、`src/server/modagptMerchantTaskExecutor.ts` 及当前测试为准。四个非服装/贸易行业的只读分析闭环另见 [`../modules/modaui-four-industry-ai.md`](../modules/modaui-four-industry-ai.md)。
+
+本次新增行业能力必须用服务端 `Merchant.industryTemplate` 选择专业 Pack。不得仅用粗粒度 `Merchant.industry` 区分百货批发和百货连锁；不得改变服装生产批发、服装批发或贸易批发既有行为。三端复用现有 ModaUI 任务 API，不增加聊天实现、数据库权威源或任务 API。
 
 ---
 
@@ -54,10 +58,13 @@ MODAUI AI Tools 的定位是**专业级 AI 创作与营销平台**，不是模�
 | 运行时门禁（未安装=不可调用，核心工具不受影响） | 已完成 | `modagptMerchantTaskExecutor.ts` 工具集过滤 |
 | 管理端 Manifest 保存与读取 | 已完成 | `GET/PUT /api/admin/app-store/apps/:id/manifest` |
 | 商家端工具清单/暂停/单次执行 | 已完成 | `GET /api/merchant/ai-tools`、`PATCH .../:toolId/grant`、`POST .../:toolId/invoke` |
-| 商品文案创作（`ai_tools_write_copy`） | 已完成（代码 + 单测；真实模型调用待线上验证） | `src/server/modauiAiTools.ts`，复用 `generateAiEmployeeText` |
+| 商品文案创作（`ai_tools_write_copy`） | 已完成（生产真实模型调用已验证） | `src/server/modauiAiTools.ts`，复用 `generateAiEmployeeText` |
 | 多语言翻译（`ai_tools_translate`） | 已完成（同上） | 同上 |
-| 图片/视频/语音/发布/分析 | **未接通** | 仓库当前仅有 `GEMINI_API_KEY`；OpenAI 图片、Kling、Cloudinary、Runway/Shotstack、ElevenLabs、Ayrshare 均需商务与凭据，未接入即不提供入口 |
-| 工具计费与额度 | **未接通** | Manifest `cost.credits` 当前固定为 0（不计量），P1 接 `ModaGptBillingSubscription` 后再启用 |
+| 调用额度（日/月）与用量记账 | 已完成 | `src/server/aiToolQuota.ts`、`loadMerchantAiToolQuota`、`recordAiToolUsage`；写 `ModaGptAiUsageRecord`（`feature='ai.tools'`、`model=toolId`），超额返回 `AI_TOOL_QUOTA_EXCEEDED` |
+| 工作中心能力真值（6 个中心） | 已完成 | `src/server/aiToolCapabilities.ts`；未接通中心返回 `not_connected` + 真实原因，前端不渲染可点击按钮 |
+| 三端工具中心 UI | 已完成（代码 + 构建；真机视觉待验收） | 电脑端 `MerchantPortal` → 「工具中心」；手机网页端「更多 → 工具中心」；小程序 `pages/ai-tools/index` |
+| 图片/视频/语音/发布/分析 | **未接通** | 图片需 `FAL_KEY` 或本地 Automatic1111 可达（当前均无）；视频/语音/发布/分析无 Provider Adapter，且发布需平台 OAuth 授权 |
+| 按次扣费（credits 结算） | **未接通** | `cost.credits` 仍为 0；`ModaGptBillingFeature('ai.tools')` 未启用时不扣费，启用后由运营配置生效 |
 
 > 规则：**未接通的能力不得出现在可点击入口里，也不得用 Mock/静态进度伪装成功。** 新增能力必须先在此表把状态改为"已完成"并附证据。
 
@@ -418,6 +425,36 @@ resolveMerchantToolset({
 
 `AI_TOOL_NOT_INSTALLED`、`AI_TOOL_DISABLED`、`AI_TOOL_INDUSTRY_MISMATCH`、`AI_TOOL_CREDENTIAL_MISSING`、`AI_TOOL_QUOTA_EXCEEDED`、`AI_TOOL_PLAN_REQUIRED`、`TOOL_MANIFEST_INVALID`、`TOOL_ID_CONFLICT`、`APP_MANIFEST_MISSING`。
 
+### 8.4 已实施的响应字段（P1，向后兼容增量）
+
+`GET /api/merchant/ai-tools` 在原 `{ success, manifestEnabled, apps, tools }` 基础上**新增**三组字段（原字段语义不变）：
+
+| 字段 | 说明 |
+|---|---|
+| `quota` | `{ planId, limits:{dailyCalls,monthlyCalls}, used:{daily,monthly}, remaining, allowed, reason, billingEnabled }`；`reason` 为 `quota_exceeded_daily` / `quota_exceeded_monthly` / `null` |
+| `trialExpiresAt` | 当前仍有效授权中最晚的试用到期时间（ISO 字符串）；无试用授权为 `null` |
+| `capabilities` | 6 个工作中心真值：`{ id, labelZh, labelIt, status: 'ready'\|'not_connected', reason, toolIds[] }`；`not_connected` 的 `toolIds` 恒为空数组 |
+
+`POST /api/merchant/ai-tools/:toolId/invoke` 成功响应新增 `quota`（调用后额度快照：`planId/limits/used/remaining`）；超额时返回
+`429 { success:false, error:'AI_TOOL_QUOTA_EXCEEDED', reason, quota }`，且**不产生模型调用与用量记录**。
+
+能力真值规则（`src/server/aiToolCapabilities.ts`）：`ready` 必须同时满足「引擎已配置」与「该中心至少 1 个已注册工具」；
+远端文本 provider 无 Key、图片 provider 非 fal 或 fal 无 Key 时，一律 `not_connected`，前端不得渲染可点击按钮。
+
+### 8.5 三端入口（P2 首批，已完成代码与构建）
+
+| 端 | 位置 | 文件 |
+|---|---|---|
+| 电脑网页端 | 侧边栏「应用记录 → 工具中心」 | `src/apps/merchant-admin-web/MerchantPortal.tsx`（`activeTab === 'ai_tools'`） |
+| 手机网页端 | 「更多 → 员工系统 → 工具中心」 | `merchantMobileNavigation.ts`（`ai_tools`）+ `MerchantMobileApp.tsx` |
+| 商家小程序 | 「更多 → 智能工具 → 工具中心」 | `merchant-miniprogram/pages/ai-tools/*`、`pages/more/index.js`、`utils/permissions.js`、`utils/review-features.js` |
+
+三端共用同一组件 `merchant-admin-common/components/merchant/MerchantAiTools.tsx`（Web/手机）与同一接口契约（小程序）：
+额度条、试用剩余、6 个中心状态、工具暂停/恢复、文案与翻译表单、结果复制。小程序可见性沿用 ModaUI 功能开关
+（`utils/review-features.js` 的 `aiWorkspaceIds`），未通过开关时与其它 ModaUI 版块一致隐藏。
+
+**待验收**：三端真机/桌面视觉截图尚未取得，只能标记「代码 + 构建完成，视觉待验收」。
+
 ---
 
 ## 9. 计费映射（复用，不新建账本）
@@ -508,10 +545,21 @@ resolveMerchantToolset({
 
 
 
-### P1｜付费与额度
+### P1｜付费与额度（已实施 2026-10-30）
 
-- Manifest `cost/quota` → `MerchantAppQuota` + 现有 credit 账本；订阅校验接入 `ModaGptBillingSubscription`。
-- 验收：额度用尽后工具解析返回 `quota_exceeded`，聊天与其它工具不受影响；账单可追溯到具体 `toolId` 与 `taskId`。
+**已实现**
+
+- Manifest `cost/quota` → 额度判定 + 用量记账复用现有 `ModaGptAiUsageRecord`，**不新增数据表、不新建第二套账本**。
+- 额度上限：`AI_TOOL_QUOTA_DEFAULTS` 按 `ModaGptPlanCode`（FREE/PLUS/PRO/BUSINESS/FASHION_PRO）给出日/月上限；运营可用 `ModaGptBillingFeature('ai.tools').config` 的 `{"dailyCalls":n,"monthlyCalls":n}` 覆盖，坏配置整体回退默认值。
+- 门禁顺序：安装/授权/试用/权限（P0 已有）→ **额度** → 运行时校验 → 真实模型调用 → 审计与用量记录。超额时**不发起模型调用**，返回 HTTP 429 `AI_TOOL_QUOTA_EXCEEDED` + `reason: quota_exceeded_daily | quota_exceeded_monthly`。
+- 用量唯一键：`ai.tools:<merchantId>:<taskId>`（upsert），重复写入不会重复计数；只有 `status='succeeded'` 计入额度，失败调用只留痕不占额度。
+- `feature='ai.tools'` 已加入 `modaGptFeatureKeys`，后台可直接用现有计费特性管理页启用并设置 `creditCost`；未启用时 `cost.credits` 保持 0，不虚报消费。
+- 验收（单测）：`tests/ai-tools-quota.test.ts` 覆盖默认值单调性、配置覆盖与回退、日/月拦截原因、UTC 周期窗口、幂等键、能力真值、引擎判定。
+
+**未实现（未接通）**
+
+- 按次扣费：`ModaGptBillingFeature('ai.tools')` 尚未启用，`creditCost` 为空即不扣费；启用属运营动作，需同时确认套餐特性勾选，否则 `reserveModaGptCredits` 会拒绝。
+- 未接通能力不得靠额度判定伪装可用。
 
 ### P2｜AI 工具中心 UI + 首批真实外部工具
 

@@ -91,6 +91,7 @@ import {
   type MerchantSettingsTone
 } from '../merchant-admin-common/components/merchant/MerchantSettingsPanel';
 import { MerchantAiEmployees } from '../merchant-admin-common/components/merchant/MerchantAiEmployees';
+import { MerchantAiTools } from '../merchant-admin-common/components/merchant/MerchantAiTools';
 import { MerchantTeamManagement } from '../merchant-admin-common/components/merchant/MerchantTeamManagement';
 import { MERCHANT_STOREFRONT_TEMPLATES } from '../../shared/merchantStorefrontTemplate';
 import { MerchantAiReports } from '../merchant-admin-common/components/merchant/MerchantAiReports';
@@ -239,7 +240,7 @@ export const MerchantPortal: React.FC<{
 
   // Active sub-tab inside Merchant Portal
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'pos' | 'products' | 'sku_matrix' | 'materials' | 'production' | 'inventory' | 'procurement' | 'orders' | 'vault_requests' | 'customers' | 'growth' | 'content' | 'finance' | 'profile' | 'settings' | 'gallery' | 'ai_employees' | 'fashion_studio' | 'modagpt' | 'app_store' | 'recycle_bin' | 'ai_chat_history' | 'recent_activity'
+    'dashboard' | 'pos' | 'products' | 'sku_matrix' | 'materials' | 'production' | 'inventory' | 'procurement' | 'orders' | 'vault_requests' | 'customers' | 'growth' | 'content' | 'finance' | 'profile' | 'settings' | 'gallery' | 'ai_employees' | 'ai_tools' | 'fashion_studio' | 'modagpt' | 'app_store' | 'recycle_bin' | 'ai_chat_history' | 'recent_activity'
   >('dashboard');
   const [industrySection, setIndustrySection] = useState<MerchantIndustryModuleKey>('dashboard');
   const pendingIndustrySectionRef = useRef<MerchantIndustryModuleKey | null>(null);
@@ -365,6 +366,7 @@ export const MerchantPortal: React.FC<{
       settings: localizeCopy('系统设置', 'Impostazioni'),
       gallery: localizeCopy('内容素材', 'Contenuti media'),
       ai_employees: localizeCopy('智能员工', 'Team AI'),
+      ai_tools: localizeCopy('工具中心', 'Centro strumenti'),
       app_store: localizeCopy('应用', 'App'),
       recycle_bin: localizeCopy('回收站', 'Cestino'),
       ai_chat_history: localizeCopy('AI 聊天记录', 'Cronologia AI'),
@@ -4809,6 +4811,7 @@ export const MerchantPortal: React.FC<{
             <div className="mt-1 flex flex-wrap gap-1">
               <button id="merchant-tab-app-store" type="button" onClick={() => setActiveTab('app_store')} className={navItemClass(activeTab === 'app_store')}><Boxes className="h-3.5 w-3.5" />{localizeCopy('应用商店', 'App store')}</button>
               <button id="merchant-tab-recycle-bin" type="button" onClick={() => setActiveTab('recycle_bin')} className={navItemClass(activeTab === 'recycle_bin')}><Trash2 className="h-3.5 w-3.5" />{localizeCopy('回收站', 'Cestino')}</button>
+              <button id="merchant-tab-ai-tools" type="button" onClick={() => setActiveTab('ai_tools')} className={navItemClass(activeTab === 'ai_tools')}><Sparkles className="h-3.5 w-3.5" />{localizeCopy('工具中心', 'Centro strumenti')}</button>
               <button id="merchant-tab-ai-chat-history" type="button" onClick={() => setActiveTab('ai_chat_history')} className={navItemClass(activeTab === 'ai_chat_history')}><MessageCircle className="h-3.5 w-3.5" />{localizeCopy('AI 聊天记录', 'Cronologia AI')}</button>
               <button id="merchant-tab-recent-activity" type="button" onClick={() => setActiveTab('recent_activity')} className={navItemClass(activeTab === 'recent_activity')}><Clock className="h-3.5 w-3.5" />{localizeCopy('最近动态', 'Attività recenti')}</button>
             </div>
@@ -4868,6 +4871,7 @@ export const MerchantPortal: React.FC<{
       )}
       {activeTab === 'gallery' && <MerchantGallery onBack={() => setActiveTab('dashboard')} />}
       {activeTab === 'ai_employees' && <MerchantAiEmployees isIt={isIt} />}
+      {activeTab === 'ai_tools' && <MerchantAiTools />}
       {/* ======================================================== */}
       {/* SUB-TAB 1: 仪表盘 (OVERVIEW) */}
       {/* ======================================================== */}

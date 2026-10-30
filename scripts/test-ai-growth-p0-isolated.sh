@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Isolated PostgreSQL runner for growth/P0, billing, ModaGPT and trading integration suites.
+# Isolated PostgreSQL runner for growth/P0, billing, ModaGPT, industry AI and trading suites.
 # Every child process runs under `env -i` so an ambient DATABASE_URL or PG* target can never
 # reach the tests: only the temporary container connection string is passed through.
 set -euo pipefail
 
 usage() {
-  echo "Usage: bash scripts/test-ai-growth-p0-isolated.sh [p0|billing|modagpt|modagpt-brain|app-store|production-chain|trading-wholesale|full]" >&2
+  echo "Usage: bash scripts/test-ai-growth-p0-isolated.sh [p0|billing|modagpt|modagpt-industries|modagpt-brain|app-store|production-chain|trading-wholesale|full]" >&2
 }
 
 suite="${1:-p0}"
 case "$suite" in
-  p0|billing|modagpt|modagpt-brain|app-store|production-chain|trading-wholesale|full) ;;
+  p0|billing|modagpt|modagpt-industries|modagpt-brain|app-store|production-chain|trading-wholesale|full) ;;
   --full) suite="full" ;;
   *) usage; exit 2 ;;
 esac
@@ -123,6 +123,7 @@ case "$suite" in
     ;;
   billing) test_files=(tests/integration/modagpt-billing.postgres.test.ts) ;;
   modagpt) test_files=(tests/integration/modagpt-quote.postgres.test.ts) ;;
+  modagpt-industries) test_files=(tests/integration/modagpt-industries.postgres.test.ts) ;;
   modagpt-brain) test_files=(tests/integration/modagpt-brain.postgres.test.ts) ;;
   app-store) test_files=(tests/integration/app-store.postgres.test.ts) ;;
   production-chain) test_files=(tests/integration/production-chain.postgres.test.ts) ;;
@@ -158,6 +159,9 @@ isolated \
   TRADING_WHOLESALE_TEST_DATABASE_URL="$database_url" \
   TRADING_WHOLESALE_TEST_RUN_ID="$run_id" \
   TRADING_WHOLESALE_TEST_CONTAINER_ID="$container_id" \
+  MODAGPT_INDUSTRIES_TEST_DATABASE_URL="$database_url" \
+  MODAGPT_INDUSTRIES_TEST_RUN_ID="$run_id" \
+  MODAGPT_INDUSTRIES_TEST_CONTAINER_ID="$container_id" \
   node --import tsx --test --test-concurrency=1 "${test_files[@]}"
 
 echo "Isolated PostgreSQL suite '$suite' passed; the temporary database will be removed."

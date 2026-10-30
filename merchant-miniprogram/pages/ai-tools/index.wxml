@@ -1,0 +1,113 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="state">正在加载工具中心…</view>
+  <view wx:elif="{{error}}" class="state state-error">{{error}}</view>
+
+  <block wx:else>
+    <view class="card">
+      <view class="card-head">
+        <text class="card-title">MODAUI AI Tools</text>
+        <view class="badges">
+          <text class="badge">{{planId}}</text>
+          <text wx:if="{{trialDays !== null}}" class="badge">试用 {{trialDays}} 天</text>
+          <text class="badge {{billingEnabled ? 'badge-on' : ''}}">{{billingEnabled ? '按额度计费' : '计费未接通'}}</text>
+        </view>
+      </view>
+      <text wx:if="{{!manifestEnabled}}" class="hint">工具清单当前已关闭，工具不可调用。</text>
+      <view wx:if="{{quota}}" class="quota">
+        <view class="quota-row">
+          <text class="quota-label">今日调用</text>
+          <text class="quota-value">{{quota.used.daily}} / {{quota.limits.dailyCalls}}</text>
+        </view>
+        <view class="quota-row">
+          <text class="quota-label">本月调用</text>
+          <text class="quota-value">{{quota.used.monthly}} / {{quota.limits.monthlyCalls}}</text>
+        </view>
+      </view>
+      <text wx:if="{{notice}}" class="hint">{{notice}}</text>
+    </view>
+
+    <view class="card">
+      <text class="section-title">工作中心</text>
+      <view class="centers">
+        <view wx:for="{{capabilities}}" wx:key="id" class="center {{item.ready ? 'center-ready' : ''}}">
+          <view class="center-head">
+            <text class="center-name">{{item.labelZh}}</text>
+            <text class="center-status">{{item.ready ? '可用' : '未接通'}}</text>
+          </view>
+          <text class="center-hint">{{item.ready ? item.toolIds.length + ' 个工具可用' : item.reasonLabel}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="card">
+      <text class="section-title">可用工具</text>
+      <view wx:if="{{tools.length === 0}}" class="hint">当前没有可调用的工具。安装 AI Tools 应用或等待授权恢复后再试。</view>
+      <view wx:for="{{tools}}" wx:key="toolId" class="tool">
+        <view class="tool-main">
+          <text class="tool-name">{{item.title}}</text>
+          <text class="tool-desc">{{item.description}}</text>
+          <text wx:if="{{item.expiresLabel}}" class="tool-meta">试用到期 {{item.expiresLabel}}</text>
+        </view>
+        <view class="tool-actions">
+          <button class="btn btn-ghost" size="mini" data-id="{{item.toolId}}" bindtap="toggleGrant">
+            {{item.grantStatus === 'paused' ? '恢复' : '暂停'}}
+          </button>
+          <button class="btn btn-primary" size="mini" data-id="{{item.toolId}}" bindtap="openTool">使用</button>
+        </view>
+      </view>
+
+      <view wx:if="{{blockedTools.length > 0}}" class="blocked">
+        <text class="blocked-title">暂不可用</text>
+        <view wx:for="{{blockedTools}}" wx:key="toolId" class="blocked-row">
+          <text class="blocked-name">{{item.title}}</text>
+          <text class="blocked-reason">{{item.reasonLabel}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{activeTool}}" class="card">
+      <view class="card-head">
+        <text class="card-title">{{activeTool.title}}</text>
+        <button class="btn btn-ghost" size="mini" bindtap="closeTool">关闭</button>
+      </view>
+
+      <block wx:if="{{activeTool.toolId === 'ai_tools_translate'}}">
+        <text class="label">待翻译文本</text>
+        <textarea class="textarea" value="{{form.text}}" maxlength="2000" data-field="text" bindinput="onInput" placeholder="粘贴商品标题、详情或邮件内容" />
+        <text class="label">目标语言</text>
+        <picker mode="selector" range="{{languageOptions}}" range-key="label" data-field="targetLanguage" bindchange="onPickOption">
+          <view class="picker">{{labels.targetLanguage}}</view>
+        </picker>
+      </block>
+
+      <block wx:else>
+        <text class="label">商品简报</text>
+        <textarea class="textarea" value="{{form.brief}}" maxlength="800" data-field="brief" bindinput="onInput" placeholder="例如：夏季亚麻西装外套，中性色，轻商务" />
+        <text class="label">渠道</text>
+        <picker mode="selector" range="{{channelOptions}}" range-key="label" data-field="channel" bindchange="onPickOption">
+          <view class="picker">{{labels.channel}}</view>
+        </picker>
+        <text class="label">语气</text>
+        <picker mode="selector" range="{{toneOptions}}" range-key="label" data-field="tone" bindchange="onPickOption">
+          <view class="picker">{{labels.tone}}</view>
+        </picker>
+        <text class="label">输出语言</text>
+        <picker mode="selector" range="{{languageOptions}}" range-key="label" data-field="language" bindchange="onPickOption">
+          <view class="picker">{{labels.language}}</view>
+        </picker>
+      </block>
+
+      <button class="btn btn-primary btn-block" loading="{{submitting}}" bindtap="invoke">
+        {{submitting ? '生成中…' : '开始生成'}}
+      </button>
+
+      <view wx:if="{{resultText}}" class="result">
+        <view class="result-head">
+          <text class="result-title">结果</text>
+          <button class="btn btn-ghost" size="mini" bindtap="copyResult">复制</button>
+        </view>
+        <text class="result-body">{{resultText}}</text>
+      </view>
+    </view>
+  </block>
+</view>

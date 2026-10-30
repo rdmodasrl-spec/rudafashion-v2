@@ -36,6 +36,7 @@ test('package PostgreSQL and E2E commands route through isolated container scrip
   for (const name of [
     'test:billing:integration',
     'test:modagpt:integration',
+    'test:modagpt:industries:integration',
     'test:modagpt:brain:integration',
     'test:p0:integration'
   ]) {

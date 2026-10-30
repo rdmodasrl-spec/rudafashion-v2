@@ -116,7 +116,7 @@ test('billing plan catalog contains only the fixed five EUR monthly plans with B
   assert.equal(plan.featured, true);
   assert.equal(plan.recommended, true);
   assert.equal(plan.monthlyCredits, 12000);
-  assert.equal(modaGptFeatureKeys.length, 23);
+  assert.equal(modaGptFeatureKeys.length, 24);
 });
 
 test('billing catalog only queries supported monthly plan ids', async () => {

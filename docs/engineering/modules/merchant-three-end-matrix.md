@@ -217,3 +217,35 @@
 - 自动化证据：`npm run test:unit` 1166/1166 通过；`npm run test:trading-wholesale:integration` 在隔离 PostgreSQL 上通过，覆盖真实 HTTP 任务、目录租户边界、采购权限拒绝、任务轮询与采购草稿写入。
 - 端侧验收：桌面 Web、手机 Web 未提供已认证浏览器会话/截图；小程序未在微信开发者工具或真机运行。三端页面和真实聊天交互仍标记为待验收，不以 API 测试替代。
 - 状态：**部分完成（端侧代码接线与自动化验证完成；Web、手机 Web、小程序实机/视觉验收待完成）**。
+
+## ModaUI 四行业 AI 只读分析闭环（规格先行）
+
+| 行业模板 | Web | 手机 Web | 商家小程序 | 权威服务/数据 |
+| --- | --- | --- | --- | --- |
+| `department_wholesale` | 复用商家 ModaUI 任务 API | 同一任务 API | 同一认证任务 API | 商品目录、变体/条码、`Product.industryAttributes` |
+| `bags_wholesale` | 复用商家 ModaUI 任务 API | 同一任务 API | 同一认证任务 API | 商品目录、材质/尺寸/容量属性、SKU |
+| `department_chain_retail` | 复用商家 ModaUI 任务 API | 同一任务 API | 同一认证任务 API | 当前商家门店、门店库存、POS 与既有调拨记录 |
+| `general_retail` | 复用商家 ModaUI 任务 API | 同一任务 API | 同一认证任务 API | 当前商家 POS、销售明细、商品/条码目录 |
+
+- 身份与能力选择：服务端从已认证商家读取 `industryTemplate`；客户端行业/merchantId 不作为授权依据。百货批发和百货连锁虽共享粗粒度 `DEPARTMENT_STORE`，必须加载不同的工具。
+- 写入边界：首期只读分析；不得由 AI 直接写商品、库存、采购、POS、调拨或促销。调拨建议必须经现有人工业务流程执行。
+- 同步与错误：三端任务状态/结果来自同一个 `ModaGptTask` 服务端数据源；权限拒绝、租户冲突、数据库错误进入现有失败状态，不以空结果掩盖。
+- 规格：[`modaui-four-industry-ai.md`](./modaui-four-industry-ai.md)。四行业专属只读工具、真实 HTTP/隔离 PostgreSQL 验证已通过；百货/箱包输出商品资料待完善清单，连锁输出调拨候选，综合零售输出 POS+库存补货候选。三端真实登录态操作和视觉验收仍待完成；不等同于图片生成、商品写入、调拨执行或促销/采购业务闭环。
+
+## MODAUI AI Tools 工具中心（P1 + P2 首批，2026-10-30）
+
+| 能力 | 商家 Web | 手机 Web | 商家小程序 | 权威服务/数据 |
+| --- | --- | --- | --- | --- |
+| 工具清单与门禁状态 | 侧边栏「应用记录 → 工具中心」 | 「更多 → 员工系统 → 工具中心」 | 「更多 → 智能工具 → 工具中心」 | `GET /api/merchant/ai-tools`（安装/授权/试用/权限/额度一次返回） |
+| 额度与试用展示 | 有（日/月额度条 + 试用剩余天数） | 有（同一组件） | 有（同一接口，原生渲染） | `quota`、`trialExpiresAt` 字段 |
+| 工作中心真值 | 有（6 个中心：可用/未接通 + 原因） | 同 | 同 | `capabilities`（服务端计算，前端不推断） |
+| 工具暂停/恢复 | 有 | 有 | 有 | `PATCH /api/merchant/ai-tools/:toolId/grant` |
+| 文案创作 / 翻译 | 有（表单 + 结果复制） | 有 | 有 | `POST /api/merchant/ai-tools/:toolId/invoke` |
+| 超额提示 | 有（`AI_TOOL_QUOTA_EXCEEDED`） | 有 | 有 | 服务端 429 + `reason` |
+
+- 身份与租户：三端都用商家 JWT，`merchantId` 由服务端会话确定；小程序额外发送 `X-Ruda-Client` 仅用于平台开关门禁，不作为身份依据。
+- 数据一致性：工具可用性、试用期、额度全部由服务端计算；前端不做乐观更新，暂停/恢复与调用后都重新拉取权威列表。
+- 小程序可见性：`utils/review-features.js` 的 `aiWorkspaceIds` 纳入 `ai_tools`，与其它 ModaUI 版块共用功能开关；`utils/permissions.js` 要求 `ai.tools.use`。
+- 自动化证据：`tests/ai-tools-quota.test.ts` 8 项通过；`tsc --noEmit` 0 错误；三端构建通过。
+- 端侧验收：桌面 Web、手机 Web、小程序真机/开发者工具视觉与交互**尚未截图验收**，状态为**部分完成（代码与构建完成，视觉待验收）**。
+- 未接通：图片/视频/语音/发布/分析五个中心在三端一致显示「未接通 + 原因」，不提供可点击入口。

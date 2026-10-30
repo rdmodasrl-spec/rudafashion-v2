@@ -1,4 +1,6 @@
 import type { ModaGptAgentRole } from './modagptRuntime';
+import { getMerchantIndustryTemplate, type MerchantIndustryTemplateId } from '../constants/merchantIndustryTemplates';
+import { getModaGptIndustryTemplateAssistantProfile } from './modagptCoreEmployees';
 
 export const modaGptCoreWorkflowIds = [
   'low_inventory_review',
@@ -27,6 +29,7 @@ export function isExecutableModaGptMerchantWorkflow(
 }
 
 export type ModaGptCoreTaskRoute = {
+  industryTemplate: MerchantIndustryTemplateId | null;
   workflow: ModaGptCoreWorkflowId;
   goal: string;
   agents: readonly ModaGptAgentRole[];
@@ -107,6 +110,7 @@ export function superviseModaGptCoreTask(input: {
   assignedAgents: readonly string[];
   registeredWorkflows: readonly string[];
   registeredTools: readonly string[];
+  industryTemplate?: unknown;
 }): ModaGptCoreTaskRoute | null {
   if (typeof input.request !== 'string' || !input.request.trim() || input.request.length > 2_000) {
     throw new Error('MODAGPT_SUPERVISOR_REQUEST_INVALID');
@@ -123,19 +127,33 @@ export function superviseModaGptCoreTask(input: {
   if (input.registeredTools.some(tool => !/^[a-z][a-z0-9_]{1,79}$/.test(tool))) {
     throw new Error('MODAGPT_SUPERVISOR_TOOL_INVALID');
   }
+  const template = getMerchantIndustryTemplate(input.industryTemplate);
+  if (input.industryTemplate !== undefined && input.industryTemplate !== null && !template) {
+    throw new Error('MODAGPT_SUPERVISOR_TEMPLATE_INVALID');
+  }
+  const industryTemplate = template?.id ?? null;
+  const specialist = getModaGptIndustryTemplateAssistantProfile(industryTemplate);
+  const businessAnalysis = intentRules.find(rule => rule.workflow === 'business_analysis');
+  const match = specialist?.intentPattern.test(input.request)
+    ? businessAnalysis
+    : intentRules.find(rule => rule.pattern.test(input.request));
 
-  const match = intentRules.find(rule => rule.pattern.test(input.request));
   if (!match) return null;
+  const requiredTools = [
+    ...match.tools,
+    ...(match.workflow === 'business_analysis' ? specialist?.tools || [] : [])
+  ];
   const assigned = new Set(input.assignedAgents);
   const registeredTools = new Set(input.registeredTools);
   const missingAgents = match.agents.filter(agent => !assigned.has(agent));
-  const missingTools = match.tools.filter(tool => !registeredTools.has(tool));
+  const missingTools = requiredTools.filter(tool => !registeredTools.has(tool));
   const workflowAvailable = input.registeredWorkflows.includes(match.workflow);
   return {
+    industryTemplate,
     workflow: match.workflow,
     goal: match.goal,
     agents: match.agents.filter(agent => assigned.has(agent)),
-    tools: match.tools.filter(tool => registeredTools.has(tool)),
+    tools: requiredTools.filter(tool => registeredTools.has(tool)),
     execution: !workflowAvailable
       ? 'workflow_unavailable'
       : missingAgents.length

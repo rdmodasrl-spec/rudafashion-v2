@@ -143,6 +143,9 @@ const ModaUIWorkbench = lazy(() =>
 const MerchantAiEmployees = lazy(() =>
   import('../merchant-admin-common/components/merchant/MerchantAiEmployees').then(module => ({ default: module.MerchantAiEmployees }))
 );
+const MerchantAiTools = lazy(() =>
+  import('../merchant-admin-common/components/merchant/MerchantAiTools').then(module => ({ default: module.MerchantAiTools }))
+);
 const MerchantAppStore = lazy(() =>
   import('../merchant-admin-common/components/merchant/AppStore').then(module => ({ default: module.AppStore }))
 );
@@ -356,7 +359,7 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
   } = useB2B();
   // 平台全局 ModaUI 总闸：关闭时隐藏 ai_home 标签并显示统一提示。
   const { modauiEnabled } = useModuleAvailability();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'inventory' | 'orders' | 'customers' | 'store' | 'profile' | 'ai_home' | 'pos' | 'finance' | 'growth' | 'production' | 'procurement' | 'content' | 'more' | 'ai_employees' | 'support'>(() =>
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'inventory' | 'orders' | 'customers' | 'store' | 'profile' | 'ai_home' | 'pos' | 'finance' | 'growth' | 'production' | 'procurement' | 'content' | 'more' | 'ai_employees' | 'ai_tools' | 'support'>(() =>
     initialTab || (isModaGptEntryRequest(window.location.search) ? 'ai_home' : 'dashboard')
   );
   const [industrySection, setIndustrySection] = useState<MerchantIndustryModuleKey>('dashboard');
@@ -393,7 +396,7 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
   const [mobileContentSection, setMobileContentSection] = useState<ContentKind>('metaobject');
   const [mobileGrowthSection, setMobileGrowthSection] = useState<GrowthSection>('overview');
   useEffect(() => {
-    if (activeTab !== 'ai_home' && activeTab !== 'more' && activeTab !== 'ai_employees' && activeTab !== 'support') {
+    if (activeTab !== 'ai_home' && activeTab !== 'more' && activeTab !== 'ai_employees' && activeTab !== 'ai_tools' && activeTab !== 'support') {
       copilotOriginTabRef.current = activeTab;
     }
   }, [activeTab]);
@@ -693,6 +696,9 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
         break;
       case 'ai_employees':
         setActiveTab('ai_employees');
+        break;
+      case 'ai_tools':
+        setActiveTab('ai_tools');
         break;
       case 'team':
         setSettingsSection('team');
@@ -2228,6 +2234,11 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
         {activeTab === 'ai_employees' && (
           <Suspense fallback={<div className="rounded-3xl bg-white p-8 text-center text-[11px] text-neutral-500">{mobileText('正在打开智能员工', 'Caricamento team AI')}</div>}>
             <MerchantAiEmployees isIt={mobileItalian} />
+          </Suspense>
+        )}
+        {activeTab === 'ai_tools' && (
+          <Suspense fallback={<div className="rounded-3xl bg-white p-8 text-center text-[11px] text-neutral-500">{mobileText('正在打开工具中心', 'Caricamento centro strumenti')}</div>}>
+            <MerchantAiTools />
           </Suspense>
         )}
         {activeTab === 'ai_home' && (modauiEnabled ? (

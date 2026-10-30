@@ -20,6 +20,7 @@ export const modaGptFeatureKeys = [
   'ai.voice',
   'ai.design',
   'ai.batch_creative',
+  'ai.tools',
   'payment.channels',
   'payment.collection',
   'payment.payout',

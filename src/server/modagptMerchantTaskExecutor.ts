@@ -23,6 +23,8 @@ import {
   isExecutableModaGptMerchantWorkflow,
   type ModaGptCoreTaskRoute
 } from './modagptTaskSupervisor';
+import { createModaGptIndustryTools, isModaGptIndustryAnalysisTool } from './modagptIndustryTools';
+import { getModaGptIndustryTemplateAssistantProfile } from './modagptCoreEmployees';
 
 export type ModaGptMerchantTaskResult = {
   taskId: string;
@@ -119,6 +121,10 @@ export async function executeModaGptMerchantTask(input: {
     assertLease: input.assertLease,
     sendQuote: input.sendQuote
   });
+  const industryTools = createModaGptIndustryTools({
+    prisma: input.prisma,
+    industryTemplate: input.route.industryTemplate
+  });
   // 应用专属工具（MODAUI AI Tools 等）：仅加入当前商家已安装且已授权的工具；
   // 未安装/授权到期/被暂停的工具不会进入工具集，核心 MODAGPT 工具不受影响。
   const aiToolAccess = await loadMerchantAiToolAccess(input.prisma, {
@@ -145,11 +151,12 @@ export async function executeModaGptMerchantTask(input: {
   const toolDefinitions = removeBlockedToolDefinitions(
     [
       ...tools.definitions,
+      ...industryTools.definitions,
       ...(appToolset?.definitions ?? []).filter(definition => aiToolAccess.allowedToolIds.includes(definition.name))
     ],
     blockedAppToolIds
   );
-  const toolHandlers = { ...(appToolset?.handlers ?? {}), ...tools.handlers };
+  const toolHandlers = { ...(appToolset?.handlers ?? {}), ...tools.handlers, ...industryTools.handlers };
   const effectiveAgentPermissions: Partial<Record<ModaGptAgentRole, readonly string[]>> = appToolset
     ? {
       ...agentPermissions,
@@ -478,6 +485,7 @@ export async function executeModaGptMerchantTask(input: {
       'finance_summary'
     ] as const;
     const results: Record<string, Record<string, unknown>> = {};
+    const industryResults: Array<{ toolId: string; summary: string }> = [];
     for (const toolId of businessToolIds) {
       await input.assertLease?.();
       const execution = await runtime.execute({
@@ -492,6 +500,34 @@ export async function executeModaGptMerchantTask(input: {
         throw new Error('MODAGPT_ANALYTICS_TOOL_VERIFY_FAILED');
       }
       results[toolId] = value;
+    }
+    const registeredIndustryToolIds = new Set(industryTools.definitions.map(definition => definition.name));
+    const industryToolIds = input.route.tools.filter(toolId =>
+      isModaGptIndustryAnalysisTool(toolId) && registeredIndustryToolIds.has(toolId)
+    );
+    if (industryToolIds.length > 1) throw new Error('MODAGPT_INDUSTRY_TOOL_ROUTE_INVALID');
+    const profile = getModaGptIndustryTemplateAssistantProfile(input.route.industryTemplate);
+    if (profile && (industryToolIds.length !== 1 || industryToolIds[0] !== profile.tools[0])) {
+      throw new Error('MODAGPT_INDUSTRY_TOOL_ROUTE_INVALID');
+    }
+    for (const toolId of industryToolIds) {
+      await input.assertLease?.();
+      const execution = await runtime.execute({
+        taskId: input.taskId,
+        tenantId: input.merchantId,
+        agentId: profile?.agentId || 'business-manager',
+        toolId,
+        input: { days }
+      });
+      const value = execution.result;
+      if (!isRecord(value)
+        || value.source !== 'ruda_database'
+        || value.industryTemplate !== input.route.industryTemplate
+        || typeof value.summary !== 'string'
+        || value.summary.length === 0) {
+        throw new Error('MODAGPT_INDUSTRY_ANALYSIS_TOOL_VERIFY_FAILED');
+      }
+      industryResults.push({ toolId, summary: value.summary });
     }
     const orders = results.order_summary;
     const sales = results.sales_summary;
@@ -516,6 +552,7 @@ export async function executeModaGptMerchantTask(input: {
       traceId: input.traceId,
       status: 'analysis_completed',
       summary: [
+        ...(profile ? [`${profile.displayName}：${industryResults[0]?.summary || '行业专属数据分析未执行。'}`] : []),
         orders.dataAvailable === false
           ? `最近 ${days} 天订单与销售数据：data_unavailable。`
           : `最近 ${days} 天 RUDA 实际数据：${String(orders.orderCount)} 笔非取消/退货订单，订单金额 ${String(sales.grossSales)}，已记录退款 ${String(sales.recordedRefundAmount)}，扣减已记录退款后 ${String(sales.amountAfterRecordedRefunds)}（币种未记录），销量 ${String(sales.unitsSold)} 件。`,
@@ -546,10 +583,15 @@ export async function executeModaGptMerchantTask(input: {
       employee: 'business-manager',
       steps: [
         `Supervisor 将任务交给经营总管，分析周期 ${days} 天`,
+        ...(profile ? [`由 ${profile.displayName} 调用模板专属只读分析工具`] : []),
         ...businessToolIds.map(toolId => `通过 Tool Runtime 读取 ${toolId}`),
+        ...industryResults.map(({ toolId }) => `通过 Tool Runtime 读取 ${toolId}`),
         '校验数据来源、周期和销售汇总一致性'
       ],
-      toolCalls: businessToolIds.map(toolId => ({ toolId, status: 'succeeded' as const })),
+      toolCalls: [
+        ...businessToolIds.map(toolId => ({ toolId, status: 'succeeded' as const })),
+        ...industryResults.map(({ toolId }) => ({ toolId, status: 'succeeded' as const }))
+      ],
       artifacts: [],
       approvalRequired: false,
       approvalId: null,

@@ -4105,6 +4105,10 @@ const UI_COPY_SOURCE_PAIRS: ReadonlyArray<{ zh: string; it: string }> = [
   { zh: "AI 正在回答…", it: "L’assistente sta rispondendo…" },
   { zh: "继续对话", it: "Continua la chat" },
   { zh: "发送失败，请重试", it: "Invio non riuscito, riprova" },
+  { zh: "工具中心", it: "Centro strumenti" },
+  { zh: "工具中心", it: "Strumenti AI" },
+  { zh: "AI 应用工具", it: "Strumenti delle app AI" },
+  { zh: "正在打开工具中心", it: "Caricamento centro strumenti" },
 
 ];
 

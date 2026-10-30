@@ -555,6 +555,9 @@ resolveMerchantToolset({
 - 用量唯一键：`ai.tools:<merchantId>:<taskId>`（upsert），重复写入不会重复计数；只有 `status='succeeded'` 计入额度，失败调用只留痕不占额度。
 - `feature='ai.tools'` 已加入 `modaGptFeatureKeys`，后台可直接用现有计费特性管理页启用并设置 `creditCost`；未启用时 `cost.credits` 保持 0，不虚报消费。
 - 验收（单测）：`tests/ai-tools-quota.test.ts` 覆盖默认值单调性、配置覆盖与回退、日/月拦截原因、UTC 周期窗口、幂等键、能力真值、引擎判定。
+- 验收（生产，2026-10-30 03:0x UTC，`npm run smoke:ai-tools` 17/17 PASS）：额度快照（`FREE` 20/200）、7 天试用到期、
+  6 个中心真值（文案 `ready` + 2 工具；图片/视频/语音/发布/分析 `not_connected` 且带原因）、
+  两次真实模型调用后当日用量 `+2` 且剩余额度同步减少、停用后 403 `app_disabled`、恢复/卸载后状态正确回落。
 
 **未实现（未接通）**
 

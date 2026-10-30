@@ -55,7 +55,10 @@ async function toolState() {
     manifestEnabled: result.body?.manifestEnabled === true,
     availableIds: tools.filter((tool: any) => tool.availability === 'available').map((tool: any) => tool.toolId),
     blockedIds: tools.filter((tool: any) => tool.availability === 'blocked').map((tool: any) => tool.toolId),
-    blockedReasons: tools.filter((tool: any) => tool.availability === 'blocked').map((tool: any) => tool.blockedReason)
+    blockedReasons: tools.filter((tool: any) => tool.availability === 'blocked').map((tool: any) => tool.blockedReason),
+    quota: result.body?.quota ?? null,
+    trialExpiresAt: typeof result.body?.trialExpiresAt === 'string' ? result.body.trialExpiresAt : null,
+    capabilities: Array.isArray(result.body?.capabilities) ? result.body.capabilities : []
   };
 }
 
@@ -68,6 +71,31 @@ async function main() {
 
   const installed = await toolState();
   check('安装后两个工具可用', installed.availableIds.length === 2, installed);
+
+  // P1 新增字段：额度、试用期、6 个工作中心真值必须由服务端返回。
+  const quotaReady = Boolean(installed.quota)
+    && installed.quota.limits?.dailyCalls > 0
+    && installed.quota.limits?.monthlyCalls >= installed.quota.limits?.dailyCalls
+    && typeof installed.quota.used?.daily === 'number';
+  check('返回额度快照', quotaReady, installed.quota);
+
+  const trialDays = installed.trialExpiresAt
+    ? Math.round((Date.parse(installed.trialExpiresAt) - Date.now()) / 86_400_000)
+    : null;
+  check('返回 7 天试用到期时间', trialDays !== null && trialDays >= 5 && trialDays <= 7, { trialExpiresAt: installed.trialExpiresAt, trialDays });
+
+  const centerIds = installed.capabilities.map((center: any) => center.id);
+  const copyCenter = installed.capabilities.find((center: any) => center.id === 'copywriting');
+  const notConnected = installed.capabilities.filter((center: any) => center.status !== 'ready');
+  check(
+    '工作中心真值：文案可用、其余未接通',
+    centerIds.length === 6
+      && copyCenter?.status === 'ready'
+      && copyCenter.toolIds.length === 2
+      && notConnected.length === 5
+      && notConnected.every((center: any) => center.toolIds.length === 0 && Boolean(center.reason)),
+    { centerIds, copyCenter, notConnected: notConnected.map((center: any) => ({ id: center.id, reason: center.reason })) }
+  );
 
   const copy = await call('POST', '/api/merchant/ai-tools/ai_tools_write_copy/invoke', {
     input: { brief: '亚麻短袖衬衫，宽松版型，适合初夏通勤', language: 'zh' }
@@ -86,6 +114,15 @@ async function main() {
     translate.status === 200 && typeof translate.body?.result?.translation === 'string',
     { status: translate.status, result: translate.body?.result ?? translate.body }
   );
+
+  // 用量记账：两次真实调用后，服务端口径的当日用量必须 +2（幂等键按 taskId，不会重复计数）。
+  const afterUsage = await toolState();
+  const usedDelta = (afterUsage.quota?.used?.daily ?? 0) - (installed.quota?.used?.daily ?? 0);
+  check('两次调用后用量 +2 且剩余额度同步减少', usedDelta === 2, {
+    before: installed.quota?.used,
+    after: afterUsage.quota?.used,
+    remaining: afterUsage.quota?.remaining
+  });
 
   const disable = await call('POST', `/api/app-store/installations/${APP_ID}/disable`);
   check('停用应用', disable.status === 200, { status: disable.status });

@@ -9,13 +9,20 @@ import {
 } from './modagptRuntime';
 import {
   createModaGptMerchantTools,
+  calculateProcurementTotal,
   executeModaGptMerchantDraftWorkflow,
   isCurrencyCode,
   productSnapshotFingerprint,
   quoteSnapshotFingerprint
 } from './modagptMerchantTools';
 import { createModaGptExecutionPlan } from './modagptOrchestration';
-import type { ModaGptCoreTaskRoute } from './modagptTaskSupervisor';
+import { loadMerchantAiToolAccess } from './aiToolRegistry';
+import { removeBlockedToolDefinitions } from './aiToolManifest';
+import { AI_TOOLS_USE_PERMISSION, createModauiAiTools } from './modauiAiTools';
+import {
+  isExecutableModaGptMerchantWorkflow,
+  type ModaGptCoreTaskRoute
+} from './modagptTaskSupervisor';
 
 export type ModaGptMerchantTaskResult = {
   taskId: string;
@@ -67,15 +74,16 @@ export async function executeModaGptMerchantTask(input: {
     signal?: AbortSignal
   ) => Promise<{ provider: string; providerMessageId: string }>;
 }): Promise<ModaGptMerchantTaskResult> {
-  if (!['product_publish', 'customer_quote_creation', 'business_analysis'].includes(input.route.workflow)
-    || input.route.execution !== 'ready') {
+  if (!isExecutableModaGptMerchantWorkflow(input.route.workflow) || input.route.execution !== 'ready') {
     throw new Error('MODAGPT_MERCHANT_WORKFLOW_UNAVAILABLE');
   }
   const employee = input.route.workflow === 'product_publish'
     ? 'product-creative-manager'
     : input.route.workflow === 'business_analysis'
       ? 'business-manager'
-      : 'sales-customer-manager';
+      : input.route.workflow === 'procurement_management'
+        ? 'supply-chain-finance-manager'
+        : 'sales-customer-manager';
   const employeePermissions = input.employeeId
     ? await input.prisma.merchantEmployee.findFirst({
       where: { id: input.employeeId, merchantId: input.merchantId, active: true },
@@ -85,12 +93,21 @@ export async function executeModaGptMerchantTask(input: {
   if (input.employeeId && !employeePermissions) throw new Error('EMPLOYEE_NOT_FOUND_OR_DISABLED');
   const userPermissions = employeePermissions
     ? parsePermissions(employeePermissions.permissions)
-    : ['product.catalog.read', 'product.import.draft', 'product.publish', 'sales.order.create', 'sales.quote.manage', 'business.analytics.read'];
+    : [
+      'product.catalog.read',
+      'product.import.draft',
+      'product.publish',
+      'sales.order.create',
+      'sales.quote.manage',
+      'business.analytics.read',
+      'purchase.manage',
+      'ai.tools.use'
+    ];
   const agentPermissions: Partial<Record<ModaGptAgentRole, readonly string[]>> = {
     'product-creative-manager': ['product.catalog.read', 'product.import.draft', 'product.publish'],
     'business-manager': ['product.catalog.read', 'sales.order.create', 'business.analytics.read'],
-    'sales-customer-manager': ['sales.order.create', 'sales.quote.manage', 'product.catalog.read'],
-    'supply-chain-finance-manager': []
+    'sales-customer-manager': ['sales.order.create', 'sales.quote.manage', 'product.catalog.read', 'business.analytics.read'],
+    'supply-chain-finance-manager': ['purchase.manage', 'business.analytics.read']
   };
   const tools = createModaGptMerchantTools({
     prisma: input.prisma,
@@ -102,6 +119,43 @@ export async function executeModaGptMerchantTask(input: {
     assertLease: input.assertLease,
     sendQuote: input.sendQuote
   });
+  // 应用专属工具（MODAUI AI Tools 等）：仅加入当前商家已安装且已授权的工具；
+  // 未安装/授权到期/被暂停的工具不会进入工具集，核心 MODAGPT 工具不受影响。
+  const aiToolAccess = await loadMerchantAiToolAccess(input.prisma, {
+    merchantId: input.merchantId,
+    actorPermissions: userPermissions,
+    agentId: employee
+  }).catch(error => {
+    // 应用工具门禁异常不得影响核心 MODAGPT 工具：降级为「无应用工具」并记录错误类型。
+    console.warn('[modagpt-app-tools]', error instanceof Error ? error.name : 'unknown error');
+    return {
+      manifestEnabled: true,
+      allowedToolIds: [],
+      blockedToolIds: [],
+      denied: [],
+      appIds: []
+    };
+  });
+  const appToolset = aiToolAccess.allowedToolIds.length > 0
+    ? createModauiAiTools({ signal: input.signal, assertLease: input.assertLease })
+    : null;
+  const appToolIds = new Set((appToolset?.definitions ?? []).map(definition => definition.name));
+  // 只按「应用实际提供的工具」剔除；即使某个 Manifest 误声明了核心工具 id，也不会移除核心能力。
+  const blockedAppToolIds = aiToolAccess.blockedToolIds.filter(toolId => appToolIds.has(toolId));
+  const toolDefinitions = removeBlockedToolDefinitions(
+    [
+      ...tools.definitions,
+      ...(appToolset?.definitions ?? []).filter(definition => aiToolAccess.allowedToolIds.includes(definition.name))
+    ],
+    blockedAppToolIds
+  );
+  const toolHandlers = { ...(appToolset?.handlers ?? {}), ...tools.handlers };
+  const effectiveAgentPermissions: Partial<Record<ModaGptAgentRole, readonly string[]>> = appToolset
+    ? {
+      ...agentPermissions,
+      [employee]: [...(agentPermissions[employee] ?? []), AI_TOOLS_USE_PERMISSION]
+    }
+    : agentPermissions;
   const quoteAction = typeof input.inputs.quoteAction === 'string' ? input.inputs.quoteAction : 'draft';
   if (input.route.workflow === 'customer_quote_creation'
     && ['update', 'submit', 'send'].includes(quoteAction)
@@ -369,13 +423,13 @@ export async function executeModaGptMerchantTask(input: {
     actorId: input.actorId,
     active: true,
     permissions: userPermissions,
-    agentPermissions,
+    agentPermissions: effectiveAgentPermissions,
     approvedActions
   };
   const runtime = createModaGptToolRuntime({
     principal,
-    definitions: tools.definitions,
-    handlers: tools.handlers,
+    definitions: toolDefinitions,
+    handlers: toolHandlers,
     signal: input.signal,
     assertLease: input.assertLease,
     recordAudit: async event => {
@@ -401,6 +455,18 @@ export async function executeModaGptMerchantTask(input: {
       });
     }
   });
+  if (input.route.workflow === 'procurement_management') {
+    return executeModaGptProcurementWorkflow({
+      prisma: input.prisma,
+      merchantId: input.merchantId,
+      taskId: input.taskId,
+      traceId: input.traceId,
+      message: input.message,
+      inputs: input.inputs,
+      runtime,
+      assertLease: input.assertLease
+    });
+  }
   if (input.route.workflow === 'business_analysis') {
     const days = extractAnalysisPeriodDays(input.message);
     const businessToolIds = [
@@ -723,6 +789,198 @@ export async function executeModaGptMerchantTask(input: {
     traceId: input.traceId,
     ...result,
     creditsUsed: 0
+  };
+}
+
+async function executeModaGptProcurementWorkflow(input: {
+  prisma: PrismaClient;
+  merchantId: string;
+  taskId: string;
+  traceId: string;
+  message: string;
+  inputs: Record<string, unknown>;
+  runtime: ReturnType<typeof createModaGptToolRuntime>;
+  assertLease?: () => Promise<void>;
+}): Promise<ModaGptMerchantTaskResult> {
+  const agentId = 'supply-chain-finance-manager';
+  const toolCalls: ModaGptMerchantTaskResult['toolCalls'] = [];
+  const supplierQuery = isRecord(input.inputs.get_suppliers) ? input.inputs.get_suppliers : {};
+  await input.assertLease?.();
+  const supplierExecution = await input.runtime.execute({
+    taskId: input.taskId,
+    tenantId: input.merchantId,
+    agentId,
+    toolId: 'get_suppliers',
+    input: supplierQuery
+  });
+  toolCalls.push({ toolId: 'get_suppliers', status: 'succeeded' });
+  const supplierResult = supplierExecution.result as { suppliers: Array<{ id: string; name: string }> };
+  if (!Array.isArray(supplierResult.suppliers)) throw new Error('MODAGPT_SUPPLIER_LIST_VERIFY_FAILED');
+
+  const comparisonRequested = /(?:对比|比较|绩效|供应商分析|采购分析|compare|performance|analy[sz]e)/i.test(input.message);
+  const explicitPerformance = input.inputs.get_supplier_performance;
+  const explicitSupplierId = isRecord(explicitPerformance) && typeof explicitPerformance.supplierId === 'string'
+    ? explicitPerformance.supplierId
+    : null;
+  const supplierIds = explicitSupplierId
+    ? [explicitSupplierId]
+    : comparisonRequested
+      ? supplierResult.suppliers.map(supplier => supplier.id)
+      : [];
+  const performanceResults: Array<{ supplierId: string; metrics: Record<string, unknown> }> = [];
+  for (const supplierId of [...new Set(supplierIds)]) {
+    await input.assertLease?.();
+    const execution = await input.runtime.execute({
+      taskId: input.taskId,
+      tenantId: input.merchantId,
+      agentId,
+      toolId: 'get_supplier_performance',
+      input: { supplierId }
+    });
+    const result = execution.result as { supplierId: string; metrics: Record<string, unknown> };
+    if (!isRecord(result.metrics)) throw new Error('MODAGPT_SUPPLIER_PERFORMANCE_VERIFY_FAILED');
+    performanceResults.push(result);
+    toolCalls.push({ toolId: 'get_supplier_performance', status: 'succeeded' });
+  }
+
+  let currencySummary = '';
+  if (isRecord(input.inputs.currency_convert)) {
+    await input.assertLease?.();
+    const execution = await input.runtime.execute({
+      taskId: input.taskId,
+      tenantId: input.merchantId,
+      agentId,
+      toolId: 'currency_convert',
+      input: input.inputs.currency_convert
+    });
+    const result = execution.result as {
+      amount: number;
+      from: string;
+      currency: string;
+      rate: number;
+      rateSource: string;
+      rateDate: string | null;
+      rateType: string;
+    };
+    toolCalls.push({ toolId: 'currency_convert', status: 'succeeded' });
+    currencySummary = result.rateType === 'daily_reference'
+      ? `汇率参考：1 ${result.from} = ${result.rate} ${result.currency}，${result.rateSource} 日度参考汇率（数据日期 ${result.rateDate}），${result.amount} ${result.currency}；非实时交易报价。`
+      : `同币种换算：${result.amount} ${result.currency}。`;
+  }
+
+  const draftRequested = input.inputs.create_procurement_draft !== undefined
+    || /(?:创建|生成|准备|新建).{0,12}(?:采购草稿|采购单|采购订单|进货单|补货订单)/i.test(input.message);
+  if (draftRequested && !isRecord(input.inputs.create_procurement_draft)) {
+    return {
+      taskId: input.taskId,
+      traceId: input.traceId,
+      status: 'needs_input',
+      summary: '已查询本商家启用供应商；请提供 supplierId，以及每项商品的 productId、variantId、数量和单位成本。当前未创建采购单。',
+      employee: agentId,
+      steps: ['Supervisor 路由至贸易采购员工', '读取本商家启用供应商', '校验缺失的采购草稿输入'],
+      toolCalls,
+      artifacts: [],
+      approvalRequired: false,
+      approvalId: null,
+      creditsUsed: 0,
+      errors: []
+    };
+  }
+
+  if (draftRequested) {
+    await input.assertLease?.();
+    const execution = await input.runtime.execute({
+      taskId: input.taskId,
+      tenantId: input.merchantId,
+      agentId,
+      toolId: 'create_procurement_draft',
+      input: input.inputs.create_procurement_draft
+    });
+    const result = execution.result as {
+      purchaseOrderId: string;
+      purchaseOrderNo: string;
+      status: string;
+      totalAmount: number;
+    };
+    const draftInput = input.inputs.create_procurement_draft as {
+      supplierId: string;
+      items: Array<{ productId: string; variantId: string; quantity: number; unitCost: number }>;
+      currency?: string;
+    };
+    const savedOrder = await input.prisma.merchantPurchaseOrder.findFirst({
+      where: { id: result.purchaseOrderId, merchantId: input.merchantId },
+      include: { items: true }
+    });
+    const savedItemsMatch = savedOrder !== null
+      && savedOrder.items.length === draftInput.items.length
+      && draftInput.items.every(expected => savedOrder.items.some(actual =>
+        actual.productId === expected.productId
+        && actual.variantId === expected.variantId
+        && actual.orderedQuantity === expected.quantity
+        && Number(actual.unitCost) === expected.unitCost
+      ));
+    const savedTotal = savedOrder
+      ? calculateProcurementTotal(savedOrder.items.map(item => ({
+        quantity: item.orderedQuantity,
+        unitCost: item.unitCost
+      })))
+      : undefined;
+    if (!savedOrder
+      || savedOrder.supplierId !== draftInput.supplierId
+      || savedOrder.status !== 'draft'
+      || result.status !== 'draft'
+      || !savedItemsMatch
+      || savedTotal === undefined
+      || savedTotal !== result.totalAmount) {
+      throw new Error('MODAGPT_PROCUREMENT_DRAFT_READBACK_FAILED');
+    }
+    toolCalls.push({ toolId: 'create_procurement_draft', status: 'succeeded' });
+    return {
+      taskId: input.taskId,
+      traceId: input.traceId,
+      status: 'draft_created',
+      summary: `已创建并回读验证采购草稿 ${result.purchaseOrderNo}，金额 ${result.totalAmount.toFixed(2)} ${draftInput.currency || 'EUR'}。状态仍为草稿，尚未提交或下单；请按现有采购审批流程处理。${currencySummary ? ` ${currencySummary}` : ''}`,
+      employee: agentId,
+      steps: [
+        'Supervisor 路由至贸易采购员工',
+        '通过 Tool Runtime 查询租户内供应商',
+        '校验供应商、商品、SKU、数量和成本',
+        '创建采购草稿并从数据库回读核验租户、状态和金额'
+      ],
+      toolCalls,
+      artifacts: [`MerchantPurchaseOrder:${savedOrder.id}`],
+      approvalRequired: false,
+      approvalId: null,
+      creditsUsed: 0,
+      errors: []
+    };
+  }
+
+  const performanceSummary = performanceResults.map(({ supplierId, metrics }) => {
+    const supplier = supplierResult.suppliers.find(item => item.id === supplierId);
+    return `${supplier?.name || supplierId}：到货率 ${String(metrics.fulfillmentRate)}，完整交付平均 ${String(metrics.averageLeadTimeDays)} 天（${String(metrics.ordersWithLeadTime)} 单）。`;
+  });
+  return {
+    taskId: input.taskId,
+    traceId: input.traceId,
+    status: 'analysis_completed',
+    summary: [
+      performanceSummary.length ? performanceSummary.join(' ') : `已查询本商家启用供应商 ${supplierResult.suppliers.length} 家。`,
+      currencySummary
+    ].filter(Boolean).join(' '),
+    employee: agentId,
+    steps: [
+      'Supervisor 路由至贸易采购员工',
+      '通过 Tool Runtime 查询租户内启用供应商',
+      ...performanceResults.map(() => '通过 Tool Runtime 查询并验证供应商历史绩效'),
+      ...(currencySummary ? ['使用带来源和基准日期的日度参考汇率'] : [])
+    ],
+    toolCalls,
+    artifacts: [],
+    approvalRequired: false,
+    approvalId: null,
+    creditsUsed: 0,
+    errors: []
   };
 }
 

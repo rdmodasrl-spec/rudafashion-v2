@@ -5,6 +5,7 @@ export type ProductLifecycleStatus = 'published' | 'pending_review' | 'draft' | 
 
 export interface SKUItem {
   sku: string;
+  variantId?: string;
   color: string;
   colorCode: string;
   size: string;

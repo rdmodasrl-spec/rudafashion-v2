@@ -167,3 +167,17 @@ test('workbench only executes real endpoints and never fabricates progress', () 
   assert.match(workbench, /<ModaCoreAnchor kind="hero"/);
   assert.doesNotMatch(workbench, /digital-?life[^\n]*<img/i, 'DigitalLife 不得用静态图片替代');
 });
+
+test('workbench business tasks reuse authenticated merchant APIs with explicit procurement inputs', () => {
+  const workbench = read('src/apps/merchant-admin-common/components/merchant/modaui/ModaUIWorkbench.tsx');
+
+  assert.match(workbench, /\/api\/merchant\/modagpt\/task\/preview/);
+  assert.match(workbench, /\/api\/merchant\/modagpt\/task'/);
+  assert.match(workbench, /\/api\/merchant\/modagpt\/task\/\$\{encodeURIComponent\(taskId\)\}/);
+  assert.match(workbench, /'Idempotency-Key': idempotencyKey/);
+  assert.match(workbench, /create_procurement_draft:/);
+  assert.match(workbench, /\/api\/merchant\/products/);
+  assert.match(workbench, /taskDraft\.unitCost\.trim\(\)/);
+  assert.match(workbench, /任务仍在处理中，任务编号/);
+  assert.match(workbench, /当前员工没有采购管理权限/);
+});

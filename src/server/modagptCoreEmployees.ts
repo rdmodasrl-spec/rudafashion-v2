@@ -54,13 +54,15 @@ function employee(
   knowledgeTags: readonly string[],
   capabilities: readonly ('text' | 'vision' | 'image')[] = ['text']
 ) {
-  const defaultPermissions = tools.includes('product_search')
-    ? ['product.catalog.read']
-    : tools.includes('inventory_search')
-      ? ['inventory.stock.read', 'sales.summary.read']
-      : tools.includes('sales_summary')
-        ? ['sales.summary.read']
-        : [];
+  const defaultPermissions = [
+    ...(tools.includes('product_search') ? ['product.catalog.read'] : []),
+    ...(tools.includes('inventory_search') ? ['inventory.stock.read', 'sales.summary.read'] : []),
+    ...(tools.includes('sales_summary') ? ['sales.summary.read'] : []),
+    ...(tools.includes('get_suppliers') || tools.includes('create_procurement_draft') || tools.includes('get_supplier_performance')
+      ? ['purchase.manage']
+      : []),
+    ...(tools.includes('currency_convert') ? ['business.analytics.read'] : [])
+  ];
   return {
     agentId,
     agentType: 'core_employee' as const,
@@ -92,19 +94,27 @@ function createPack(input: {
   skills: readonly [readonly string[], readonly string[], readonly string[], readonly string[]];
   tags: readonly string[];
   workflows: readonly string[];
+  extraTools?: Partial<Record<ModaGptAgentRole, string[]>>;
 }): ModaGptIndustryPack {
   return {
     id: input.id,
     businessTypes: input.businessTypes,
     workflows: input.workflows,
     employees: {
-      'business-manager': employee('business-manager', input.id, input.names[0], input.skills[0], [], input.tags),
+      'business-manager': employee(
+        'business-manager',
+        input.id,
+        input.names[0],
+        input.skills[0],
+        input.extraTools?.['business-manager'] || [],
+        input.tags
+      ),
       'product-creative-manager': employee(
         'product-creative-manager',
         input.id,
         input.names[1],
         input.skills[1],
-        ['product_search'],
+        ['product_search', ...(input.extraTools?.['product-creative-manager'] || [])],
         [...input.tags, 'product_catalog'],
         ['text', 'vision', 'image']
       ),
@@ -113,7 +123,7 @@ function createPack(input: {
         input.id,
         input.names[2],
         input.skills[2],
-        ['sales_summary'],
+        ['sales_summary', ...(input.extraTools?.['sales-customer-manager'] || [])],
         [...input.tags, 'customer_operations']
       ),
       'supply-chain-finance-manager': employee(
@@ -121,7 +131,7 @@ function createPack(input: {
         input.id,
         input.names[3],
         input.skills[3],
-        ['inventory_search', 'replenishment_analysis'],
+        ['inventory_search', 'replenishment_analysis', ...(input.extraTools?.['supply-chain-finance-manager'] || [])],
         [...input.tags, 'supply_chain']
       )
     }
@@ -205,7 +215,12 @@ export const modaGptIndustryPacks: Readonly<Record<ModaGptIndustry, ModaGptIndus
       ['trade_supply_chain', 'inventory_search', 'financial_reporting']
     ],
     tags: ['trading', 'import_export', 'supplier_operations', 'b2b'],
-    workflows: ['inventory_low_replenishment']
+    workflows: ['inventory_low_replenishment'],
+    extraTools: {
+      'product-creative-manager': ['get_suppliers'],
+      'sales-customer-manager': ['currency_convert'],
+      'supply-chain-finance-manager': ['get_suppliers', 'create_procurement_draft', 'get_supplier_performance', 'currency_convert']
+    }
   }),
   WHOLESALE_COMPANY: createPack({
     id: 'WHOLESALE_COMPANY',

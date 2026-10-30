@@ -51,6 +51,8 @@
 
 智能生产链是应用商店中的**可选安装业务应用**（`ruda-production-chain`），不是新的应用运行面：其商家页面仍由商家后台 Web/手机端承载，服务端路由为 `/api/production/*`，安装状态由 `AppInstallation` 控制。工厂协作使用独立主体会话与工厂归属校验，不进入商家后台菜单。规格见 [`modules/production-chain.md`](./modules/production-chain.md)。
 
+MODAUI AI 工具平台（App Store 独立应用 + 工具注册协议）目前处于**设计待评审**，尚未实现。设计文档为 [`architecture/MODaUI-AI-TOOLS-PLATFORM.md`](./architecture/MODaUI-AI-TOOLS-PLATFORM.md)，其中记录了一个关键现状：商店安装记录 `AppInstallation` 只在 `src/server/productionChain.ts:256` 被当作能力门禁（appId 写死），AI 工具链完全不读取安装记录；可安装性被硬编码在 `src/server/appStoreValidation.ts` 的两个 `appId` 白名单内。因此"安装某个应用"当前不等于"获得对应 AI 能力"。该文档给出 Tool Manifest v1 协议与解析链设计，实施前必须先评审。
+
 
 开始改动一个领域时，应从真实页面/调用方追踪至 API、服务、数据库和权限，而非仅按组件名推断业务边界。创建可独立交付的新模块时，使用 `templates/module-spec-template.md` 先记录复用、契约、权限和验收。
 

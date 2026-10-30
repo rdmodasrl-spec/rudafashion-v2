@@ -1905,6 +1905,7 @@ model App {
   status        String            @default("draft") @db.VarChar(24)
   pricingType   String            @default("free") @db.VarChar(24)
   pricePlan     Json              @default("{}")
+  manifest      Json?
   developer     String            @default("RUDA FASHION") @db.VarChar(160)
   permissions   String            @default("[]") @db.Text
   features      String            @default("[]") @db.Text
@@ -1930,6 +1931,65 @@ model AppInstallation {
 
   @@unique([merchantId, appId])
   @@index([merchantId, status])
+}
+
+model AiToolRegistryEntry {
+  toolId      String   @id @db.VarChar(120)
+  appId       String   @db.VarChar(120)
+  appRecordId String
+  version     String   @db.VarChar(32)
+  displayName Json
+  enabled     Boolean  @default(true)
+  status      String   @default("published") @db.VarChar(24)
+  riskLevel   String   @default("LOW") @db.VarChar(16)
+  permission  String   @db.VarChar(80)
+  cost        Json
+  industries  String[] @default([])
+  employees   String[] @default([])
+  credentials String[] @default([])
+  fingerprint String   @db.VarChar(64)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([appId, status])
+  @@index([status, enabled])
+}
+
+model MerchantToolGrant {
+  id            String    @id @default(uuid())
+  merchantId    String
+  toolId        String    @db.VarChar(120)
+  appId         String    @db.VarChar(120)
+  status        String    @default("active") @db.VarChar(24)
+  source        String    @default("app-install") @db.VarChar(24)
+  grantedBy     String?   @db.VarChar(160)
+  grantedAt     DateTime  @default(now())
+  expiresAt     DateTime?
+  pausedAt      DateTime?
+  revokedAt     DateTime?
+  revokedReason String?   @db.VarChar(160)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([merchantId, toolId])
+  @@index([merchantId, status])
+  @@index([appId, status])
+  @@index([merchantId, appId])
+}
+
+model AppInstallationStatusEvent {
+  id          String   @id @default(uuid())
+  merchantId  String
+  appRecordId String
+  appId       String   @db.VarChar(120)
+  fromStatus  String?  @db.VarChar(24)
+  toStatus    String   @db.VarChar(24)
+  actorId     String?  @db.VarChar(160)
+  reason      String?  @db.VarChar(160)
+  createdAt   DateTime @default(now())
+
+  @@index([merchantId, createdAt])
+  @@index([appId, createdAt])
 }
 
 model ModaGptAiUsageRecord {

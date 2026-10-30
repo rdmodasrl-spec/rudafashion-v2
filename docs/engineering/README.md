@@ -6,6 +6,7 @@
 
 - [`AGENTS.md`](../../AGENTS.md)：全仓开发规则，VS Code/Copilot 工作区根级指令入口。
 - [`architecture.md`](./architecture.md)：跨运行面架构基线；应用构建和边界细节继续以现有 [`docs/application-boundaries.md`](../application-boundaries.md) 为准，避免维护两份冲突的构建清单。
+- [`architecture/MODaUI-AI-TOOLS-PLATFORM.md`](./architecture/MODaUI-AI-TOOLS-PLATFORM.md)：MODAUI AI 工具平台设计（v0.1，设计待评审、未实现）。含 App Store/工具运行时/任务队列/计费/员工体系的只读审计、Tool Manifest v1 协议、安装→能力解析链、分阶段计划与验收标准；实施前必须先评审。
 - [`module-registry.md`](./module-registry.md)：按当前源码建立的模块目录；状态表示代码证据级别，不替代模块规格或业务验收。
 - [`duplication-audit.md`](./duplication-audit.md)：全站版块重复数字/重复入口审计记录、已修复项、数据口径核查与未验证范围。
 - [`ide-workspace-config.md`](./ide-workspace-config.md)：VS Code / TypeScript 索引边界（`tsconfig.json` 与 `.vscode/settings.json` 排除项）、OOM 处理记录、保留的源码索引范围与回滚方式。

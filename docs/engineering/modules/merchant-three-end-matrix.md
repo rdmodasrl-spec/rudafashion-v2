@@ -49,7 +49,8 @@
 | 店铺资料/设置 | 有 | 有 | 有（部分字段） | 同一 GET/PUT；设置事件回显与 `expectedUpdatedAt` 409 已补，待三端验收 |
 | 商品编辑锁/员工权限 | 有 | 有 | 有 | 同一服务端权限；待角色矩阵验收 |
 | 通知/消息 | 有 | 有 | 有（部分） | 同一服务端；跨端去重待验证 |
-| ModaUI/AI | 有；桌面宽度 880px | 有；9 项分组菜单、四个常驻快捷胶囊、导航默认收于细拖柄、创作设置底部面板、任务模式互斥 | 审核期隐藏；`pages/assistant` 已同步同一结构（菜单 68rpx 行高、四个快捷胶囊、`setHidden`、64rpx 拖柄） | 三端业务规则一致；Web/手机真实会话 Playwright 通过；小程序受审核开关限制待真机 |
+| ModaUI/贸易批发任务 | `ModaUIWorkbench` 增加任务模式及预览/确认/提交/轮询；此前 `MerchantPortal` 辅助面板已有独立任务流程，现有界面保留；待真实浏览器任务验收 | 共享 `ModaUIWorkbench`：接入同一任务模式及预览/确认/提交/轮询，待真实手机 Web 验收 | `merchant-miniprogram/pages/assistant`：复用既有商家/员工 JWT 与对话入口，接入受保护 `/api/merchant/modagpt/task*`，待开发者工具/真机验收 | 三端指向同一 Supervisor、`TRADING_COMPANY` Pack、工具运行时和 Prisma 数据；服务端从 JWT 确定租户。创建草稿时三端显式收集并确认供应商、商品、SKU、数量和成本；同一隔离商家执行供应商分析、草稿、无权限员工、跨租户四场景后才可标为一致 |
+| ModaUI 通用聊天与图片 | 原工作台与辅助问答保持既有行为；图片 API 同步返回 | 原图片工作台功能保持；任务模式退出后仍走原图像流程 | 原对话、图片/试穿与任务以既有入口区分；公共 `miniprogram/` 文本聊天不获得商家工具权限 | 不把商家工具接入未认证 `/api/modagpt/public/chat`；本阶段不触发计费图片服务 |
 | 七行业首页一致性 | 共用原版 `MerchantPortal` 首页；生产登录态页面已重载核对 | 共用原版 `MerchantMobileApp` 首页；生产登录态页面已重载核对，390×844 隔离页 7/7 同结构 | 保留小程序自己的旧版首页与导航，未在本轮修改/验收 | 商家 Web `20261029201319473-5ab5440d`、手机 Web `20261029201330774-839824fd` 已发布；线上桌面/手机截图确认旧首页结构。小程序与七账号生产登录仍待验收 |
 | 七行业后台布局/AI 助手栏 | 六行业业务模块复用 `MerchantPortal` 顶栏、旧导航、响应式水平导航及上下文 GPTmoda | 六行业业务模块复用 `MerchantMobileApp` 底部导航/更多页及 ModaUI 入口 | 原生小程序按既有运行面保持，不套用 Web 构建布局 | 隔离预览仅抽验服装批发商：Web 881×485 旧水平导航与 GPTmoda 可用；手机 390×844 旧底部导航正常且无页面横向溢出。其余行业逐页视觉/AI 上下文和小程序仍待验收；发布仍阻塞，见 `merchant-industry-backends.md` 与 `merchant-seven-industry-acceptance.md` §2.6 |
 | ModaUI 单页创作工作台 | 有；`fashion_studio`/`modagpt` 直接进入单页工作台（左五项、中时间流、右检查器），无卡片落地页 | 有；`ai_home` 渲染同一个 `ModaUIWorkbench`（固定全屏 + 键盘内缩，旧拖柄导航已删） | 缺失（`pages/assistant` 仍是旧结构，无创作入口；审核期 AI 开关关闭） | 三端共用同一能力注册表、推理规划与 `/api/merchant/modagpt/*`；Web 已浏览器验收，手机 App 已代码接入并构建通过（真实登录态视觉待验收），小程序未接入（见 `modaui-workbench.md` §13） |
@@ -183,3 +184,36 @@
 - 未新增任何应用记录、未改后台外壳与配色；生产库核对 2 个已上架应用、9 个分类、修复前 0 条安装记录（非数据丢失）。
 - 验证：平台后台列表可见、无 `[object Object]`、商家 Web/手机入口可进入、安装→启用→停用均 200、平台后台 `_count.installations=1`、页面运行时报错 0；截图见 `docs/engineering/evidence/app-store/`。
 - 生产迁移与正式发布、商家小程序发布均**未执行**，等待确认。
+
+## 2026-10-30 电脑端左侧导航定型（14 项）与三个新入口
+
+| 功能 | 电脑网页端（merchant-admin-web） | 手机网页端（merchant-admin-mobile） | 商家小程序（merchant-miniprogram） |
+| --- | --- | --- | --- |
+| 左侧导航结构 | 已完成：14 个一级入口（业务 9 / 应用与记录 3 / 底部固定 2），白色侧栏、浅灰选中态 | **本轮未改**（用户明确要求只做电脑端） | **本轮未改** |
+| 顶部品牌位 | 已完成：改为真实 `companyLegalName`（回退 `name`），不再显示 RUDA 占位 | 未改 | 未改 |
+| 应用（应用商店 / 回收站） | 已完成：`#merchant-sidebar-tab-apps` 展开「应用商店」「回收站」 | 手机端原有「更多 → 应用商店」保持不变 | 无入口（本次不改） |
+| AI 聊天记录 | 已完成：跨页面上下文会话列表、搜索、完整对话、继续对话 | 无独立入口；手机端沿用助手会话菜单 | 无 |
+| 最近动态 | 已完成：商品/库存/订单/应用安装事件聚合，可跳转业务页 | 无入口 | 无 |
+| 回收站恢复 | 已完成：`POST /api/merchant/recycle-bin/products/:id/restore`，恢复为 `draft` 并写审计 | 无 | 无 |
+
+- 数据源复用：`Product`、`InventoryMovement`、`Order.timeline`、`EmployeeAuditLog`、`MerchantAssistantConversation`；无新增表、无迁移。
+- 权限：活动/回收站读取需 `sales.order.create` / `product.publish` / `production.report` 之一；恢复需 `product.publish` 且商品编辑未锁定；会话列表与详情按 `merchantId + actorId` 隔离。
+- 规格文档：`docs/engineering/modules/merchant-admin-desktop-navigation.md`。
+- 验证：`tsc` 0、`npm run test:unit` 1164/1164、`build:app:merchant-admin-web` 0、新增测试 7/7、组件级真实渲染 1440×900 与 390×844 无横向溢出与 0 控制台错误。
+- 未覆盖：真实商家登录态的桌面截图（导航/顶部公司名）、手机 Web 与小程序本轮按范围未改，不参与验收。
+
+## 2026-10-30 贸易批发 ModaUI 三端统一任务接线
+
+| 功能 | 电脑网页端（merchant-admin-web） | 手机网页端（merchant-admin-mobile） | 商家小程序（merchant-miniprogram） |
+| --- | --- | --- | --- |
+| 任务预览/确认/执行/轮询 | 复用 `/api/merchant/modagpt/task/preview`、`task`、`task/:id` | 在共享 `ModaUIWorkbench` 使用同一契约 | 在 `pages/assistant` 使用 `utils/api.js` 既有认证请求封装调用同一契约 |
+| 供应商分析/采购草稿/员工权限/租户隔离 | 由服务端行业 Pack、Supervisor、工具运行时、权限中间件决定 | 同一服务端规则 | 同一服务端规则；不使用公共聊天 API 执行商家业务 |
+| UI 与业务边界 | 保持原工作台，不重做布局 | 仅增加任务操作状态并保持现有创作/图片工作台 | 保持原 ModaUI 页面和导航，仅在现有对话加入任务预览/结果状态 |
+
+- 权威数据源：既有 `Supplier`、`Product`、`ProductVariant`、`MerchantPurchaseOrder`/收货关系；无 schema 或迁移变化。
+- 身份与租户：复用商家 JWT；客户端不传权威 `merchantId`；每次提交/轮询由服务端授权。
+- 幂等与恢复：单次已确认任务使用稳定 `Idempotency-Key`；网络结果不确定时用同一键重试；任务轮询终态和错误码在当前对话展示。
+- 文档/API 契约：沿用 [trading-wholesale-ai.md](./trading-wholesale-ai.md) 的预览、提交、轮询契约；没有新增 endpoint。
+- 自动化证据：`npm run test:unit` 1166/1166 通过；`npm run test:trading-wholesale:integration` 在隔离 PostgreSQL 上通过，覆盖真实 HTTP 任务、目录租户边界、采购权限拒绝、任务轮询与采购草稿写入。
+- 端侧验收：桌面 Web、手机 Web 未提供已认证浏览器会话/截图；小程序未在微信开发者工具或真机运行。三端页面和真实聊天交互仍标记为待验收，不以 API 测试替代。
+- 状态：**部分完成（端侧代码接线与自动化验证完成；Web、手机 Web、小程序实机/视觉验收待完成）**。

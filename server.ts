@@ -39,11 +39,30 @@ import {
 } from './src/server/miniprogramWechatIdentity';
 import { getClientIp } from './src/server/clientIp';
 import {
+  describeAppStoreRuntime,
   getAppStoreInstallationError,
   isAppStoreNativeRuntimeCompatible,
   parseAppStoreStringArray,
+  pricingTypeAllowsTrial,
   transitionAppStoreInstallation
 } from './src/server/appStoreValidation';
+import {
+  isAiToolsManifestEnabled,
+  readManifestTrialDays,
+  removeBlockedToolDefinitions,
+  summarizeAiToolManifestTool
+} from './src/server/aiToolManifest';
+import {
+  grantAppTools,
+  loadMerchantAiToolAccess,
+  readAiToolManifest,
+  recordAppInstallationStatusEvent,
+  revokeAppToolGrants,
+  saveAppManifest,
+  setAppToolGrantState,
+  setMerchantToolGrantStatus
+} from './src/server/aiToolRegistry';
+import { AI_TOOLS_USE_PERMISSION, createModauiAiTools } from './src/server/modauiAiTools';
 import { meetsMinimumPasswordLength } from './src/shared/passwordPolicy';
 import { normalizeMerchantWebsiteUrl } from './src/shared/merchantWebsiteUrl';
 import {
@@ -358,7 +377,12 @@ import {
 } from './src/server/modagptRuntime';
 import { createModaGptMerchantTools, isCurrencyCode, quoteSnapshotFingerprint } from './src/server/modagptMerchantTools';
 import { executeModaGptMerchantTask } from './src/server/modagptMerchantTaskExecutor';
-import { superviseModaGptCoreTask } from './src/server/modagptTaskSupervisor';
+import {
+  executableModaGptMerchantWorkflowIds,
+  isExecutableModaGptMerchantWorkflow,
+  superviseModaGptCoreTask
+} from './src/server/modagptTaskSupervisor';
+import { fetchLatestExchangeRates } from './src/server/exchangeRates';
 import { ModaGptTaskRuntime } from './src/server/modagptTaskQueue';
 import { startModaGptTaskWorker } from './src/server/modagptTaskWorker';
 import { PrismaModaGptTaskStore } from './src/server/prismaModaGptTaskStore';
@@ -558,6 +582,8 @@ dotenv.config({ override: process.env.NODE_ENV !== 'test' });
 
 const isProduction = process.env.NODE_ENV === 'production';
 const p0HttpTestMode = process.env.P0_HTTP_TEST_MODE === 'true';
+const enableModaGptWorkerForHttpTest = p0HttpTestMode
+  && process.env.P0_HTTP_TEST_ENABLE_MODAGPT_WORKER === 'true';
 if (p0HttpTestMode) {
   const databaseUrl = process.env.DATABASE_URL;
   if (process.env.NODE_ENV !== 'test' || !databaseUrl) {
@@ -5015,12 +5041,36 @@ function employeeHasPermission(req: AuthRequest, permission: string) {
   return hasEmployeePermission(role, configuredPermissions, permission);
 }
 
+function merchantEffectivePermissions(req: AuthRequest): string[] {
+  const raw = (req.merchant as unknown as { permissions?: unknown } | undefined)?.permissions;
+  const configured = Array.isArray(raw)
+    ? raw.filter((permission): permission is string => typeof permission === 'string')
+    : [];
+  // 商家本人没有员工角色：使用店主默认权限集，避免因未显式配置 permissions 而丢失已开通能力。
+  if (!req.merchant?.employeeId || configured.includes('*')) {
+    return Array.from(new Set([...(defaultEmployeePermissions.store_manager || []), ...configured]));
+  }
+  return configured;
+}
+
 function merchantEmployeeCannotManageCosts(req: AuthRequest): boolean {
   return Boolean(req.merchant?.employeeId) && !employeeHasPermission(req, 'product.cost.view');
 }
 
 function serializeMerchantProductForRequest(row: any, req: AuthRequest): Product {
   const product = serializeProductRow(row);
+  const variantIds = new Map<string, string>();
+  if (Array.isArray(row.variants)) {
+    for (const variant of row.variants) {
+      if (typeof variant.sku === 'string' && typeof variant.id === 'string') {
+        variantIds.set(variant.sku, variant.id);
+      }
+    }
+  }
+  product.skus = product.skus.map(sku => ({
+    ...sku,
+    ...(variantIds.has(sku.sku) ? { variantId: variantIds.get(sku.sku) } : {})
+  }));
   if (!merchantEmployeeCannotManageCosts(req)) return product;
   delete product.costPrice;
   product.skus = product.skus.map(sku => {
@@ -12239,38 +12289,19 @@ async function startServer() {
   });
 
   app.get('/api/exchange-rates/latest', async (_req, res) => {
-    const currencies = ['USD', 'CNY', 'GBP', 'JPY', 'CHF'] as const;
     try {
-      const response = await fetch(
-        `https://api.frankfurter.app/latest?from=EUR&to=${currencies.join(',')}`,
-        { signal: AbortSignal.timeout(5000) }
-      );
-      if (!response.ok) throw new Error(`EXCHANGE_RATES_PROVIDER_${response.status}`);
-      const payload: unknown = await response.json();
-      if (!payload || typeof payload !== 'object' || !('rates' in payload) || !('date' in payload)) {
-        throw new Error('EXCHANGE_RATES_INVALID_RESPONSE');
-      }
-      const providerRates = payload.rates;
-      if (!providerRates || typeof providerRates !== 'object') {
-        throw new Error('EXCHANGE_RATES_INVALID_RESPONSE');
-      }
-      const rates = { EUR: 1, USD: 1, CNY: 1, GBP: 1, JPY: 1, CHF: 1 };
-      for (const currency of currencies) {
-        const rate = Reflect.get(providerRates, currency);
-        if (typeof rate !== 'number' || !Number.isFinite(rate) || rate <= 0) {
-          throw new Error('EXCHANGE_RATES_INVALID_RESPONSE');
-        }
-        rates[currency] = rate;
-      }
+      const snapshot = await fetchLatestExchangeRates();
       res.setHeader('Cache-Control', 'public, max-age=3600');
       res.json({
-        base: 'EUR',
-        rates,
-        updatedAt: new Date(`${String(payload.date)}T00:00:00.000Z`).toISOString(),
-        source: 'Frankfurter'
+        base: snapshot.base,
+        rates: snapshot.rates,
+        updatedAt: snapshot.updatedAt,
+        source: snapshot.source
       });
     } catch (error) {
-      const code = error instanceof Error ? error.message : 'EXCHANGE_RATES_UNAVAILABLE';
+      const code = error instanceof Error && /^EXCHANGE_RATES_[A-Z0-9_]+$/.test(error.message)
+        ? error.message
+        : 'EXCHANGE_RATES_UNAVAILABLE';
       console.error('[exchange-rates]', code);
       res.status(503).json({ success: false, error: 'EXCHANGE_RATES_UNAVAILABLE' });
     }
@@ -19147,9 +19178,11 @@ async function startServer() {
       ]);
       res.json({
         success: true,
-        apps: apps.map(({ installations, ...app }) => ({
+        apps: apps.map(({ installations, manifest, ...app }) => ({
           ...app,
-          runtimeAvailable: isAppStoreNativeRuntimeCompatible(app.appId, app.version),
+          runtimeAvailable: describeAppStoreRuntime({ ...app, manifest }) !== null,
+          runtime: describeAppStoreRuntime({ ...app, manifest }),
+          toolCount: readAiToolManifest(manifest)?.tools.length ?? 0,
           isInstalled: installations.length > 0,
           installationStatus: installations[0]?.status || null,
           installedVersion: installations[0]?.installedVersion || null
@@ -19170,9 +19203,15 @@ async function startServer() {
       try {
         const app = await prisma.app.findUnique({
           where: { appId },
-          select: { id: true, appId: true, status: true, pricingType: true, version: true }
+          select: { id: true, appId: true, status: true, pricingType: true, version: true, manifest: true }
         });
-        const installationError = getAppStoreInstallationError(app, true);
+        // 试用由 Tool Manifest 决定：付费应用在试用期内允许安装，到期后由工具门禁拦截。
+        const manifest = isAiToolsManifestEnabled() ? readAiToolManifest(app?.manifest) : null;
+        const trialDays = manifest ? readManifestTrialDays(manifest) : 0;
+        const installationError = getAppStoreInstallationError(app, {
+          requireRuntime: true,
+          entitled: pricingTypeAllowsTrial(app?.pricingType, trialDays)
+        });
         if (installationError === 'APP_STORE_APP_NOT_AVAILABLE') {
           return res.status(404).json({ success: false, error: installationError });
         }
@@ -19191,6 +19230,24 @@ async function startServer() {
           update: {},
           select: { id: true, status: true, installedVersion: true, installedAt: true, updatedAt: true }
         });
+        if (manifest) {
+          await grantAppTools(prisma, {
+            merchantId: req.merchant!.merchantId,
+            appId: app.appId,
+            manifest,
+            trialDays,
+            grantedBy: req.merchant!.employeeId || null
+          });
+          await recordAppInstallationStatusEvent(prisma, {
+            merchantId: req.merchant!.merchantId,
+            appRecordId: app.id,
+            appId: app.appId,
+            fromStatus: null,
+            toStatus: installation.status,
+            actorId: req.merchant!.employeeId || null,
+            reason: 'install'
+          });
+        }
         await logEmployeeAudit(req.merchant!.merchantId, req.merchant!.employeeId, 'APP_INSTALLED', 'App', app.id, req, { appId });
         return res.status(201).json({ success: true, installation });
       } catch (error) {
@@ -19204,9 +19261,14 @@ async function startServer() {
     try {
       const app = await prisma.app.findUnique({
         where: { appId },
-        select: { id: true, appId: true, status: true, pricingType: true, version: true }
+        select: { id: true, appId: true, status: true, pricingType: true, version: true, manifest: true }
       });
-      const appError = getAppStoreInstallationError(app, true);
+      const manifest = isAiToolsManifestEnabled() ? readAiToolManifest(app?.manifest) : null;
+      const trialDays = manifest ? readManifestTrialDays(manifest) : 0;
+      const appError = getAppStoreInstallationError(app, {
+        requireRuntime: true,
+        entitled: pricingTypeAllowsTrial(app?.pricingType, trialDays)
+      });
       if (appError === 'APP_STORE_APP_NOT_AVAILABLE') {
         return res.status(404).json({ success: false, error: appError });
       }
@@ -19229,6 +19291,22 @@ async function startServer() {
         },
         select: { id: true, status: true, installedVersion: true, installedAt: true, updatedAt: true }
       });
+      if (manifest) {
+        await setAppToolGrantState(prisma, {
+          merchantId: req.merchant!.merchantId,
+          appId: app.appId,
+          status: action === 'enable' ? 'active' : 'paused'
+        });
+        await recordAppInstallationStatusEvent(prisma, {
+          merchantId: req.merchant!.merchantId,
+          appRecordId: app.id,
+          appId: app.appId,
+          fromStatus: existing.status,
+          toStatus: status,
+          actorId: req.merchant!.employeeId || null,
+          reason: action
+        });
+      }
       await logEmployeeAudit(
         req.merchant!.merchantId,
         req.merchant!.employeeId,
@@ -19263,15 +19341,193 @@ async function startServer() {
       const appId = appStoreString(req.params.appId, 120);
       if (!appId) return res.status(400).json({ success: false, error: 'APP_STORE_APP_ID_INVALID' });
       try {
-        const app = await prisma.app.findUnique({ where: { appId }, select: { id: true } });
+        const app = await prisma.app.findUnique({
+          where: { appId },
+          select: { id: true, appId: true, manifest: true }
+        });
         if (!app) return res.status(404).json({ success: false, error: 'APP_STORE_APP_NOT_FOUND' });
+        const previous = await prisma.appInstallation.findUnique({
+          where: { merchantId_appId: { merchantId: req.merchant!.merchantId, appId: app.id } },
+          select: { status: true }
+        });
         await prisma.appInstallation.deleteMany({
           where: { merchantId: req.merchant!.merchantId, appId: app.id }
         });
+        if (isAiToolsManifestEnabled() && readAiToolManifest(app.manifest)) {
+          await revokeAppToolGrants(prisma, {
+            merchantId: req.merchant!.merchantId,
+            appId: app.appId,
+            reason: 'uninstall'
+          });
+          await recordAppInstallationStatusEvent(prisma, {
+            merchantId: req.merchant!.merchantId,
+            appRecordId: app.id,
+            appId: app.appId,
+            fromStatus: previous?.status ?? null,
+            toStatus: 'uninstalled',
+            actorId: req.merchant!.employeeId || null,
+            reason: 'uninstall'
+          });
+        }
         await logEmployeeAudit(req.merchant!.merchantId, req.merchant!.employeeId, 'APP_UNINSTALLED', 'App', app.id, req, { appId });
         return res.json({ success: true });
       } catch (error) {
         sendInternalError(res, error, 'app-store-uninstall');
+      }
+    }
+  );
+
+  // MODAUI AI Tools：商家侧工具清单。只列出已安装应用在 Manifest 中声明的工具及其真实可用状态。
+  app.get('/api/merchant/ai-tools', requireMerchantTenant, async (req: AuthRequest, res) => {
+    try {
+      const merchantId = req.merchant!.merchantId;
+      const actorPermissions = merchantEffectivePermissions(req);
+      const [access, apps] = await Promise.all([
+        loadMerchantAiToolAccess(prisma, { merchantId, actorPermissions }),
+        prisma.app.findMany({
+          where: { installations: { some: { merchantId } } },
+          select: { appId: true, name: true, status: true, manifest: true }
+        })
+      ]);
+      const grants = await prisma.merchantToolGrant.findMany({
+        where: { merchantId },
+        select: { toolId: true, status: true, source: true, expiresAt: true }
+      });
+      const denialReasons = new Map(access.denied.map(item => [item.toolId, item.reason]));
+      const tools = apps.flatMap(app => {
+        const manifest = readAiToolManifest(app.manifest);
+        if (!manifest) return [];
+        return manifest.tools.map(tool => {
+          const grant = grants.find(candidate => candidate.toolId === tool.toolId);
+          const blockedReason = denialReasons.get(tool.toolId) ?? null;
+          return {
+            appId: app.appId,
+            appName: app.name,
+            ...summarizeAiToolManifestTool(tool),
+            availability: blockedReason ? 'blocked' : 'available',
+            blockedReason,
+            grantStatus: grant?.status ?? null,
+            grantSource: grant?.source ?? null,
+            grantExpiresAt: grant?.expiresAt ?? null
+          };
+        });
+      });
+      return res.json({ success: true, manifestEnabled: access.manifestEnabled, apps: access.appIds, tools });
+    } catch (error) {
+      return sendInternalError(res, error, 'merchant-ai-tools-read');
+    }
+  });
+  // 商家手动暂停/恢复单个工具授权：只改授权状态，不改安装状态与业务数据。
+  app.patch(
+    '/api/merchant/ai-tools/:toolId/grant',
+    requireMerchantTenant,
+    requireEmployeePermission('employees.manage', 'store_manager'),
+    async (req: AuthRequest, res) => {
+      const toolId = appStoreString(req.params.toolId, 120);
+      const status = (req.body as { status?: unknown } | undefined)?.status;
+      if (!toolId) return res.status(400).json({ success: false, error: 'AI_TOOL_ID_INVALID' });
+      if (status !== 'active' && status !== 'paused') {
+        return res.status(400).json({ success: false, error: 'AI_TOOL_STATUS_INVALID' });
+      }
+      try {
+        const updated = await setMerchantToolGrantStatus(prisma, {
+          merchantId: req.merchant!.merchantId,
+          toolId,
+          status
+        });
+        if (!updated) return res.status(404).json({ success: false, error: 'AI_TOOL_GRANT_NOT_FOUND' });
+        await logEmployeeAudit(
+          req.merchant!.merchantId,
+          req.merchant!.employeeId,
+          status === 'paused' ? 'AI_TOOL_PAUSED' : 'AI_TOOL_RESUMED',
+          'AiTool',
+          toolId,
+          req,
+          { toolId }
+        );
+        return res.json({ success: true, toolId, status });
+      } catch (error) {
+        return sendInternalError(res, error, 'merchant-ai-tools-grant');
+      }
+    }
+  );
+
+  // 单次工具执行：门禁 → 运行时校验 → 真实 Provider 调用 → 审计。失败不返回伪造结果。
+  app.post(
+    '/api/merchant/ai-tools/:toolId/invoke',
+    requireMerchantTenant,
+    requireEmployeePermission(AI_TOOLS_USE_PERMISSION),
+    async (req: AuthRequest, res) => {
+      const toolId = appStoreString(req.params.toolId, 120);
+      if (!toolId) return res.status(400).json({ success: false, error: 'AI_TOOL_ID_INVALID' });
+      const merchantId = req.merchant!.merchantId;
+      try {
+        const actorPermissions = merchantEffectivePermissions(req);
+        const access = await loadMerchantAiToolAccess(prisma, { merchantId, actorPermissions });
+        if (!access.manifestEnabled) {
+          return res.status(409).json({ success: false, error: 'AI_TOOLS_MANIFEST_DISABLED' });
+        }
+        if (!access.allowedToolIds.includes(toolId)) {
+          const denial = access.denied.find(item => item.toolId === toolId);
+          return res.status(403).json({
+            success: false,
+            error: 'AI_TOOL_NOT_AVAILABLE',
+            reason: denial?.reason ?? 'tool_not_declared'
+          });
+        }
+        const aiTools = createModauiAiTools({});
+        if (!aiTools.handlers[toolId]) {
+          return res.status(404).json({ success: false, error: 'AI_TOOL_HANDLER_MISSING' });
+        }
+        const taskId = `ai-tools:${crypto.randomUUID()}`;
+        const runtime = createModaGptToolRuntime({
+          principal: {
+            tenantId: merchantId,
+            actorId: req.merchant!.id,
+            active: true,
+            permissions: actorPermissions,
+            agentPermissions: { 'product-creative-manager': [AI_TOOLS_USE_PERMISSION] },
+            approvedActions: []
+          },
+          definitions: aiTools.definitions,
+          handlers: aiTools.handlers,
+          recordAudit: async event => {
+            await prisma.employeeAuditLog.create({
+              data: {
+                id: crypto.randomUUID(),
+                merchantId,
+                employeeId: req.merchant!.employeeId || null,
+                action: `AI_TOOLS_TOOL_${event.status.toUpperCase()}`,
+                entityType: 'AiTool',
+                entityId: event.toolId,
+                metadata: JSON.stringify({
+                  taskId: event.taskId,
+                  actorId: event.actorId,
+                  agentId: event.agentId,
+                  toolId: event.toolId,
+                  riskLevel: event.riskLevel,
+                  attempt: event.attempt,
+                  errorCode: event.errorCode
+                }),
+                ipAddress: null
+              }
+            });
+          }
+        });
+        const execution = await runtime.execute({
+          taskId,
+          agentId: 'product-creative-manager',
+          toolId,
+          input: (req.body as { input?: unknown } | undefined)?.input,
+          tenantId: merchantId
+        });
+        return res.json({ success: true, taskId, toolId, result: execution.result });
+      } catch (error) {
+        const code = error instanceof Error ? error.message : '';
+        if (code.startsWith('MODAGPT_') || code.startsWith('AI_TOOLS_')) {
+          return res.status(400).json({ success: false, error: code });
+        }
+        return sendInternalError(res, error, 'merchant-ai-tools-invoke');
       }
     }
   );
@@ -19379,12 +19635,20 @@ async function startServer() {
           data: input.data,
           include: appStoreAppIncludes
         });
+        const updatedManifest = isAiToolsManifestEnabled() ? readAiToolManifest(updated.manifest) : null;
         const updatedIsRunnable = getAppStoreInstallationError({
           appId: updated.appId,
           status: updated.status,
           pricingType: updated.pricingType,
-          version: updated.version
-        }, true) === null;
+          version: updated.version,
+          manifest: updated.manifest
+        }, {
+          requireRuntime: true,
+          entitled: pricingTypeAllowsTrial(
+            updated.pricingType,
+            updatedManifest ? readManifestTrialDays(updatedManifest) : 0
+          )
+        }) === null;
         const isUnpublishing = existing.status === 'published' && updated.status !== 'published';
         let suspendedInstallations = 0;
         if (!updatedIsRunnable) {
@@ -19431,6 +19695,74 @@ async function startServer() {
       return sendInternalError(res, error, 'admin-app-store-app-update');
     }
   });
+  // Tool Manifest v1：平台侧读取与保存。校验失败或 toolId 跨应用冲突时拒绝写入并保留上一版。
+  app.get(
+    '/api/admin/app-store/apps/:id/manifest',
+    requireAdminAuth,
+    requireAdminPermission('settings.integrations'),
+    async (req, res) => {
+      try {
+        const app = await prisma.app.findUnique({
+          where: { id: req.params.id },
+          select: { id: true, appId: true, manifest: true }
+        });
+        if (!app) return res.status(404).json({ success: false, error: 'APP_STORE_APP_NOT_FOUND' });
+        const tools = await prisma.aiToolRegistryEntry.findMany({
+          where: { appId: app.appId },
+          orderBy: { toolId: 'asc' },
+          select: {
+            toolId: true,
+            version: true,
+            displayName: true,
+            enabled: true,
+            status: true,
+            riskLevel: true,
+            permission: true,
+            cost: true,
+            credentials: true,
+            updatedAt: true
+          }
+        });
+        return res.json({ success: true, appId: app.appId, manifest: app.manifest, tools });
+      } catch (error) {
+        return sendInternalError(res, error, 'admin-app-store-manifest-read');
+      }
+    }
+  );
+  app.put(
+    '/api/admin/app-store/apps/:id/manifest',
+    requireAdminAuth,
+    requireAdminPermission('settings.integrations'),
+    async (req: AuthRequest, res) => {
+      try {
+        const app = await prisma.app.findUnique({
+          where: { id: req.params.id },
+          select: { appId: true }
+        });
+        if (!app) return res.status(404).json({ success: false, error: 'APP_STORE_APP_NOT_FOUND' });
+        const body = req.body as { manifest?: unknown } | undefined;
+        const result = await saveAppManifest(prisma, { appId: app.appId, manifest: body?.manifest });
+        if (result.ok === false) {
+          const statusCode = result.error === 'APP_STORE_APP_NOT_FOUND' ? 404
+            : result.error === 'TOOL_ID_CONFLICT' ? 409
+              : 400;
+          return res.status(statusCode).json({ success: false, error: result.error, issues: result.issues });
+        }
+        await logAuditAndWait(
+          req.admin?.username || 'Platform SuperAdmin',
+          'admin',
+          'APP_STORE_TOOL_MANIFEST_UPDATED',
+          'App',
+          req.params.id,
+          '',
+          JSON.stringify({ appId: app.appId, toolCount: result.toolCount })
+        );
+        return res.json({ success: true, appId: app.appId, toolCount: result.toolCount });
+      } catch (error) {
+        return sendInternalError(res, error, 'admin-app-store-manifest-update');
+      }
+    }
+  );
   app.get(
     '/api/admin/app-store/apps/:id/installations',
     requireAdminAuth,
@@ -30477,7 +30809,7 @@ async function startServer() {
   });
 
   // GET /api/merchant/products (商家只能查看自己的商品与可见性设置)
-  app.get('/api/merchant/products', requireMerchantTenant, requireAnyEmployeePermission('sales.order.create', 'production.report', 'product.publish'), async (req, res) => {
+  app.get('/api/merchant/products', requireMerchantTenant, requireAnyEmployeePermission('sales.order.create', 'production.report', 'product.publish', 'purchase.manage'), async (req, res) => {
     try {
       const merchantId = (req as any).merchant.merchantId;
       const rows = await prisma.product.findMany({
@@ -30552,7 +30884,7 @@ async function startServer() {
   // GET /api/merchant/products/:id (single product for the authenticated merchant)
   // Registered after /products/sales-summary so the static route is not captured
   // by the :id parameter.
-  app.get('/api/merchant/products/:id', requireMerchantTenant, requireAnyEmployeePermission('sales.order.create', 'production.report', 'product.publish'), async (req: AuthRequest, res) => {
+  app.get('/api/merchant/products/:id', requireMerchantTenant, requireAnyEmployeePermission('sales.order.create', 'production.report', 'product.publish', 'purchase.manage'), async (req: AuthRequest, res) => {
     try {
       const merchantId = req.merchant!.merchantId;
       const row = await prisma.product.findFirst({
@@ -35027,7 +35359,7 @@ async function startServer() {
         const route = superviseModaGptCoreTask({
           request: body.message.trim(),
           assignedAgents: industryAssignments.map(assignment => assignment.agentId),
-          registeredWorkflows: ['product_publish', 'customer_quote_creation', 'business_analysis'],
+          registeredWorkflows: executableModaGptMerchantWorkflowIds,
           registeredTools: merchantTools.definitions.map(definition => definition.name)
         });
         if (!route) return res.status(422).json({ success: false, error: 'MODAGPT_TASK_INTENT_UNSUPPORTED' });
@@ -35038,7 +35370,9 @@ async function startServer() {
           ? ['product.catalog.read', 'product.import.draft']
           : route.workflow === 'business_analysis'
             ? ['business.analytics.read']
-            : ['sales.order.create', 'product.catalog.read'];
+            : route.workflow === 'procurement_management'
+              ? ['purchase.manage']
+              : ['sales.order.create', 'product.catalog.read'];
         const missingPermissions = employeeId
           ? requiredPermissions.filter(permission => !userPermissions.includes(permission))
           : [];
@@ -35048,7 +35382,8 @@ async function startServer() {
         const workflowLabels: Record<string, string> = {
           product_publish: '商品工作流：核对商品数据并准备人工审核的发布流程',
           customer_quote_creation: '报价工作流：读取授权客户与商品数据并准备报价草稿',
-          business_analysis: '经营分析工作流：读取授权销售与库存数据并生成分析'
+          business_analysis: '经营分析工作流：读取授权销售与库存数据并生成分析',
+          procurement_management: '采购工作流：读取租户内供应商与采购记录，必要时创建采购草稿'
         };
         return res.json({
           success: true,
@@ -35060,7 +35395,9 @@ async function startServer() {
           summary: workflowLabels[route.workflow],
           sideEffects: route.workflow === 'business_analysis'
             ? '只读分析，不修改业务数据。'
-            : '确认后会启动服务端工作流；可能创建草稿。发布、提交或发送等敏感操作仍需单独审批。',
+            : route.workflow === 'procurement_management'
+              ? '只创建采购草稿，不会提交、下单或收货；后续按现有采购流程处理。'
+              : '确认后会启动服务端工作流；可能创建草稿。发布、提交或发送等敏感操作仍需单独审批。',
           requiresApprovalForSensitiveActions: route.workflow !== 'business_analysis'
         });
       } catch (error) {
@@ -35121,7 +35458,7 @@ async function startServer() {
         const route = superviseModaGptCoreTask({
           request: body.message,
           assignedAgents: agentIds,
-          registeredWorkflows: ['product_publish', 'customer_quote_creation', 'business_analysis'],
+          registeredWorkflows: executableModaGptMerchantWorkflowIds,
           registeredTools: merchantTools.definitions.map(definition => definition.name)
         });
         if (!route) return res.status(422).json({ success: false, error: 'MODAGPT_TASK_INTENT_UNSUPPORTED' });
@@ -35134,11 +35471,13 @@ async function startServer() {
             : ['product.catalog.read', 'product.import.draft']
           : route.workflow === 'business_analysis'
             ? ['business.analytics.read']
-            : ['sales.order.create', 'product.catalog.read', ...(
-              ['update', 'submit', 'send'].includes(String(taskInputs.quoteAction))
-                ? ['sales.quote.manage']
-                : []
-            )];
+            : route.workflow === 'procurement_management'
+              ? ['purchase.manage', ...(taskInputs.currency_convert !== undefined ? ['business.analytics.read'] : [])]
+              : ['sales.order.create', 'product.catalog.read', ...(
+                ['update', 'submit', 'send'].includes(String(taskInputs.quoteAction))
+                  ? ['sales.quote.manage']
+                  : []
+              )];
         if (employeeId && neededPermissions.some(permission => !userPermissions.includes(permission))) {
           return sendAccessDenied(res, 'MODAGPT_TASK_PERMISSION_REQUIRED', {
             permissions: neededPermissions.filter(permission => !userPermissions.includes(permission))
@@ -35174,7 +35513,7 @@ async function startServer() {
           success: true,
           taskId: taskInput.id,
           status: taskInput.status,
-          summary: 'ModaGPT 已接收任务，正在按行业团队配置执行。',
+          summary: 'ModaUI 已接收任务，正在按行业团队配置执行。',
           employee: employee?.agentId || route.agents[0],
           steps: ['Master Supervisor 已路由任务', '等待固定 AI Core 员工执行'],
           toolCalls: [],
@@ -39310,6 +39649,371 @@ async function startServer() {
     }
   });
 
+  // ==========================================
+  // 商家回收站 / 最近动态 / AI 聊天记录（电脑端导航新增入口）
+  // 只读聚合既有权威表：Product、InventoryMovement、Order、EmployeeAuditLog、
+  // MerchantAssistantConversation。不新建表、不写副本。
+  // 规格：docs/engineering/modules/merchant-admin-desktop-navigation.md
+  // ==========================================
+  const merchantRecycleBinReadPermissions = requireAnyEmployeePermission(
+    'sales.order.create',
+    'production.report',
+    'product.publish'
+  );
+
+  app.get('/api/merchant/recycle-bin', requireMerchantTenant, merchantRecycleBinReadPermissions, async (req: AuthRequest, res) => {
+    try {
+      res.setHeader('Cache-Control', 'no-store');
+      const merchantId = req.merchant!.merchantId;
+      const limitRaw = Number(req.query.limit);
+      const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(Math.trunc(limitRaw), 1), 100) : 50;
+      const search = typeof req.query.search === 'string' ? req.query.search.trim().slice(0, 80) : '';
+      const products = await prisma.product.findMany({
+        where: {
+          merchantId,
+          lifecycleStatus: 'archived',
+          ...(search
+            ? {
+                OR: [
+                  { styleNo: { contains: search, mode: 'insensitive' as const } },
+                  { name: { contains: search, mode: 'insensitive' as const } }
+                ]
+              }
+            : {})
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: limit,
+        select: {
+          id: true,
+          styleNo: true,
+          name: true,
+          category: true,
+          images: true,
+          lifecycleStatus: true,
+          updatedAt: true
+        }
+      });
+      return res.json({
+        success: true,
+        products: products.map(product => ({
+          id: product.id,
+          styleNo: product.styleNo,
+          name: product.name,
+          category: product.category,
+          archivedAt: product.updatedAt.toISOString(),
+          images: parseStoredJson<string[]>(product.images, []).slice(0, 4)
+        }))
+      });
+    } catch (error) {
+      return sendInternalError(res, error, 'merchant-recycle-bin');
+    }
+  });
+
+  app.post(
+    '/api/merchant/recycle-bin/products/:id/restore',
+    requireMerchantTenant,
+    requireEmployeePermission('product.publish', 'store_manager'),
+    requireMerchantProductEditingEnabled(),
+    async (req: AuthRequest, res) => {
+      try {
+        res.setHeader('Cache-Control', 'no-store');
+        const merchantId = req.merchant!.merchantId;
+        const product = await prisma.product.findFirst({
+          where: { id: req.params.id, merchantId },
+          select: { id: true, lifecycleStatus: true }
+        });
+        if (!product) return res.status(404).json({ success: false, error: 'PRODUCT_NOT_FOUND' });
+        if (product.lifecycleStatus !== 'archived') {
+          return res.status(409).json({ success: false, error: 'RECYCLE_BIN_PRODUCT_NOT_ARCHIVED' });
+        }
+        const updated = await prisma.product.update({
+          where: { id: product.id },
+          data: { lifecycleStatus: 'draft' },
+          select: { id: true, lifecycleStatus: true }
+        });
+        logAudit((req as any).merchant.name, 'merchant', 'PRODUCT_RESTORED', 'Product', product.id, 'archived', 'draft');
+        return res.json({ success: true, product: updated });
+      } catch (error) {
+        return sendInternalError(res, error, 'merchant-recycle-bin-restore');
+      }
+    }
+  );
+
+  const merchantActivityTypes = [
+    'product_created', 'product_updated', 'inventory_changed', 'order_updated',
+    'app_installed', 'app_enabled', 'app_disabled', 'app_uninstalled'
+  ] as const;
+  type MerchantActivityType = (typeof merchantActivityTypes)[number];
+  type MerchantActivityItem = {
+    id: string;
+    type: MerchantActivityType;
+    category: 'product' | 'inventory' | 'order' | 'app';
+    occurredAt: string;
+    data: Record<string, unknown>;
+    target: { tab: 'products' | 'inventory' | 'orders' | 'app_store'; productId?: string; orderId?: string; search?: string };
+  };
+
+  app.get(
+    '/api/merchant/activity',
+    requireMerchantTenant,
+    requireAnyEmployeePermission('sales.order.create', 'product.publish', 'production.report'),
+    async (req: AuthRequest, res) => {
+      try {
+        res.setHeader('Cache-Control', 'no-store');
+        const merchantId = req.merchant!.merchantId;
+        const limitRaw = Number(req.query.limit);
+        const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(Math.trunc(limitRaw), 1), 100) : 40;
+        const [products, movements, orders, appAuditRows, apps] = await Promise.all([
+          prisma.product.findMany({
+            where: { merchantId },
+            orderBy: { updatedAt: 'desc' },
+            take: limit,
+            select: {
+              id: true, styleNo: true, name: true, lifecycleStatus: true,
+              createdAt: true, updatedAt: true
+            }
+          }),
+          prisma.inventoryMovement.findMany({
+            where: { merchantId },
+            orderBy: { createdAt: 'desc' },
+            take: limit,
+            select: {
+              id: true, quantity: true, movementType: true, note: true, createdAt: true,
+              variant: { select: { sku: true, product: { select: { id: true, styleNo: true, name: true, merchantId: true } } } }
+            }
+          }),
+          prisma.order.findMany({
+            where: { merchantId },
+            orderBy: { updatedAt: 'desc' },
+            take: limit,
+            select: { id: true, orderNo: true, status: true, timeline: true, updatedAt: true }
+          }),
+          prisma.employeeAuditLog.findMany({
+            where: {
+              merchantId,
+              entityType: 'App',
+              action: { in: ['APP_INSTALLED', 'APP_ENABLED', 'APP_DISABLED', 'APP_UNINSTALLED'] }
+            },
+            orderBy: { createdAt: 'desc' },
+            take: limit,
+            select: { id: true, action: true, entityId: true, metadata: true, createdAt: true }
+          }),
+          prisma.app.findMany({ select: { id: true, appId: true, name: true } })
+        ]);
+
+        const appNameById = new Map(apps.map(app => [app.id, app.name]));
+        const appNameBySlug = new Map(apps.map(app => [app.appId, app.name]));
+        const activities: MerchantActivityItem[] = [];
+
+        for (const product of products) {
+          activities.push({
+            id: `product:${product.id}`,
+            type: 'product_created',
+            category: 'product',
+            occurredAt: product.createdAt.toISOString(),
+            data: {
+              productId: product.id,
+              styleNo: product.styleNo,
+              name: product.name,
+              lifecycleStatus: product.lifecycleStatus
+            },
+            target: { tab: 'products', productId: product.id, search: product.styleNo }
+          });
+          // 创建后 60 秒内的 updatedAt 视为同一次创建，避免重复条目。
+          if (product.updatedAt.getTime() - product.createdAt.getTime() >= 60_000) {
+            activities.push({
+              id: `product-updated:${product.id}`,
+              type: 'product_updated',
+              category: 'product',
+              occurredAt: product.updatedAt.toISOString(),
+              data: {
+                productId: product.id,
+                styleNo: product.styleNo,
+                name: product.name,
+                lifecycleStatus: product.lifecycleStatus
+              },
+              target: { tab: 'products', productId: product.id, search: product.styleNo }
+            });
+          }
+        }
+
+        for (const movement of movements) {
+          if (movement.variant?.product?.merchantId !== merchantId) continue;
+          activities.push({
+            id: `inventory:${movement.id}`,
+            type: 'inventory_changed',
+            category: 'inventory',
+            occurredAt: movement.createdAt.toISOString(),
+            data: {
+              movementType: movement.movementType,
+              quantity: movement.quantity,
+              note: movement.note || '',
+              sku: movement.variant.sku,
+              productId: movement.variant.product.id,
+              styleNo: movement.variant.product.styleNo,
+              productName: movement.variant.product.name
+            },
+            target: {
+              tab: 'inventory',
+              productId: movement.variant.product.id,
+              search: movement.variant.product.styleNo
+            }
+          });
+        }
+
+        for (const order of orders) {
+          const timeline = parseStoredJson<Array<Record<string, unknown>>>(order.timeline, []);
+          const lastEvent = Array.isArray(timeline) && timeline.length ? timeline[timeline.length - 1] : null;
+          const rawTime = lastEvent && typeof lastEvent.time === 'string'
+            ? lastEvent.time
+            : lastEvent && typeof lastEvent.timestamp === 'string' ? lastEvent.timestamp : '';
+          const parsedTime = rawTime ? new Date(rawTime.replace(' ', 'T')) : null;
+          activities.push({
+            id: `order:${order.id}`,
+            type: 'order_updated',
+            category: 'order',
+            occurredAt: parsedTime && !Number.isNaN(parsedTime.getTime())
+              ? parsedTime.toISOString()
+              : order.updatedAt.toISOString(),
+            data: {
+              orderNo: order.orderNo,
+              status: order.status,
+              step: lastEvent && typeof lastEvent.status === 'string' ? lastEvent.status : '',
+              title: lastEvent && typeof lastEvent.title === 'string' ? lastEvent.title : '',
+              note: lastEvent && typeof lastEvent.note === 'string' ? lastEvent.note : ''
+            },
+            target: { tab: 'orders', orderId: order.id, search: order.orderNo }
+          });
+        }
+
+        const appActivityTypes: Record<string, MerchantActivityType> = {
+          APP_INSTALLED: 'app_installed',
+          APP_ENABLED: 'app_enabled',
+          APP_DISABLED: 'app_disabled',
+          APP_UNINSTALLED: 'app_uninstalled'
+        };
+        for (const row of appAuditRows) {
+          const type = appActivityTypes[row.action];
+          if (!type) continue;
+          const metadata = parseStoredJson<{ appId?: unknown }>(row.metadata, {});
+          const appSlug = typeof metadata.appId === 'string' ? metadata.appId : '';
+          const appName = (row.entityId ? appNameById.get(row.entityId) : '') || appNameBySlug.get(appSlug) || appSlug;
+          activities.push({
+            id: `app:${row.id}`,
+            type,
+            category: 'app',
+            occurredAt: row.createdAt.toISOString(),
+            data: { appId: appSlug, appName: appName || appSlug },
+            target: { tab: 'app_store' }
+          });
+        }
+
+        activities.sort((left, right) => {
+          const delta = new Date(right.occurredAt).getTime() - new Date(left.occurredAt).getTime();
+          return delta !== 0 ? delta : left.id.localeCompare(right.id);
+        });
+
+        return res.json({
+          success: true,
+          generatedAt: new Date().toISOString(),
+          activities: activities.slice(0, limit)
+        });
+      } catch (error) {
+        return sendInternalError(res, error, 'merchant-activity');
+      }
+    }
+  );
+
+  app.get('/api/merchant/assistant/history', requireMerchantTenant, async (req: AuthRequest, res) => {
+    try {
+      res.setHeader('Cache-Control', 'no-store');
+      const merchantId = req.merchant!.merchantId;
+      const actorId = merchantAssistantActorId(req);
+      const limitRaw = Number(req.query.limit);
+      const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(Math.trunc(limitRaw), 1), 50) : 30;
+      const search = typeof req.query.search === 'string' ? req.query.search.trim().slice(0, 80) : '';
+      const conversations = await prisma.merchantAssistantConversation.findMany({
+        where: {
+          merchantId,
+          actorId,
+          ...(search
+            ? {
+                OR: [
+                  { title: { contains: search, mode: 'insensitive' as const } },
+                  { messages: { some: { content: { contains: search, mode: 'insensitive' as const } } } }
+                ]
+              }
+            : {})
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: limit,
+        select: {
+          id: true,
+          title: true,
+          updatedAt: true,
+          _count: { select: { messages: true } },
+          messages: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: { content: true, role: true, context: true }
+          }
+        }
+      });
+      return res.json({
+        success: true,
+        conversations: conversations.map(({ _count, messages, ...conversation }) => ({
+          ...conversation,
+          updatedAt: conversation.updatedAt.toISOString(),
+          messageCount: _count.messages,
+          lastMessage: messages[0]?.content || '',
+          lastMessageRole: messages[0]?.role || '',
+          lastContext: messages[0]?.context || 'dashboard'
+        }))
+      });
+    } catch (error) {
+      return sendInternalError(res, error, 'merchant-assistant-history');
+    }
+  });
+
+  app.get('/api/merchant/assistant/history/:id', requireMerchantTenant, async (req: AuthRequest, res) => {
+    try {
+      res.setHeader('Cache-Control', 'no-store');
+      const merchantId = req.merchant!.merchantId;
+      const actorId = merchantAssistantActorId(req);
+      const conversation = await prisma.merchantAssistantConversation.findFirst({
+        where: { id: req.params.id, merchantId, actorId },
+        select: {
+          id: true,
+          title: true,
+          updatedAt: true,
+          messages: {
+            orderBy: { createdAt: 'asc' },
+            take: 200,
+            select: { id: true, role: true, content: true, context: true, createdAt: true }
+          }
+        }
+      });
+      if (!conversation) return res.status(404).json({ success: false, error: 'ASSISTANT_CONVERSATION_NOT_FOUND' });
+      return res.json({
+        success: true,
+        conversation: {
+          id: conversation.id,
+          title: conversation.title,
+          updatedAt: conversation.updatedAt.toISOString()
+        },
+        messages: conversation.messages.map(message => ({
+          id: message.id,
+          role: message.role,
+          content: message.content,
+          context: message.context,
+          createdAt: message.createdAt.toISOString()
+        }))
+      });
+    } catch (error) {
+      return sendInternalError(res, error, 'merchant-assistant-history-detail');
+    }
+  });
+
   app.get('/api/merchant/assistant/conversations', requireMerchantTenant, async (req: AuthRequest, res) => {
     try {
       res.setHeader('Cache-Control', 'no-store');
@@ -41116,6 +41820,8 @@ async function startServer() {
     const requestedConversationId = typeof req.body?.conversationId === 'string'
       ? req.body.conversationId.trim().slice(0, 100)
       : '';
+    // 仅取布尔值：调用方（AI 聊天记录页）继续旧会话时要求完整历史；其它调用保持原上下文过滤。
+    const includeFullHistory = req.body?.includeFullHistory === true;
     let conversationId = '';
     let conversationTitle = '';
     let recentMessages: Array<{ role: string; content: string; context: string }> = [];
@@ -41140,7 +41846,11 @@ async function startServer() {
         prisma.merchantAssistantMessage.findMany({
           where: {
             conversationId,
-            context: scope === 'overview' ? { in: [conversationContext, context] } : conversationContext
+            // 从「AI 聊天记录」继续对话时，允许把整段会话（跨页面上下文）纳入模型输入；
+            // 不传时保持原行为，只取当前 page context。
+            ...(includeFullHistory
+              ? {}
+              : { context: scope === 'overview' ? { in: [conversationContext, context] } : conversationContext })
           },
           orderBy: { createdAt: 'desc' },
           take: 12,
@@ -47671,7 +48381,7 @@ async function startServer() {
   const httpServers: ReturnType<typeof app.listen>[] = [];
   const httpServer = app.listen(PORT, bindHost, () => {
     console.log(`[MODAHUB B2B] Server running on http://${bindHost}:${PORT}`);
-    if (!p0HttpTestMode) {
+    if (!p0HttpTestMode || enableModaGptWorkerForHttpTest) {
     {
       const worker = startModaGptTaskWorker(
         modaGptTaskRuntime,
@@ -47854,11 +48564,11 @@ async function startServer() {
               const supervisorRoute = superviseModaGptCoreTask({
                 request: payload.message,
                 assignedAgents: teamProfiles.map(profile => profile.agentId),
-                registeredWorkflows: ['product_publish', 'customer_quote_creation', 'business_analysis'],
+                registeredWorkflows: executableModaGptMerchantWorkflowIds,
                 registeredTools: merchantTools.definitions.map(definition => definition.name)
               });
               if (!supervisorRoute || supervisorRoute.execution !== 'ready'
-                || !['product_publish', 'customer_quote_creation', 'business_analysis'].includes(supervisorRoute.workflow)) {
+                || !isExecutableModaGptMerchantWorkflow(supervisorRoute.workflow)) {
                 throw new Error('MODAGPT_SUPERVISOR_ROUTE_UNAVAILABLE');
               }
               return executeModaGptMerchantTask({
@@ -48529,6 +49239,7 @@ async function startServer() {
       modaGptWorkerRunning = true;
       console.log('[modagpt-worker] PostgreSQL task worker started');
     }
+    if (!p0HttpTestMode) {
     void runOperationalSweep();
     sweepTimer = setInterval(() => void runOperationalSweep(), 5 * 60 * 1000);
     void loadFashionFeeds().then(() => runFashionFeedIngestion());
@@ -48589,6 +49300,7 @@ async function startServer() {
         enqueueNotification('database.backup.failed', 'admin', { error: result.error || 'unknown' }, ['in_app']);
       }
     }, getDatabaseBackupSyncTargets, () => integrationConfig.databaseBackupSchedule);
+    }
     }
   });
   httpServers.push(httpServer);

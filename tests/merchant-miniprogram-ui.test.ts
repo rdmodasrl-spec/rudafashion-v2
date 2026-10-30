@@ -175,7 +175,7 @@ test('visual refresh preserves page geometry and business interactions', () => {
   assert.match(assistant, /bindtouchstart="onNavTouchStart"/);
   assert.match(assistantLogic, /onNavTouchStart\(event\)\s*\{/);
   assert.match(assistantLogic, /onNavTouchEnd\(event\)\s*\{[\s\S]{0,700}setNavigationOpen\(delta > 0\)/);
-  assert.match(assistant, /wx:if="\{\{!activeMode && !toolsOpen\}\}" class="quick-actions"/);
+  assert.match(assistant, /wx:if="\{\{!taskMode && !activeMode && !toolsOpen\}\}" class="quick-actions"/);
   assert.match(assistant, /aria-label="\{\{navigationOpen \? '收起商家导航' : '展开商家导航'\}\}"/);
   assert.match(assistantLogic, /navigationAvailable:\s*typeof this\.getTabBar === 'function'/);
   assert.match(assistantLogic, /toggleNavigation\(\)\s*\{[\s\S]*?tabBar\.setHidden\(false\)/);
@@ -230,7 +230,7 @@ test('visual refresh preserves page geometry and business interactions', () => {
 
   assert.match(assistant, /class="[^"]*\bmessage-list\b/);
   assert.match(assistant, /bindtap="sendMessage"/);
-  assert.match(assistant, /aria-label="发送消息"/);
+  assert.match(assistant, /aria-label="\{\{taskMode \? '预览业务任务' : '发送消息'\}\}"/);
   assert.match(assistant, /class="send-button \{\{canSend && !loading \? 'send-button-active' : ''\}\}"/);
   assert.match(assistant, /class="voice-glyph"/);
   assert.match(assistant, /class="composer-plus">＋<\/text>/);
@@ -356,4 +356,24 @@ test('merchant mini-program sources do not emit unsupported spread-runtime depen
     const source = read(`pages/${page}/index.js`);
     assert.doesNotMatch(source, /\.\.\.\s*(?:[A-Za-z_$]|\{|\[)/, `${page} must avoid spread syntax that can require the missing SWC runtime`);
   }
+});
+
+test('merchant assistant task mode uses the protected ModaUI task API and current session', () => {
+  const assistantLogic = read('pages/assistant/index.js');
+  const assistant = read('pages/assistant/index.wxml');
+  const api = read('utils/api.js');
+
+  assert.match(assistantLogic, /requireMerchantSession\(this\)/);
+  assert.match(assistantLogic, /\/api\/merchant\/modagpt\/task\/preview/);
+  assert.match(assistantLogic, /\/api\/merchant\/modagpt\/task'/);
+  assert.match(assistantLogic, /\/api\/merchant\/modagpt\/task\/\$\{encodeURIComponent\(taskId\)\}/);
+  assert.match(assistantLogic, /'Idempotency-Key': this\._pendingTaskRequestKey/);
+  assert.match(assistantLogic, /create_procurement_draft:/);
+  assert.match(assistantLogic, /latest\.runtimeStatus/);
+  assert.match(assistant, /bindtap="toggleTaskMode"/);
+  assert.match(assistant, /bindtap="confirmMerchantTask"/);
+  assert.match(assistant, /bindtap="retryMerchantTaskStatus"/);
+  assert.match(api, /headers\.Authorization = `Bearer \$\{session\.token\}`/);
+  assert.match(api, /X-Ruda-Client/);
+  assert.doesNotMatch(assistantLogic, /\/api\/modagpt\/public\/chat/);
 });

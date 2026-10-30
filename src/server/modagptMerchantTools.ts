@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { Prisma, PrismaClient } from '@prisma/client';
+import BigNumber from 'bignumber.js';
 import {
   runModaGptAgentHandoff,
   type ModaGptAgentContext,
@@ -7,6 +8,12 @@ import {
   type ModaGptToolDefinition,
   type ModaGptToolRuntimeOptions
 } from './modagptRuntime';
+import {
+  exchangeRateCurrencies,
+  fetchLatestExchangeRates,
+  type ExchangeRateCurrency,
+  type LatestExchangeRates
+} from './exchangeRates';
 
 type ToolHandler = ModaGptToolRuntimeOptions['handlers'][string];
 type ProductDraftInput = {
@@ -38,6 +45,13 @@ type QuoteUpdateInput = {
   notes?: string;
 };
 type QuoteActionInput = { quoteId: string; approvalId: string };
+type ProcurementDraftInput = {
+  supplierId: string;
+  items: Array<{ productId: string; variantId: string; quantity: number; unitCost: number }>;
+  currency?: string;
+  notes?: string;
+};
+type CurrencyConvertInput = { amount: number; from: string; to: string };
 type QuoteDeliveryInput = {
   quoteId: string;
   quoteNo: string;
@@ -203,6 +217,49 @@ function isQuoteActionInput(value: unknown): value is QuoteActionInput {
     && Object.keys(value).length === 2
     && typeof value.quoteId === 'string' && value.quoteId.length > 0 && value.quoteId.length <= 160
     && typeof value.approvalId === 'string' && value.approvalId.length > 0 && value.approvalId.length <= 160;
+}
+
+function isProcurementDraftInput(value: unknown): value is ProcurementDraftInput {
+  return isRecord(value)
+    && Object.keys(value).every(key => ['supplierId', 'items', 'currency', 'notes'].includes(key))
+    && typeof value.supplierId === 'string' && value.supplierId.length > 0 && value.supplierId.length <= 160
+    && (value.currency === undefined || isCurrencyCode(value.currency))
+    && Array.isArray(value.items) && value.items.length > 0 && value.items.length <= 100
+    && value.items.every(item => isRecord(item)
+      && Object.keys(item).every(key => ['productId', 'variantId', 'quantity', 'unitCost'].includes(key))
+      && typeof item.productId === 'string' && item.productId.length > 0 && item.productId.length <= 160
+      && typeof item.variantId === 'string' && item.variantId.length > 0 && item.variantId.length <= 160
+      && Number.isSafeInteger(item.quantity) && Number(item.quantity) > 0 && Number(item.quantity) <= 2_147_483_647
+      && typeof item.unitCost === 'number' && Number.isFinite(item.unitCost)
+      && item.unitCost >= 0 && item.unitCost <= 99_999_999.9999
+      && Number(item.unitCost.toFixed(4)) === item.unitCost)
+    && (value.notes === undefined || value.notes === null || (typeof value.notes === 'string' && value.notes.length <= 2_000));
+}
+
+export function calculateProcurementTotal(
+  items: ReadonlyArray<{ quantity: number; unitCost: number | string | { toString(): string } }>
+): number {
+  const total = items.reduce(
+    (sum, item) => sum.plus(new BigNumber(String(item.unitCost)).multipliedBy(item.quantity)),
+    new BigNumber(0)
+  );
+  return Number(total.toFixed(2, BigNumber.ROUND_HALF_UP));
+}
+
+function isCurrencyConvertInput(value: unknown): value is CurrencyConvertInput {
+  return isRecord(value)
+    && Object.keys(value).length === 3
+    && Object.keys(value).every(key => ['amount', 'from', 'to'].includes(key))
+    && typeof value.amount === 'number'
+    && Number.isFinite(value.amount)
+    && value.amount >= 0
+    && value.amount <= Number.MAX_SAFE_INTEGER
+    && isCurrencyCode(value.from)
+    && isCurrencyCode(value.to);
+}
+
+function isExchangeRateCurrency(value: string): value is ExchangeRateCurrency {
+  return exchangeRateCurrencies.some(currency => currency === value);
 }
 
 export function quoteSnapshotFingerprint(quote: {
@@ -463,6 +520,93 @@ const definitions: ModaGptToolDefinition[] = [
       && typeof value.quoteId === 'string'
       && value.status === (name === 'submit_quote' ? 'approved' : 'sent')
   })),
+  {
+    name: 'get_suppliers',
+    description: 'Search suppliers linked to this merchant.',
+    inputSchema: {
+      ...objectSchema,
+      properties: { query: { type: 'string', maxLength: 120 } }
+    },
+    outputSchema: { type: 'object', required: ['suppliers'] },
+    permission: 'purchase.manage',
+    riskLevel: 'LOW',
+    requiresApproval: false,
+    timeoutMs: 10_000,
+    retryPolicy: { maxAttempts: 1, idempotent: true },
+    auditPolicy: 'required',
+    validateInput: value => isRecord(value)
+      && Object.keys(value).every(key => key === 'query')
+      && (value.query === undefined || (typeof value.query === 'string' && value.query.length <= 120)),
+    validateOutput: value => isRecord(value) && Array.isArray(value.suppliers)
+  },
+  {
+    name: 'create_procurement_draft',
+    description: 'Create a draft procurement order (purchase order) for a supplier.',
+    inputSchema: { ...objectSchema, required: ['supplierId', 'items'] },
+    outputSchema: { type: 'object', required: ['purchaseOrderId', 'status', 'totalAmount'] },
+    permission: 'purchase.manage',
+    riskLevel: 'MEDIUM',
+    requiresApproval: false,
+    timeoutMs: 20_000,
+    retryPolicy: { maxAttempts: 1, idempotent: false },
+    auditPolicy: 'required',
+    validateInput: isProcurementDraftInput,
+    validateOutput: value => isRecord(value)
+      && typeof value.purchaseOrderId === 'string'
+      && value.status === 'draft'
+      && typeof value.totalAmount === 'number'
+  },
+  {
+    name: 'get_supplier_performance',
+    description: 'Analyze performance metrics for a specific supplier.',
+    inputSchema: {
+      ...objectSchema,
+      required: ['supplierId'],
+      properties: { supplierId: { type: 'string', minLength: 1, maxLength: 160 } }
+    },
+    outputSchema: { type: 'object', required: ['supplierId', 'metrics'] },
+    permission: 'purchase.manage',
+    riskLevel: 'LOW',
+    requiresApproval: false,
+    timeoutMs: 15_000,
+    retryPolicy: { maxAttempts: 1, idempotent: true },
+    auditPolicy: 'required',
+    validateInput: value => isRecord(value)
+      && Object.keys(value).length === 1
+      && typeof value.supplierId === 'string'
+      && value.supplierId.length > 0
+      && value.supplierId.length <= 160,
+    validateOutput: value => isRecord(value) && isRecord(value.metrics)
+  },
+  {
+    name: 'currency_convert',
+      description: 'Convert currencies using the latest published daily Frankfurter reference rates; this is not a real-time trading quote.',
+    inputSchema: {
+      ...objectSchema,
+      required: ['amount', 'from', 'to'],
+      properties: {
+        amount: { type: 'number', minimum: 0 },
+        from: { type: 'string', minLength: 3, maxLength: 3 },
+        to: { type: 'string', minLength: 3, maxLength: 3 }
+      }
+    },
+    outputSchema: { type: 'object', required: ['amount', 'from', 'currency', 'rate', 'rateSource', 'rateDate', 'rateType'] },
+    permission: 'business.analytics.read',
+    riskLevel: 'LOW',
+    requiresApproval: false,
+    timeoutMs: 5_000,
+    retryPolicy: { maxAttempts: 1, idempotent: true },
+    auditPolicy: 'required',
+    validateInput: isCurrencyConvertInput,
+    validateOutput: (value: unknown) => isRecord(value)
+      && typeof value.amount === 'number'
+      && typeof value.from === 'string'
+      && typeof value.currency === 'string'
+      && typeof value.rate === 'number'
+      && (value.rateSource === 'Frankfurter' || value.rateSource === 'identity')
+      && (value.rateDate === null || (typeof value.rateDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.rateDate)))
+      && (value.rateType === 'daily_reference' || value.rateType === 'identity')
+  },
   ...([
     'order_summary',
     'sales_summary',
@@ -499,6 +643,7 @@ export function createModaGptMerchantTools(input: {
   employeeId: string | null;
   signal?: AbortSignal;
   assertLease?: () => Promise<void>;
+  fetchExchangeRates?: (input: { signal?: AbortSignal }) => Promise<LatestExchangeRates>;
   sendQuote?: (
     merchantId: string,
     quote: QuoteDeliveryInput,
@@ -687,7 +832,8 @@ export function createModaGptMerchantTools(input: {
           ...(query ? {
             OR: [
               { name: { contains: query, mode: 'insensitive' } },
-              { styleNo: { contains: query, mode: 'insensitive' } }
+              { styleNo: { contains: query, mode: 'insensitive' } },
+              { brand: { contains: query, mode: 'insensitive' } }
             ]
           } : {})
         },
@@ -697,6 +843,7 @@ export function createModaGptMerchantTools(input: {
           id: true,
           styleNo: true,
           name: true,
+          brand: true,
           category: true,
           wholesalePrice: true,
           lifecycleStatus: true,
@@ -710,6 +857,7 @@ export function createModaGptMerchantTools(input: {
           id: product.id,
           styleNo: product.styleNo,
           name: product.name,
+          brand: product.brand,
           category: product.category,
           wholesalePrice: Number(product.wholesalePrice),
           lifecycleStatus: product.lifecycleStatus,
@@ -1755,6 +1903,211 @@ export function createModaGptMerchantTools(input: {
           ])),
         byStatus: countBy(invoices.map(invoice => invoice.status)),
         truncated: invoices.length === 2_000
+      };
+    },
+    get_suppliers: async (merchantId, rawInput) => {
+      const query = (isRecord(rawInput) && typeof rawInput.query === 'string' ? rawInput.query : '').trim();
+      const suppliers = await input.prisma.supplier.findMany({
+        where: {
+          merchantId,
+          status: 'active',
+          ...(query ? {
+            OR: [
+              { name: { contains: query, mode: 'insensitive' } },
+              { contactName: { contains: query, mode: 'insensitive' } },
+              { email: { contains: query, mode: 'insensitive' } }
+            ]
+          } : {})
+        },
+        take: 20,
+        orderBy: { updatedAt: 'desc' },
+        select: { id: true, name: true, contactName: true, country: true, email: true, leadTimeDays: true }
+      });
+      return { suppliers };
+    },
+    create_procurement_draft: async (merchantId, rawInput) => {
+      if (!isProcurementDraftInput(rawInput)) throw new Error('MODAGPT_PROCUREMENT_DRAFT_INPUT_INVALID');
+      const supplier = await input.prisma.supplier.findFirst({
+        where: { id: rawInput.supplierId, merchantId, status: 'active' },
+        select: { id: true }
+      });
+      if (!supplier) throw new Error('MODAGPT_SUPPLIER_UNAVAILABLE');
+
+      const idempotencyKey = `modaui-procurement:${merchantId}:${input.taskId}`;
+      const payloadHash = createHash('sha256').update(stableJson(rawInput)).digest('hex');
+      const stablePoId = createHash('sha256').update(idempotencyKey).digest('hex').slice(0, 32);
+      const procurement = await input.prisma.$transaction(async tx => {
+        const previouslyCreated = await tx.merchantPurchaseOrder.findUnique({
+          where: { idempotencyKey },
+          include: { items: true }
+        });
+        if (previouslyCreated) {
+          if (previouslyCreated.merchantId !== merchantId || previouslyCreated.payloadHash !== payloadHash) {
+            throw new Error('MODAGPT_PROCUREMENT_IDEMPOTENCY_CONFLICT');
+          }
+          return previouslyCreated;
+        }
+
+        const productIds = [...new Set(rawInput.items.map(item => item.productId))];
+        const products = await tx.product.findMany({
+          where: { id: { in: productIds }, merchantId },
+          select: { id: true, name: true, styleNo: true, variants: { select: { id: true, sku: true, color: true, size: true } } }
+        });
+
+        const productMap = new Map(products.map(p => [p.id, p]));
+        const poItems = [];
+
+        for (const item of rawInput.items) {
+          const product = productMap.get(item.productId);
+          if (!product) throw new Error('MODAGPT_PRODUCT_UNAVAILABLE');
+          const variant = product.variants.find(variant => variant.id === item.variantId);
+          if (!variant) throw new Error('MODAGPT_VARIANT_UNAVAILABLE');
+
+          poItems.push({
+            productId: product.id,
+            variantId: variant.id,
+            styleNo: product.styleNo,
+            productName: product.name,
+            sku: variant.sku,
+            color: variant.color,
+            size: variant.size,
+            orderedQuantity: item.quantity,
+            unitCost: item.unitCost
+          });
+        }
+
+        await assertExecutionLease();
+        const created = await tx.merchantPurchaseOrder.create({
+          data: {
+            id: stablePoId,
+            purchaseOrderNo: `PO-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${randomUUID().slice(0, 8).toUpperCase()}`,
+            merchantId,
+            supplierId: supplier.id,
+            status: 'draft',
+            idempotencyKey,
+            payloadHash,
+            currency: rawInput.currency || 'EUR',
+            notes: rawInput.notes || null,
+            createdBy: input.employeeId || input.actorId,
+            items: { create: poItems }
+          },
+          include: { items: true }
+        });
+        return created;
+      });
+
+      return {
+        purchaseOrderId: procurement.id,
+        purchaseOrderNo: procurement.purchaseOrderNo,
+        status: procurement.status,
+        totalAmount: calculateProcurementTotal(procurement.items.map(item => ({
+          quantity: item.orderedQuantity,
+          unitCost: item.unitCost
+        })))
+      };
+    },
+    get_supplier_performance: async (merchantId, rawInput) => {
+      if (!isRecord(rawInput) || typeof rawInput.supplierId !== 'string') throw new Error('MODAGPT_TOOL_INPUT_INVALID');
+      const supplier = await input.prisma.supplier.findUnique({
+        where: { id: rawInput.supplierId },
+        select: { id: true, name: true, merchantId: true }
+      });
+      if (!supplier || supplier.merchantId !== merchantId) throw new Error('MODAGPT_SUPPLIER_NOT_FOUND');
+
+      const orders = await input.prisma.merchantPurchaseOrder.findMany({
+        where: { supplierId: supplier.id, merchantId, status: { in: ['ordered', 'partially_received', 'received'] } },
+        include: { receipts: { include: { items: true } }, items: true },
+        orderBy: { createdAt: 'desc' },
+        take: 50
+      });
+
+      const totalOrders = orders.length;
+      if (totalOrders === 0) {
+        return {
+          supplierId: supplier.id,
+          metrics: { totalOrders: 0, fulfillmentRate: 0, averageLeadTimeDays: 0, ordersWithLeadTime: 0, recentOrderCount: 0 }
+        };
+      }
+
+      let fulfilledItems = 0;
+      let totalOrderedItems = 0;
+      let totalLeadTime = 0;
+      let ordersWithLeadTime = 0;
+
+      for (const order of orders) {
+        for (const item of order.items) {
+          if (!Number.isInteger(item.orderedQuantity)
+            || item.orderedQuantity < 0
+            || !Number.isInteger(item.receivedQuantity)
+            || item.receivedQuantity < 0
+            || item.receivedQuantity > item.orderedQuantity) {
+            throw new Error('MODAGPT_SUPPLIER_PERFORMANCE_DATA_INVALID');
+          }
+          totalOrderedItems += item.orderedQuantity;
+          fulfilledItems += item.receivedQuantity;
+        }
+
+        if (order.status === 'received'
+          && order.items.some(item => item.receivedQuantity !== item.orderedQuantity)) {
+          throw new Error('MODAGPT_SUPPLIER_PERFORMANCE_DATA_INVALID');
+        }
+
+        if (order.status === 'received' && order.orderedAt && order.receipts.length > 0) {
+          const lastReceipt = order.receipts.reduce((latest, receipt) =>
+            receipt.receivedAt > latest.receivedAt ? receipt : latest
+          );
+          const leadTime = (lastReceipt.receivedAt.getTime() - order.orderedAt.getTime()) / (1000 * 60 * 60 * 24);
+          if (leadTime < 0) throw new Error('MODAGPT_SUPPLIER_PERFORMANCE_DATA_INVALID');
+          totalLeadTime += leadTime;
+          ordersWithLeadTime++;
+        }
+      }
+
+      return {
+        supplierId: supplier.id,
+        metrics: {
+          totalOrders,
+          fulfillmentRate: totalOrderedItems > 0 ? Number((fulfilledItems / totalOrderedItems).toFixed(4)) : 0,
+          averageLeadTimeDays: ordersWithLeadTime > 0 ? Number((totalLeadTime / ordersWithLeadTime).toFixed(1)) : 0,
+          ordersWithLeadTime,
+          recentOrderCount: orders.length
+        }
+      };
+    },
+    currency_convert: async (_merchantId, rawInput, signal) => {
+      if (!isCurrencyConvertInput(rawInput)) throw new Error('MODAGPT_CURRENCY_INPUT_INVALID');
+      const { amount, from, to } = rawInput;
+      if (from === to) {
+        return {
+          amount: Number(amount.toFixed(2)),
+          from,
+          currency: to,
+          rate: 1,
+          rateSource: 'identity',
+          rateDate: null,
+          rateType: 'identity'
+        };
+      }
+
+      if (!isExchangeRateCurrency(from) || !isExchangeRateCurrency(to)) {
+        throw new Error('MODAGPT_CURRENCY_NOT_SUPPORTED');
+      }
+      const rates = await (input.fetchExchangeRates || fetchLatestExchangeRates)({ signal: signal || input.signal });
+      const fromRate = rates.rates[from];
+      const toRate = rates.rates[to];
+      const rate = toRate / fromRate;
+      const convertedAmount = amount * rate;
+      if (!Number.isFinite(rate) || rate <= 0 || !Number.isFinite(convertedAmount)) {
+        throw new Error('MODAGPT_CURRENCY_CONVERSION_INVALID');
+      }
+      return {
+        amount: Number(convertedAmount.toFixed(2)),
+        from,
+        currency: to,
+        rate: Number(rate.toFixed(8)),
+        rateSource: rates.source,
+        rateDate: rates.rateDate,
+        rateType: 'daily_reference'
       };
     }
   };

@@ -8,7 +8,8 @@ export const defaultEmployeePermissions: Record<string, string[]> = {
     'sales.order.create', 'sales.quote.manage', 'business.analytics.read', 'product.catalog.read', 'product.import.draft', 'product.publish', 'product.publish.approve', 'product.cost.view', 'pricing.request', 'pricing.approve',
     'warehouse.pick', 'warehouse.review', 'warehouse.pack', 'warehouse.ship',
     'production.report', 'production.view', 'production.manage', 'production.cost.view',
-    'purchase.manage', 'return.manage', 'employees.manage'
+    'purchase.manage', 'return.manage', 'employees.manage',
+    'ai.tools.use'
   ]
 };
 

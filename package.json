@@ -30,6 +30,7 @@
     "test:billing:integration": "bash scripts/test-ai-growth-p0-isolated.sh billing",
     "test:modagpt:integration": "bash scripts/test-ai-growth-p0-isolated.sh modagpt",
     "test:modagpt:brain:integration": "bash scripts/test-ai-growth-p0-isolated.sh modagpt-brain",
+    "test:trading-wholesale:integration": "bash scripts/test-ai-growth-p0-isolated.sh trading-wholesale",
     "test:p0:integration": "bash scripts/test-ai-growth-p0-isolated.sh p0",
     "test:e2e": "bash scripts/test-pos-e2e-isolated.sh",
     "test:e2e:seed": "bash scripts/test-pos-e2e-isolated.sh --seed-only",

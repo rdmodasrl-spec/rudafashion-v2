@@ -1171,6 +1171,156 @@
   line-height: 1.45;
 }
 
+.task-preview-card,
+.task-status-card {
+  margin: 0 0 16rpx;
+  padding: 18rpx;
+  border: 1rpx solid #e8e7e5;
+  border-radius: 18rpx;
+  background: #fff;
+  color: #343330;
+}
+
+.task-preview-title {
+  display: block;
+  color: #1f1e1b;
+  font-size: 22rpx;
+  font-weight: 600;
+}
+
+.task-preview-summary,
+.task-preview-message,
+.task-preview-meta {
+  display: block;
+  margin-top: 10rpx;
+  color: #66635e;
+  font-size: 19rpx;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.task-preview-message {
+  padding: 12rpx;
+  border-radius: 12rpx;
+  background: #f7f7f6;
+  color: #44423e;
+}
+
+.task-preview-meta {
+  color: #85817b;
+  font-size: 17rpx;
+}
+
+.task-draft-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+  margin-top: 14rpx;
+}
+
+.task-catalog-loading,
+.task-catalog-empty {
+  color: #77736d;
+  font-size: 18rpx;
+  line-height: 1.5;
+}
+
+.task-picker,
+.task-field {
+  display: flex;
+  min-height: 66rpx;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+  padding: 0 14rpx;
+  border: 1rpx solid #e8e6e2;
+  border-radius: 12rpx;
+  background: #fff;
+  color: #514e49;
+  font-size: 19rpx;
+}
+
+.task-field input {
+  width: 220rpx;
+  min-height: 60rpx;
+  color: #272624;
+  text-align: right;
+}
+
+.task-amount {
+  color: #343330;
+  font-size: 19rpx;
+  font-weight: 600;
+}
+
+.task-preview-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10rpx;
+  margin-top: 16rpx;
+}
+
+.task-primary-button,
+.task-secondary-button,
+.task-status-retry {
+  min-height: 58rpx;
+  margin: 0;
+  padding: 0 18rpx;
+  border: 1rpx solid #dedbd6;
+  border-radius: 12rpx;
+  background: #fff;
+  color: #4b4843;
+  font-size: 18rpx;
+}
+
+.task-primary-button {
+  border-color: #22211f;
+  background: #22211f;
+  color: #fff;
+}
+
+.task-status-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+  color: #605d58;
+  font-size: 18rpx;
+  line-height: 1.5;
+}
+
+.task-mode-row {
+  display: flex;
+  min-height: 54rpx;
+  align-items: center;
+  gap: 10rpx;
+  margin-bottom: 8rpx;
+}
+
+.task-mode-toggle {
+  min-height: 48rpx;
+  margin: 0;
+  padding: 0 16rpx;
+  border: 1rpx solid #e5e4e2;
+  border-radius: 999rpx;
+  background: #fff;
+  color: #55534f;
+  font-size: 18rpx;
+  font-weight: 600;
+}
+
+.task-mode-toggle-active {
+  border-color: #242320;
+  background: #242320;
+  color: #fff;
+}
+
+.task-mode-hint {
+  color: #85817b;
+  font-size: 17rpx;
+}
+
 .composer-dock {
   position: relative;
   z-index: 3;
@@ -1713,4 +1863,3 @@
 .modaui-blocked-back::after {
   border: none;
 }
-

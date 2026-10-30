@@ -44,5 +44,6 @@
         "**/bun.lock": true
     },
     "typescript.tsserver.maxTsServerMemory": 4096,
-    "typescript.disableAutomaticTypeAcquisition": true
+    "typescript.disableAutomaticTypeAcquisition": true,
+    "telemetry.editStats.showDecorations": true
 }

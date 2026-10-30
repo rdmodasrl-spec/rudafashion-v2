@@ -5,10 +5,26 @@ export const modaGptCoreWorkflowIds = [
   'product_publish',
   'customer_quote_creation',
   'business_analysis',
-  'fashion_creative_generation'
+  'fashion_creative_generation',
+  'procurement_management'
 ] as const;
 
 export type ModaGptCoreWorkflowId = (typeof modaGptCoreWorkflowIds)[number];
+
+export const executableModaGptMerchantWorkflowIds = [
+  'product_publish',
+  'customer_quote_creation',
+  'business_analysis',
+  'procurement_management'
+] as const satisfies readonly ModaGptCoreWorkflowId[];
+
+export type ExecutableModaGptMerchantWorkflowId = (typeof executableModaGptMerchantWorkflowIds)[number];
+
+export function isExecutableModaGptMerchantWorkflow(
+  workflow: ModaGptCoreWorkflowId
+): workflow is ExecutableModaGptMerchantWorkflowId {
+  return executableModaGptMerchantWorkflowIds.some(candidate => candidate === workflow);
+}
 
 export type ModaGptCoreTaskRoute = {
   workflow: ModaGptCoreWorkflowId;
@@ -55,6 +71,13 @@ const intentRules: ReadonlyArray<{
     goal: 'Prepare a fashion collection creative brief and reviewed visual draft.',
     agents: ['product-creative-manager', 'business-manager'],
     tools: ['generate_creative_draft', 'verify_creative_artifact']
+  },
+  {
+    workflow: 'procurement_management',
+    pattern: /(?:\b(?:procurement|purchase order|supplier|sourcing|vendor)\b|采购|供应商|进货|采购草稿|采购单|采购订单|供应商对比|供应商分析|比价|补货采购|补货订单)/i,
+    goal: 'Manage merchant procurement by analyzing suppliers and preparing purchase orders.',
+    agents: ['supply-chain-finance-manager', 'product-creative-manager', 'business-manager'],
+    tools: ['get_suppliers', 'get_supplier_performance', 'create_procurement_draft', 'get_products', 'currency_convert']
   },
   {
     workflow: 'low_inventory_review',

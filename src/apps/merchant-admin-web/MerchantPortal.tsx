@@ -43,7 +43,6 @@ import {
   Boxes,
   ClipboardCheck,
   Receipt,
-  Smartphone,
   FolderOpen,
   MessageCircle,
   Pencil,
@@ -139,6 +138,15 @@ const ModaUIWorkbench = lazy(() =>
 const MerchantAppStore = lazy(() =>
   import('../merchant-admin-common/components/merchant/AppStore').then(module => ({ default: module.AppStore }))
 );
+const MerchantRecycleBin = lazy(() =>
+  import('../merchant-admin-common/components/merchant/MerchantRecycleBin').then(module => ({ default: module.MerchantRecycleBin }))
+);
+const MerchantAiChatHistory = lazy(() =>
+  import('../merchant-admin-common/components/merchant/MerchantAiChatHistory').then(module => ({ default: module.MerchantAiChatHistory }))
+);
+const MerchantActivityFeed = lazy(() =>
+  import('../merchant-admin-common/components/merchant/MerchantActivityFeed').then(module => ({ default: module.MerchantActivityFeed }))
+);
 const MerchantEmailDomains = lazy(() =>
   import('../merchant-admin-common/components/merchant/EmailApp').then(module => ({ default: module.EmailApp }))
 );
@@ -221,16 +229,17 @@ export const MerchantPortal: React.FC<{
   const { modauiEnabled } = useModuleAvailability();
 
   const isIt = lang === 'it';
+  // 电脑端侧栏与窄屏水平导航统一使用黑白/中性灰：白底、选中浅灰，不引入彩色高亮。
   const navItemClass = (active: boolean) => `inline-flex items-center gap-2 rounded-lg px-3.5 py-2.5 text-xs font-semibold tracking-wide transition-all cursor-pointer ${
     active
-      ? 'bg-emerald-50 text-emerald-800 shadow-sm ring-1 ring-emerald-200'
-      : 'text-neutral-600 hover:bg-white hover:text-neutral-950 hover:shadow-sm'
+      ? 'bg-neutral-100 text-neutral-950'
+      : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-950'
   }`;
-  const settingsSubItemClass = (active: boolean) => `flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[11px] font-semibold transition ${active ? 'bg-emerald-50 text-emerald-800' : 'text-neutral-600 hover:bg-white hover:text-neutral-950'}`;
+  const settingsSubItemClass = (active: boolean) => `flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[11px] font-semibold transition ${active ? 'bg-neutral-100 text-neutral-950' : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-950'}`;
 
   // Active sub-tab inside Merchant Portal
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'pos' | 'products' | 'sku_matrix' | 'materials' | 'production' | 'inventory' | 'procurement' | 'orders' | 'vault_requests' | 'customers' | 'growth' | 'content' | 'finance' | 'profile' | 'settings' | 'gallery' | 'ai_employees' | 'fashion_studio' | 'modagpt' | 'app_store'
+    'dashboard' | 'pos' | 'products' | 'sku_matrix' | 'materials' | 'production' | 'inventory' | 'procurement' | 'orders' | 'vault_requests' | 'customers' | 'growth' | 'content' | 'finance' | 'profile' | 'settings' | 'gallery' | 'ai_employees' | 'fashion_studio' | 'modagpt' | 'app_store' | 'recycle_bin' | 'ai_chat_history' | 'recent_activity'
   >('dashboard');
   const [industrySection, setIndustrySection] = useState<MerchantIndustryModuleKey>('dashboard');
   const pendingIndustrySectionRef = useRef<MerchantIndustryModuleKey | null>(null);
@@ -263,7 +272,7 @@ export const MerchantPortal: React.FC<{
   const [growthSection, setGrowthSection] = useState<GrowthSection>('overview');
   const [contentSection, setContentSection] = useState<ContentKind>('metaobject');
   const [assistantUsesPageContext, setAssistantUsesPageContext] = useState(true);
-  const [sidebarNavExpanded, setSidebarNavExpanded] = useState<'dashboard' | 'products' | 'customers' | 'growth' | 'store' | 'settings' | null>(null);
+  const [sidebarNavExpanded, setSidebarNavExpanded] = useState<'dashboard' | 'orders' | 'products' | 'supply' | 'customers' | 'growth' | 'store' | 'apps' | 'settings' | null>(null);
   const [moreNavExpanded, setMoreNavExpanded] = useState(false);
   const [settingsSubsection, setSettingsSubsection] = useState<'general' | 'rules' | 'payments' | 'notifications' | 'mobile' | 'team' | 'roles' | 'language' | 'info'>('general');
   const [activeSettingsEntry, setActiveSettingsEntry] = useState<MerchantSettingsEntryId>('general');
@@ -286,25 +295,33 @@ export const MerchantPortal: React.FC<{
   const openSidebarNav = (section: NonNullable<typeof sidebarNavExpanded>) => setSidebarNavExpanded(section);
   const toggleSidebarNav = (section: NonNullable<typeof sidebarNavExpanded>) => setSidebarNavExpanded(current => current === section ? null : section);
   const productNavIsExpanded = sidebarNavExpanded === 'products';
+  const supplyNavIsExpanded = sidebarNavExpanded === 'supply';
+  const orderNavIsExpanded = sidebarNavExpanded === 'orders';
   const customerNavIsExpanded = sidebarNavExpanded === 'customers';
   const growthNavIsExpanded = sidebarNavExpanded === 'growth';
   const storeNavIsExpanded = sidebarNavExpanded === 'store';
+  const appsNavIsExpanded = sidebarNavExpanded === 'apps';
   const dashboardNavIsExpanded = sidebarNavExpanded === 'dashboard';
   const moreNavIsExpanded = moreNavExpanded;
-  const productNavIsActive = ['products', 'sku_matrix', 'inventory', 'production', 'materials', 'procurement'].includes(activeTab);
+  const appsNavIsActive = ['app_store', 'recycle_bin'].includes(activeTab);
+  const productNavIsActive = ['products', 'sku_matrix'].includes(activeTab);
+  const supplyNavIsActive = ['inventory', 'production', 'materials', 'procurement'].includes(activeTab);
   const customerNavIsActive = activeTab === 'customers' || activeTab === 'vault_requests';
   const storeNavIsActive = ['content', 'gallery', 'profile'].includes(activeTab);
   const [orderView, setOrderView] = useState<'orders' | 'drafts'>('orders');
   const [productWorkspaceSection, setProductWorkspaceSection] = useState<'catalog' | 'categories'>('catalog');
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   useEffect(() => {
-    if (['products', 'sku_matrix', 'inventory', 'production', 'materials', 'procurement'].includes(activeTab)) openSidebarNav('products');
+    if (['products', 'sku_matrix'].includes(activeTab)) openSidebarNav('products');
+    else if (['inventory', 'production', 'materials', 'procurement'].includes(activeTab)) openSidebarNav('supply');
+    else if (activeTab === 'pos') openSidebarNav('orders');
     else if (activeTab === 'vault_requests') openSidebarNav('customers');
     else if (activeTab === 'growth') openSidebarNav('growth');
     else if (['gallery', 'profile', 'content'].includes(activeTab)) openSidebarNav('store');
+    else if (['app_store', 'recycle_bin'].includes(activeTab)) openSidebarNav('apps');
     else if (activeTab === 'settings') setSidebarNavExpanded(null);
     else if (activeTab === 'dashboard' && dashboardNavSection === 'analytics') openSidebarNav('dashboard');
-    if (['sku_matrix', 'inventory', 'production', 'materials', 'procurement', 'vault_requests', 'content', 'gallery', 'ai_employees', 'settings', 'profile'].includes(activeTab)
+    if (['sku_matrix', 'inventory', 'production', 'materials', 'procurement', 'vault_requests', 'content', 'gallery', 'ai_employees', 'settings', 'profile', 'recycle_bin', 'ai_chat_history', 'recent_activity'].includes(activeTab)
       || (activeTab === 'dashboard' && dashboardNavSection === 'analytics')) setMoreNavExpanded(true);
   }, [activeTab, dashboardNavSection, growthSection]);
   const industryAssistantLabels: Readonly<Record<MerchantIndustryModuleKey, string>> = {
@@ -348,6 +365,10 @@ export const MerchantPortal: React.FC<{
       settings: localizeCopy('系统设置', 'Impostazioni'),
       gallery: localizeCopy('内容素材', 'Contenuti media'),
       ai_employees: localizeCopy('智能员工', 'Team AI'),
+      app_store: localizeCopy('应用', 'App'),
+      recycle_bin: localizeCopy('回收站', 'Cestino'),
+      ai_chat_history: localizeCopy('AI 聊天记录', 'Cronologia AI'),
+      recent_activity: localizeCopy('最近动态', 'Attività recenti'),
       fashion_studio: localizeCopy('创作空间', 'ModaUI Fashion Studio'),
       modagpt: localizeCopy('创作空间', 'ModaUI Fashion Studio')
     } as const)[activeTab];
@@ -402,6 +423,8 @@ export const MerchantPortal: React.FC<{
         ? 'materials'
         : activeTab === 'pos'
           ? 'orders'
+        : ['app_store', 'recycle_bin', 'ai_chat_history', 'recent_activity'].includes(activeTab)
+          ? 'dashboard'
         : activeTab
     : 'dashboard';
   const assistantRequestScope = assistantUsesPageContext ? assistantContextScope : 'overview';
@@ -4488,14 +4511,23 @@ export const MerchantPortal: React.FC<{
   const lowStockFabricCount = lowStockMaterials.filter(material => ['fabric', 'lining'].includes(material.category)).length;
   const lowStockTrimCount = lowStockMaterials.filter(material => ['trim', 'label', 'packaging'].includes(material.category)).length;
   const inventoryAlerts = (operationsIntelligence?.alerts || []).filter(alert => ['stockout', 'slow_mover'].includes(alert.type));
+  // 顶部品牌位显示已登录商家的真实公司名（法定主体优先），不再使用平台占位品牌。
+  const merchantCompanyName = (currentMerchant.companyLegalName || currentMerchant.name || '').trim();
 
   return (
     <div id="merchant-web-layout" className={`merchant-web-layout mx-auto grid min-h-screen w-full max-w-none grid-cols-1 gap-0 lg:gap-0 ${activeTab === 'settings' ? 'lg:grid-cols-1' : assistantPanelOpen && !assistantPanelExpanded ? 'lg:grid-cols-[192px_minmax(0,1fr)_360px]' : 'lg:grid-cols-[192px_minmax(0,1fr)]'}`}>
       <header className="merchant-web-topbar sticky top-0 z-50 col-span-full flex h-14 items-center gap-3 bg-neutral-950 px-3 text-white shadow-sm sm:px-5">
-        <div className="flex w-auto shrink-0 items-center gap-2 font-bold tracking-tight sm:w-[204px]">
-          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-white text-[11px] font-black text-neutral-950">R</span>
-          <span className="text-sm">RUDA</span>
-          <span className="hidden text-[10px] font-medium text-neutral-400 sm:inline">企业中心</span>
+        <div className="flex w-auto min-w-0 shrink-0 items-center gap-2 sm:w-[204px]">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white text-[11px] font-black text-neutral-950">
+            {(merchantCompanyName.charAt(0) || 'R').toUpperCase()}
+          </span>
+          <span
+            className="min-w-0 truncate text-sm font-semibold tracking-tight"
+            title={merchantCompanyName}
+            aria-label={merchantCompanyName}
+          >
+            {merchantCompanyName}
+          </span>
         </div>
         <div className="relative mx-auto hidden min-w-0 max-w-xl flex-1 items-center sm:flex">
           <Search className="pointer-events-none absolute left-3 h-4 w-4 text-neutral-500" />
@@ -4562,12 +4594,12 @@ export const MerchantPortal: React.FC<{
         </div>
       </header>
       {isDemoMerchant && <div role="status" className="col-span-full border-b border-neutral-300 bg-neutral-100 px-4 py-2 text-xs font-medium text-neutral-800 sm:px-6">演示环境 · 数据仅供功能测试，请勿录入真实业务。</div>}
-      <aside className={`${activeTab === 'settings' ? 'hidden' : 'hidden lg:sticky lg:top-14 lg:flex lg:h-[calc(100vh-3.5rem)] lg:flex-col lg:overflow-hidden'} border-r border-neutral-200 bg-neutral-100 p-3`}>
+      <aside className={`${activeTab === 'settings' ? 'hidden' : 'hidden lg:sticky lg:top-14 lg:flex lg:h-[calc(100vh-3.5rem)] lg:flex-col lg:overflow-hidden'} border-r border-neutral-200 bg-white p-3`}>
         <button
           type="button"
           onClick={() => setBusinessCardOpen(true)}
           aria-label={localizeCopy('打开商家名片', 'Apri scheda negozio')}
-          className="flex w-full items-center gap-3 rounded-xl border-b border-neutral-100 px-2 pb-4 pt-2 text-left transition hover:bg-white active:bg-white"
+          className="flex w-full items-center gap-3 rounded-xl border-b border-neutral-100 px-2 pb-4 pt-2 text-left transition hover:bg-neutral-50 active:bg-neutral-100"
         >
           <img src={merchantLogo} alt="" className="h-10 w-10 rounded-xl border border-neutral-200 object-cover" />
           <span className="min-w-0 flex-1">
@@ -4575,73 +4607,70 @@ export const MerchantPortal: React.FC<{
           </span>
           <ChevronRight className="h-3.5 w-3.5 shrink-0 text-neutral-400" aria-hidden="true" />
         </button>
-        <nav aria-label="企业中心导航" className="merchant-web-sidebar-nav mt-3 min-h-0 flex-1 space-y-4 overflow-y-auto px-1">
+        <nav aria-label="商家后台导航" className="merchant-web-sidebar-nav mt-3 min-h-0 flex-1 space-y-4 overflow-y-auto px-1">
           <div>
             <div className="flex items-center gap-1">
               <button type="button" id="merchant-sidebar-tab-dashboard" onClick={openMerchantHome} className={`${navItemClass(activeTab === 'dashboard' && dashboardNavSection === 'home')} flex-1`}><Home className="h-4 w-4" />{localizeCopy('经营主页', 'Home')}</button>
-              <button type="button" aria-label={dashboardNavIsExpanded ? '收起主页菜单' : '展开主页菜单'} aria-expanded={dashboardNavIsExpanded} onClick={() => toggleSidebarNav('dashboard')} className="rounded-lg p-2 text-neutral-500 hover:bg-white hover:text-neutral-900"><ChevronDown className={`h-3.5 w-3.5 transition-transform ${dashboardNavIsExpanded ? 'rotate-180' : ''}`} /></button>
+              <button type="button" aria-label={dashboardNavIsExpanded ? '收起主页菜单' : '展开主页菜单'} aria-expanded={dashboardNavIsExpanded} onClick={() => toggleSidebarNav('dashboard')} className="rounded-lg p-2 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"><ChevronDown className={`h-3.5 w-3.5 transition-transform ${dashboardNavIsExpanded ? 'rotate-180' : ''}`} /></button>
             </div>
             {dashboardNavIsExpanded && <button type="button" id="merchant-sidebar-growth-analytics" onClick={openMerchantAnalytics} className={settingsSubItemClass(activeTab === 'dashboard' && dashboardNavSection === 'analytics')}><BarChart3 className="h-3.5 w-3.5" />{localizeCopy('经营分析', 'Analisi')}</button>}
-            <button type="button" id="merchant-sidebar-tab-orders" onClick={() => { setSidebarNavExpanded(null); setActiveTab('orders'); }} className={navItemClass(activeTab === 'orders')}><Truck className="h-4 w-4" />{localizeCopy('订单履约', 'Ordini')}{orderActionCount > 0 && <span className="ml-auto min-w-5 rounded-full bg-blue-100 px-1.5 py-0.5 text-center text-[10px] font-bold text-blue-800">{orderActionCount > 99 ? '99+' : orderActionCount}</span>}</button>
-            {modauiEnabled && <button type="button" id="merchant-sidebar-tab-modagpt" onClick={() => { setSidebarNavExpanded(null); setActiveTab('fashion_studio'); }} className={navItemClass(activeTab === 'fashion_studio' || activeTab === 'modagpt')}><Sparkles className="h-4 w-4" />{localizeCopy('创作空间', 'Studio ModaUI')}</button>}
-            <button type="button" id="merchant-sidebar-tab-pos" onClick={() => { setSidebarNavExpanded(null); setActiveTab('pos'); }} className={navItemClass(false)}><ShoppingCart className="h-4 w-4" />{localizeCopy('智能收银', 'Smart POS')}</button>
-          </div>
-          <div>
             <div className="flex items-center gap-1">
-              <button type="button" id="merchant-sidebar-tab-products" onClick={() => { openSidebarNav('products'); openProductCatalog(); }} className={`${navItemClass(productNavIsActive)} flex-1`}><Package className="h-4 w-4" />{localizeCopy('商品库存', 'Prodotti e scorte')}</button>
-              <button type="button" aria-label={productNavIsExpanded ? '收起商品与库存菜单' : '展开商品与库存菜单'} aria-expanded={productNavIsExpanded} onClick={() => toggleSidebarNav('products')} className="rounded-lg p-2 text-neutral-500 hover:bg-white hover:text-neutral-900"><ChevronDown className={`h-3.5 w-3.5 transition-transform ${productNavIsExpanded ? 'rotate-180' : ''}`} /></button>
+              <button type="button" id="merchant-sidebar-tab-orders" onClick={() => { openSidebarNav('orders'); setActiveTab('orders'); }} className={`${navItemClass(activeTab === 'orders')} flex-1`}><Truck className="h-4 w-4" />{localizeCopy('订单履约', 'Ordini')}{orderActionCount > 0 && <span className="ml-auto min-w-5 rounded-full bg-neutral-200 px-1.5 py-0.5 text-center text-[10px] font-bold text-neutral-800">{orderActionCount > 99 ? '99+' : orderActionCount}</span>}</button>
+              <button type="button" aria-label={orderNavIsExpanded ? '收起订单菜单' : '展开订单菜单'} aria-expanded={orderNavIsExpanded} onClick={() => toggleSidebarNav('orders')} className="rounded-lg p-2 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"><ChevronDown className={`h-3.5 w-3.5 transition-transform ${orderNavIsExpanded ? 'rotate-180' : ''}`} /></button>
             </div>
-            {productNavIsExpanded && <div className="ml-3 mt-2 space-y-3 border-l border-neutral-200 pl-2">
-              <section>
-                <h3 className="px-2 pb-1 text-[9px] font-bold uppercase tracking-wide text-neutral-400">{localizeCopy('商品管理', 'Catalogo')}</h3>
-                <div className="space-y-0.5">
-                  <button type="button" id="merchant-sidebar-product-list" onClick={openProductCatalog} className={settingsSubItemClass(activeTab === 'products' && productWorkspaceSection === 'catalog')}><Package className="h-3.5 w-3.5" />{localizeCopy('商品列表', 'Catalogo prodotti')}</button>
-                  <button type="button" id="merchant-sidebar-product-categories" onClick={openProductCategories} className={settingsSubItemClass(false)}><Layers className="h-3.5 w-3.5" />{localizeCopy('店铺分类', 'Categorie negozio')}</button>
-                  <button type="button" id="merchant-sidebar-tab-sku-matrix" onClick={() => setActiveTab('sku_matrix')} className={settingsSubItemClass(activeTab === 'sku_matrix')}><Barcode className="h-3.5 w-3.5" />{localizeCopy('款式规格', 'Varianti SKU')}</button>
-                </div>
-              </section>
-              <section>
-                <h3 className="px-2 pb-1 text-[9px] font-bold uppercase tracking-wide text-neutral-400">{localizeCopy('库存台账', 'Scorte')}</h3>
-                <div className="space-y-0.5">
-                  <button type="button" id="merchant-sidebar-tab-inventory" onClick={() => setActiveTab('inventory')} className={settingsSubItemClass(activeTab === 'inventory')}><Boxes className="h-3.5 w-3.5" />{localizeCopy('库存管理', 'Giacenze')}</button>
-                </div>
-              </section>
-              <section>
-                <h3 className="px-2 pb-1 text-[9px] font-bold uppercase tracking-wide text-neutral-400">{localizeCopy('生产采购', 'Produzione e approvvigionamento')}</h3>
-                <div className="space-y-0.5">
-                  <button type="button" id="merchant-sidebar-tab-production" onClick={() => setActiveTab('production')} className={settingsSubItemClass(activeTab === 'production')}><ClipboardCheck className="h-3.5 w-3.5" />{localizeCopy('生产工单', 'Produzione')}{productionWorkOrders.filter(order => !['completed', 'cancelled'].includes(order.status)).length > 0 && <span className="ml-auto text-[10px] text-neutral-400">{productionWorkOrders.filter(order => !['completed', 'cancelled'].includes(order.status)).length}</span>}</button>
-                  <button type="button" id="merchant-sidebar-tab-materials" onClick={() => setActiveTab('materials')} className={settingsSubItemClass(activeTab === 'materials')}><Layers className="h-3.5 w-3.5" />{localizeCopy('物料库存', 'Materiali')}</button>
-                  <button type="button" id="merchant-sidebar-tab-procurement" onClick={() => setActiveTab('procurement')} className={settingsSubItemClass(activeTab === 'procurement')}><ClipboardCheck className="h-3.5 w-3.5" />{localizeCopy('采购订单', 'Acquisti')}</button>
-                </div>
-              </section>
+            {orderNavIsExpanded && <div className="ml-3 mt-1 space-y-0.5 border-l border-neutral-200 pl-2">
+              <button type="button" id="merchant-sidebar-tab-pos" onClick={() => setActiveTab('pos')} className={settingsSubItemClass(activeTab === 'pos')}><ShoppingCart className="h-3.5 w-3.5" />{localizeCopy('智能收银', 'Smart POS')}</button>
             </div>}
           </div>
           <div>
             <div className="flex items-center gap-1">
-              <button type="button" id="merchant-sidebar-tab-customers" onClick={() => { openSidebarNav('customers'); setActiveTab('customers'); }} className={`${navItemClass(customerNavIsActive)} flex-1`}><UserCheck className="h-4 w-4" />{localizeCopy('客户管理', 'Clienti')}{pendingVaultCount > 0 && <span className="ml-auto min-w-5 rounded-full bg-blue-100 px-1.5 py-0.5 text-center text-[10px] font-bold text-blue-800">{pendingVaultCount > 99 ? '99+' : pendingVaultCount}</span>}</button>
-              <button type="button" aria-label={customerNavIsExpanded ? '收起客户菜单' : '展开客户菜单'} aria-expanded={customerNavIsExpanded} onClick={() => toggleSidebarNav('customers')} className="rounded-lg p-2 text-neutral-500 hover:bg-white hover:text-neutral-900"><ChevronDown className={`h-3.5 w-3.5 transition-transform ${customerNavIsExpanded ? 'rotate-180' : ''}`} /></button>
+              <button type="button" id="merchant-sidebar-tab-products" onClick={() => { openSidebarNav('products'); openProductCatalog(); }} className={`${navItemClass(productNavIsActive)} flex-1`}><Package className="h-4 w-4" />{localizeCopy('商品管理', 'Prodotti')}</button>
+              <button type="button" aria-label={productNavIsExpanded ? '收起商品菜单' : '展开商品菜单'} aria-expanded={productNavIsExpanded} onClick={() => toggleSidebarNav('products')} className="rounded-lg p-2 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"><ChevronDown className={`h-3.5 w-3.5 transition-transform ${productNavIsExpanded ? 'rotate-180' : ''}`} /></button>
             </div>
-            {customerNavIsExpanded && <button type="button" id="merchant-sidebar-tab-vault" onClick={() => setActiveTab('vault_requests')} className={`${settingsSubItemClass(activeTab === 'vault_requests')} relative`}><Lock className="h-3.5 w-3.5" />{localizeCopy('授权申请', 'Richieste private')}{pendingVaultCount > 0 && <span className="ml-auto min-w-5 rounded-full bg-blue-100 px-1.5 py-0.5 text-center text-[10px] font-bold text-blue-800">{pendingVaultCount > 99 ? '99+' : pendingVaultCount}</span>}</button>}
+            {productNavIsExpanded && <div className="ml-3 mt-1 space-y-0.5 border-l border-neutral-200 pl-2">
+              <button type="button" id="merchant-sidebar-product-list" onClick={openProductCatalog} className={settingsSubItemClass(activeTab === 'products' && productWorkspaceSection === 'catalog')}><Package className="h-3.5 w-3.5" />{localizeCopy('商品列表', 'Catalogo prodotti')}</button>
+              <button type="button" id="merchant-sidebar-product-categories" onClick={openProductCategories} className={settingsSubItemClass(activeTab === 'products' && productWorkspaceSection === 'categories')}><Layers className="h-3.5 w-3.5" />{localizeCopy('店铺分类', 'Categorie negozio')}</button>
+              <button type="button" id="merchant-sidebar-tab-sku-matrix" onClick={() => setActiveTab('sku_matrix')} className={settingsSubItemClass(activeTab === 'sku_matrix')}><Barcode className="h-3.5 w-3.5" />{localizeCopy('款式规格', 'Varianti SKU')}</button>
+            </div>}
+          </div>
+          <div>
+            <div className="flex items-center gap-1">
+              <button type="button" id="merchant-sidebar-tab-inventory" onClick={() => { openSidebarNav('supply'); setActiveTab('inventory'); }} className={`${navItemClass(supplyNavIsActive)} flex-1`}><Boxes className="h-4 w-4" />{localizeCopy('库存管理', 'Giacenze')}</button>
+              <button type="button" aria-label={supplyNavIsExpanded ? '收起库存菜单' : '展开库存菜单'} aria-expanded={supplyNavIsExpanded} onClick={() => toggleSidebarNav('supply')} className="rounded-lg p-2 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"><ChevronDown className={`h-3.5 w-3.5 transition-transform ${supplyNavIsExpanded ? 'rotate-180' : ''}`} /></button>
+            </div>
+            {supplyNavIsExpanded && <div className="ml-3 mt-1 space-y-0.5 border-l border-neutral-200 pl-2">
+              <button type="button" id="merchant-sidebar-tab-inventory-ledger" onClick={() => setActiveTab('inventory')} className={settingsSubItemClass(activeTab === 'inventory')}><Boxes className="h-3.5 w-3.5" />{localizeCopy('库存台账', 'Scorte')}</button>
+              <button type="button" id="merchant-sidebar-tab-materials" onClick={() => setActiveTab('materials')} className={settingsSubItemClass(activeTab === 'materials')}><Layers className="h-3.5 w-3.5" />{localizeCopy('物料库存', 'Materiali')}</button>
+              <button type="button" id="merchant-sidebar-tab-production" onClick={() => setActiveTab('production')} className={settingsSubItemClass(activeTab === 'production')}><ClipboardCheck className="h-3.5 w-3.5" />{localizeCopy('生产工单', 'Produzione')}{productionWorkOrders.filter(order => !['completed', 'cancelled'].includes(order.status)).length > 0 && <span className="ml-auto text-[10px] text-neutral-400">{productionWorkOrders.filter(order => !['completed', 'cancelled'].includes(order.status)).length}</span>}</button>
+              <button type="button" id="merchant-sidebar-tab-procurement" onClick={() => setActiveTab('procurement')} className={settingsSubItemClass(activeTab === 'procurement')}><ClipboardCheck className="h-3.5 w-3.5" />{localizeCopy('采购订单', 'Acquisti')}</button>
+            </div>}
+          </div>
+          <div>
+            <div className="flex items-center gap-1">
+              <button type="button" id="merchant-sidebar-tab-customers" onClick={() => { openSidebarNav('customers'); setActiveTab('customers'); }} className={`${navItemClass(customerNavIsActive)} flex-1`}><UserCheck className="h-4 w-4" />{localizeCopy('客户管理', 'Clienti')}{pendingVaultCount > 0 && <span className="ml-auto min-w-5 rounded-full bg-neutral-200 px-1.5 py-0.5 text-center text-[10px] font-bold text-neutral-800">{pendingVaultCount > 99 ? '99+' : pendingVaultCount}</span>}</button>
+              <button type="button" aria-label={customerNavIsExpanded ? '收起客户菜单' : '展开客户菜单'} aria-expanded={customerNavIsExpanded} onClick={() => toggleSidebarNav('customers')} className="rounded-lg p-2 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"><ChevronDown className={`h-3.5 w-3.5 transition-transform ${customerNavIsExpanded ? 'rotate-180' : ''}`} /></button>
+            </div>
+            {customerNavIsExpanded && <button type="button" id="merchant-sidebar-tab-vault" onClick={() => setActiveTab('vault_requests')} className={`${settingsSubItemClass(activeTab === 'vault_requests')} relative`}><Lock className="h-3.5 w-3.5" />{localizeCopy('授权申请', 'Richieste private')}{pendingVaultCount > 0 && <span className="ml-auto min-w-5 rounded-full bg-neutral-200 px-1.5 py-0.5 text-center text-[10px] font-bold text-neutral-800">{pendingVaultCount > 99 ? '99+' : pendingVaultCount}</span>}</button>}
           </div>
           <div>
             <div className="flex items-center gap-1">
               <button type="button" id="merchant-sidebar-tab-growth" onClick={() => { setGrowthSection('overview'); setActiveTab('growth'); }} className={`${navItemClass(activeTab === 'growth')} flex-1`}><TrendingUp className="h-4 w-4" />{localizeCopy('营销增长', 'Crescita')}</button>
-              <button type="button" aria-label={growthNavIsExpanded ? '收起增长菜单' : '展开增长菜单'} aria-expanded={growthNavIsExpanded} onClick={() => toggleSidebarNav('growth')} className="rounded-lg p-2 text-neutral-500 hover:bg-white hover:text-neutral-900"><ChevronDown className={`h-3.5 w-3.5 transition-transform ${growthNavIsExpanded ? 'rotate-180' : ''}`} /></button>
+              <button type="button" aria-label={growthNavIsExpanded ? '收起增长菜单' : '展开增长菜单'} aria-expanded={growthNavIsExpanded} onClick={() => toggleSidebarNav('growth')} className="rounded-lg p-2 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"><ChevronDown className={`h-3.5 w-3.5 transition-transform ${growthNavIsExpanded ? 'rotate-180' : ''}`} /></button>
             </div>
             {growthNavIsExpanded && <div className="ml-3 mt-1 space-y-0.5 border-l border-neutral-200 pl-2">
               <button type="button" id="merchant-sidebar-growth-overview" onClick={() => { setGrowthSection('overview'); setActiveTab('growth'); }} className={settingsSubItemClass(activeTab === 'growth' && growthSection === 'overview')}><BarChart3 className="h-3.5 w-3.5" />{localizeCopy('增长概览', 'Panoramica')}</button>
               <button type="button" id="merchant-sidebar-growth-autopilot" onClick={() => { setGrowthSection('autopilot'); setActiveTab('growth'); }} className={settingsSubItemClass(activeTab === 'growth' && growthSection === 'autopilot')}><Sparkles className="h-3.5 w-3.5" />{localizeCopy('智能运营', 'Autopilot')}</button>
               <button type="button" id="merchant-sidebar-growth-campaigns" onClick={() => { setGrowthSection('campaigns'); setActiveTab('growth'); }} className={settingsSubItemClass(activeTab === 'growth' && growthSection === 'campaigns')}><Send className="h-3.5 w-3.5" />{localizeCopy('营销活动', 'Campagne')}</button>
             </div>}
-            <button type="button" id="merchant-sidebar-tab-finance" onClick={() => { setSidebarNavExpanded(null); setActiveTab('finance'); }} className={navItemClass(activeTab === 'finance')}><Receipt className="h-4 w-4" />{localizeCopy('财务结算', 'Pagamenti e saldo')}</button>
           </div>
+          {modauiEnabled && <button type="button" id="merchant-sidebar-tab-modagpt" onClick={() => { setSidebarNavExpanded(null); setActiveTab('fashion_studio'); }} className={navItemClass(activeTab === 'fashion_studio' || activeTab === 'modagpt')}><Sparkles className="h-4 w-4" />{localizeCopy('创作空间', 'Studio ModaUI')}</button>}
           <div>
             <div className="flex items-center gap-1">
               <button type="button" id="merchant-sidebar-tab-store-content" onClick={() => toggleSidebarNav('store')} className={`${navItemClass(storeNavIsActive)} flex-1`}><Store className="h-4 w-4" />{localizeCopy('店铺内容', 'Negozio e contenuti')}</button>
-              <button type="button" aria-label={storeNavIsExpanded ? '收起店铺与内容菜单' : '展开店铺与内容菜单'} aria-expanded={storeNavIsExpanded} onClick={() => toggleSidebarNav('store')} className="rounded-lg p-2 text-neutral-500 hover:bg-white hover:text-neutral-900"><ChevronDown className={`h-3.5 w-3.5 transition-transform ${storeNavIsExpanded ? 'rotate-180' : ''}`} /></button>
+              <button type="button" aria-label={storeNavIsExpanded ? '收起店铺与内容菜单' : '展开店铺与内容菜单'} aria-expanded={storeNavIsExpanded} onClick={() => toggleSidebarNav('store')} className="rounded-lg p-2 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"><ChevronDown className={`h-3.5 w-3.5 transition-transform ${storeNavIsExpanded ? 'rotate-180' : ''}`} /></button>
             </div>
             {storeNavIsExpanded && <div className="ml-3 mt-1 space-y-0.5 border-l border-neutral-200 pl-2">
-              <a href={merchantSharePath} target="_blank" rel="noopener noreferrer" className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-[11px] font-semibold text-neutral-600 transition hover:bg-white hover:text-neutral-950"><ExternalLink className="h-3.5 w-3.5" />{localizeCopy('店铺预览', 'Negozio online')}</a>
+              <a href={merchantSharePath} target="_blank" rel="noopener noreferrer" className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-[11px] font-semibold text-neutral-600 transition hover:bg-neutral-50 hover:text-neutral-950"><ExternalLink className="h-3.5 w-3.5" />{localizeCopy('店铺预览', 'Negozio online')}</a>
               <button type="button" id="merchant-sidebar-content-metaobject" onClick={() => openContentSection('metaobject')} className={settingsSubItemClass(activeTab === 'content' && contentSection === 'metaobject')}><Layers className="h-3.5 w-3.5" />{localizeCopy('内容对象', 'Metaoggetti')}</button>
               <button type="button" id="merchant-sidebar-content-menu" onClick={() => openContentSection('menu')} className={settingsSubItemClass(activeTab === 'content' && contentSection === 'menu')}><Menu className="h-3.5 w-3.5" />{localizeCopy('菜单管理', 'Menu')}</button>
               <button type="button" id="merchant-sidebar-content-blog" onClick={() => openContentSection('blog')} className={settingsSubItemClass(activeTab === 'content' && contentSection === 'blog')}><BookOpen className="h-3.5 w-3.5" />{localizeCopy('博客文章', 'Articoli del blog')}</button>
@@ -4650,19 +4679,40 @@ export const MerchantPortal: React.FC<{
               <button type="button" id="merchant-sidebar-storefront-settings" onClick={() => openSettingsSection('storefront')} className={settingsSubItemClass(activeTab === 'profile')}><Store className="h-3.5 w-3.5" />{localizeCopy('店铺设置', 'Impostazioni vetrina')}</button>
             </div>}
           </div>
-          <button
-            type="button"
-            id="merchant-sidebar-tab-app-store"
-            onClick={() => { setSidebarNavExpanded(null); setActiveTab('app_store'); }}
-            className={navItemClass(activeTab === 'app_store')}
-          >
-            <Boxes className="h-4 w-4" />{localizeCopy('应用商店', 'App store')}
-          </button>
-          <button type="button" id="merchant-sidebar-tab-settings" onClick={openMerchantSettings} className={navItemClass(activeTab === 'settings')}><SlidersHorizontal className="h-4 w-4" />{localizeCopy('系统设置', 'Impostazioni')}</button>
+          <button type="button" id="merchant-sidebar-tab-finance" onClick={() => { setSidebarNavExpanded(null); setActiveTab('finance'); }} className={navItemClass(activeTab === 'finance')}><Receipt className="h-4 w-4" />{localizeCopy('财务结算', 'Pagamenti e saldo')}</button>
+          <div className="border-t border-neutral-200 pt-3">
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                id="merchant-sidebar-tab-apps"
+                onClick={() => { openSidebarNav('apps'); setActiveTab('app_store'); }}
+                className={`${navItemClass(appsNavIsActive)} flex-1`}
+              >
+                <Boxes className="h-4 w-4" />{localizeCopy('应用', 'App')}
+              </button>
+              <button
+                type="button"
+                aria-label={appsNavIsExpanded ? '收起应用菜单' : '展开应用菜单'}
+                aria-expanded={appsNavIsExpanded}
+                onClick={() => toggleSidebarNav('apps')}
+                className="rounded-lg p-2 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
+              >
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${appsNavIsExpanded ? 'rotate-180' : ''}`} />
+              </button>
+            </div>
+            {appsNavIsExpanded && (
+              <div className="ml-3 mt-1 space-y-0.5 border-l border-neutral-200 pl-2">
+                <button type="button" id="merchant-sidebar-tab-app-store" onClick={() => setActiveTab('app_store')} className={settingsSubItemClass(activeTab === 'app_store')}><Boxes className="h-3.5 w-3.5" />{localizeCopy('应用商店', 'App store')}</button>
+                <button type="button" id="merchant-sidebar-tab-recycle-bin" onClick={() => setActiveTab('recycle_bin')} className={settingsSubItemClass(activeTab === 'recycle_bin')}><Trash2 className="h-3.5 w-3.5" />{localizeCopy('回收站', 'Cestino')}</button>
+              </div>
+            )}
+            <button type="button" id="merchant-sidebar-tab-ai-chat-history" onClick={() => { setSidebarNavExpanded(null); setActiveTab('ai_chat_history'); }} className={`${navItemClass(activeTab === 'ai_chat_history')} mt-1`}><MessageCircle className="h-4 w-4" />{localizeCopy('AI 聊天记录', 'Cronologia AI')}</button>
+            <button type="button" id="merchant-sidebar-tab-recent-activity" onClick={() => { setSidebarNavExpanded(null); setActiveTab('recent_activity'); }} className={navItemClass(activeTab === 'recent_activity')}><Clock className="h-4 w-4" />{localizeCopy('最近动态', 'Attività recenti')}</button>
+          </div>
         </nav>
-        <div className="mt-3 space-y-2 border-t border-neutral-100 pt-3">
-          <button type="button" id="merchant-sidebar-tab-ai-employees" onClick={() => { setSidebarNavExpanded(null); setActiveTab('ai_employees'); }} className={navItemClass(activeTab === 'ai_employees')}><Bot className="h-4 w-4" />{localizeCopy('智能员工', 'Team AI')}</button>
-          <button type="button" onClick={() => navigateToAppTarget('merchant-admin-mobile')} className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-xs font-semibold text-neutral-600 transition hover:bg-neutral-50"><Smartphone className="h-4 w-4" />{localizeCopy('切换手机端', 'Modalità mobile')}</button>
+        <div className="mt-3 shrink-0 space-y-1 border-t border-neutral-200 pt-3">
+          <button type="button" id="merchant-sidebar-tab-ai-employees" onClick={() => { setSidebarNavExpanded(null); setActiveTab('ai_employees'); }} className={`${navItemClass(activeTab === 'ai_employees')} w-full`}><Bot className="h-4 w-4" />{localizeCopy('智能员工', 'Team AI')}</button>
+          <button type="button" id="merchant-sidebar-tab-settings" onClick={openMerchantSettings} className={`${navItemClass(activeTab === 'settings')} w-full`}><SlidersHorizontal className="h-4 w-4" />{localizeCopy('系统设置', 'Impostazioni')}</button>
         </div>
       </aside>
       <main id="merchant-content-area" className="merchant-content-area min-w-0 space-y-4 bg-neutral-100/70 px-3 py-4 sm:px-5 lg:h-[calc(100vh-3.5rem)] lg:overflow-y-auto lg:px-6 lg:py-5">
@@ -4698,7 +4748,7 @@ export const MerchantPortal: React.FC<{
       <div className="merchant-web-horizontal-nav rounded-2xl border border-neutral-200/80 bg-white p-2 shadow-sm lg:hidden">
         <div className="flex flex-wrap items-center gap-1 rounded-xl bg-neutral-50/80 p-1">
           <button id="merchant-tab-dashboard" type="button" onClick={openMerchantHome} className={navItemClass(activeTab === 'dashboard' && dashboardNavSection === 'home')}><Home className="h-3.5 w-3.5" />{localizeCopy('经营主页', 'Home')}</button>
-          <button id="merchant-tab-orders" type="button" onClick={() => setActiveTab('orders')} className={`${navItemClass(activeTab === 'orders')} relative`}><Truck className="h-3.5 w-3.5" />{localizeCopy('订单履约', 'Ordini')}{orderActionCount > 0 && <span className="min-w-4 rounded-full bg-blue-100 px-1 text-center text-[10px] font-bold text-blue-800">{orderActionCount > 99 ? '99+' : orderActionCount}</span>}</button>
+          <button id="merchant-tab-orders" type="button" onClick={() => setActiveTab('orders')} className={`${navItemClass(activeTab === 'orders')} relative`}><Truck className="h-3.5 w-3.5" />{localizeCopy('订单履约', 'Ordini')}{orderActionCount > 0 && <span className="min-w-4 rounded-full bg-neutral-200 px-1 text-center text-[10px] font-bold text-neutral-800">{orderActionCount > 99 ? '99+' : orderActionCount}</span>}</button>
           {modauiEnabled && <button id="merchant-tab-modagpt" type="button" onClick={() => setActiveTab('fashion_studio')} className={navItemClass(activeTab === 'fashion_studio' || activeTab === 'modagpt')}><Sparkles className="h-3.5 w-3.5" />{localizeCopy('创作空间', 'Studio ModaUI')}</button>}
           <button id="merchant-tab-pos" type="button" onClick={() => setActiveTab('pos')} className={navItemClass(false)}><ShoppingCart className="h-3.5 w-3.5" />{localizeCopy('智能收银', 'Smart POS')}</button>
           <button id="merchant-tab-products" type="button" onClick={openProductCatalog} className={navItemClass(activeTab === 'products')}><Package className="h-3.5 w-3.5" />{localizeCopy('商品管理', 'Prodotti')}</button>
@@ -4737,7 +4787,7 @@ export const MerchantPortal: React.FC<{
           <section>
             <h2 className="px-2 text-[10px] font-bold uppercase tracking-wide text-neutral-400">{localizeCopy('客户分析', 'Clienti e analisi')}</h2>
             <div className="mt-1 flex flex-wrap gap-1">
-              <button id="merchant-tab-vault" type="button" onClick={() => setActiveTab('vault_requests')} className={`${navItemClass(activeTab === 'vault_requests')} relative`}><Lock className="h-3.5 w-3.5" />{localizeCopy('授权申请', 'Richieste private')}{pendingVaultCount > 0 && <span className="min-w-4 rounded-full bg-blue-100 px-1 text-center text-[10px] font-bold text-blue-800">{pendingVaultCount > 99 ? '99+' : pendingVaultCount}</span>}</button>
+              <button id="merchant-tab-vault" type="button" onClick={() => setActiveTab('vault_requests')} className={`${navItemClass(activeTab === 'vault_requests')} relative`}><Lock className="h-3.5 w-3.5" />{localizeCopy('授权申请', 'Richieste private')}{pendingVaultCount > 0 && <span className="min-w-4 rounded-full bg-neutral-200 px-1 text-center text-[10px] font-bold text-neutral-800">{pendingVaultCount > 99 ? '99+' : pendingVaultCount}</span>}</button>
               <button id="merchant-tab-analytics" type="button" onClick={openMerchantAnalytics} className={navItemClass(activeTab === 'dashboard' && dashboardNavSection === 'analytics')}><BarChart3 className="h-3.5 w-3.5" />{localizeCopy('经营分析', 'Analisi')}</button>
             </div>
           </section>
@@ -4752,6 +4802,15 @@ export const MerchantPortal: React.FC<{
               <button id="merchant-tab-gallery" type="button" onClick={() => setActiveTab('gallery')} className={navItemClass(activeTab === 'gallery')}><FolderOpen className="h-3.5 w-3.5" />{localizeCopy('内容素材', 'Contenuti media')}</button>
               <button id="merchant-tab-storefront-settings" type="button" onClick={() => openSettingsSection('storefront')} className={navItemClass(activeTab === 'profile')}><Store className="h-3.5 w-3.5" />{localizeCopy('店铺设置', 'Impostazioni vetrina')}</button>
               <button id="merchant-tab-ai-employees" type="button" onClick={() => setActiveTab('ai_employees')} className={navItemClass(activeTab === 'ai_employees')}><Bot className="h-3.5 w-3.5" />{localizeCopy('智能员工', 'Team AI')}</button>
+            </div>
+          </section>
+          <section>
+            <h2 className="px-2 text-[10px] font-bold uppercase tracking-wide text-neutral-400">{localizeCopy('应用记录', 'App e attività')}</h2>
+            <div className="mt-1 flex flex-wrap gap-1">
+              <button id="merchant-tab-app-store" type="button" onClick={() => setActiveTab('app_store')} className={navItemClass(activeTab === 'app_store')}><Boxes className="h-3.5 w-3.5" />{localizeCopy('应用商店', 'App store')}</button>
+              <button id="merchant-tab-recycle-bin" type="button" onClick={() => setActiveTab('recycle_bin')} className={navItemClass(activeTab === 'recycle_bin')}><Trash2 className="h-3.5 w-3.5" />{localizeCopy('回收站', 'Cestino')}</button>
+              <button id="merchant-tab-ai-chat-history" type="button" onClick={() => setActiveTab('ai_chat_history')} className={navItemClass(activeTab === 'ai_chat_history')}><MessageCircle className="h-3.5 w-3.5" />{localizeCopy('AI 聊天记录', 'Cronologia AI')}</button>
+              <button id="merchant-tab-recent-activity" type="button" onClick={() => setActiveTab('recent_activity')} className={navItemClass(activeTab === 'recent_activity')}><Clock className="h-3.5 w-3.5" />{localizeCopy('最近动态', 'Attività recenti')}</button>
             </div>
           </section>
           <section>
@@ -4783,6 +4842,28 @@ export const MerchantPortal: React.FC<{
       {activeTab === 'app_store' && (
         <Suspense fallback={<div className="rounded-xl border border-neutral-200 bg-white p-6 text-sm text-neutral-500">应用商店正在加载…</div>}>
           <MerchantAppStore onOpenApp={setActiveStoreAppId} />
+        </Suspense>
+      )}
+      {activeTab === 'recycle_bin' && (
+        <Suspense fallback={<div className="rounded-xl border border-neutral-200 bg-white p-6 text-sm text-neutral-500">{localizeCopy('正在加载…', 'Caricamento…')}</div>}>
+          <MerchantRecycleBin onOpenProducts={() => { setActiveTab('products'); openProductCatalog(); }} />
+        </Suspense>
+      )}
+      {activeTab === 'ai_chat_history' && (
+        <Suspense fallback={<div className="rounded-xl border border-neutral-200 bg-white p-6 text-sm text-neutral-500">{localizeCopy('正在加载…', 'Caricamento…')}</div>}>
+          <MerchantAiChatHistory isIt={isIt} />
+        </Suspense>
+      )}
+      {activeTab === 'recent_activity' && (
+        <Suspense fallback={<div className="rounded-xl border border-neutral-200 bg-white p-6 text-sm text-neutral-500">{localizeCopy('正在加载…', 'Caricamento…')}</div>}>
+          <MerchantActivityFeed onOpenTarget={target => {
+            setActiveTab(target.tab);
+            if (target.tab === 'products') {
+              if (target.search) setProductSearch(target.search);
+              openProductCatalog();
+            }
+            if (target.tab === 'orders' && target.search) setOrderSearch(target.search);
+          }} />
         </Suspense>
       )}
       {activeTab === 'gallery' && <MerchantGallery onBack={() => setActiveTab('dashboard')} />}

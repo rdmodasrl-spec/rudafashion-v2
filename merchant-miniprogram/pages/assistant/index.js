@@ -79,6 +79,27 @@ function knowledgeErrorDetails(error, fallback) {
   };
 }
 
+function requestsProcurementDraft(message) {
+  return /(?:创建|生成|准备|新建).{0,12}(?:采购草稿|采购单|采购订单|进货单|补货订单)/i.test(message);
+}
+
+function merchantTaskErrorMessage(error) {
+  const code = error && error.code || '';
+  const known = {
+    MODAGPT_TASK_PERMISSION_REQUIRED: '当前员工没有采购管理权限，任务未执行。',
+    EMPLOYEE_PERMISSION_REQUIRED: '当前员工没有采购管理权限，任务未执行。',
+    MODAGPT_TASK_WORKFLOW_UNAVAILABLE: '当前商家行业暂不支持此任务。',
+    MODAGPT_TASK_NOT_FOUND: '任务不存在或不属于当前商家。',
+    REQUEST_TIMEOUT: '请求超时；如已提交，请使用同一任务重试或查询状态。'
+  };
+  if (known[code]) return known[code];
+  if (error && error.status === 401) return '登录已过期，请重新登录。';
+  if (error && error.status === 403) return '缺少采购管理权限，任务未执行。';
+  const message = error && typeof error.message === 'string' ? error.message : '';
+  if (message && !/^[A-Z0-9_]{6,}$/.test(message)) return message;
+  return `任务未能完成${code ? `（${code}）` : ''}。请检查权限和输入后重试。`;
+}
+
 function readImageDataUrl(filePath) {
   const extension = String(filePath).split('?')[0].split('.').pop().toLowerCase();
   const contentType = extension === 'png' ? 'image/png' : extension === 'webp' ? 'image/webp' : 'image/jpeg';
@@ -185,7 +206,25 @@ Page({
     ],
     selectedDesign: null,
     modauiBlocked: false,
-    canSend: false
+    canSend: false,
+    taskMode: false,
+    taskPreview: null,
+    taskSuppliers: [],
+    taskProducts: [],
+    taskSkuOptions: [],
+    taskSupplierIndex: 0,
+    taskProductIndex: 0,
+    taskSkuIndex: 0,
+    taskQuantity: '1',
+    taskUnitCost: '',
+    taskAmount: '0.00',
+    taskDraftReady: false,
+    taskCatalogLoading: false,
+    taskIdempotencyLocked: false,
+    taskToolSummary: '',
+    taskAgentSummary: '',
+    taskId: '',
+    taskStatus: '',
   },
 
   onLoad() {
@@ -445,9 +484,14 @@ Page({
 
   startNewConversation() {
     if (this.data.loading) return;
+    if (this._pendingTaskRequestKey || this.data.taskId) {
+      this.setData({ error: '当前任务结果尚未确认，请先查询任务状态。' });
+      return;
+    }
     this.stopWelcomeSequence();
     this._conversationId = '';
     this._pendingChatRequestKey = '';
+    this._pendingTaskRequestKey = '';
     this._welcomeIndex = 0;
     this.setData({
     messages: [],
@@ -461,6 +505,24 @@ Page({
     historyOpen: false,
     menuOpen: false,
     toolsOpen: false,
+    taskMode: false,
+    taskPreview: null,
+    taskSuppliers: [],
+    taskProducts: [],
+    taskSkuOptions: [],
+    taskSupplierIndex: 0,
+    taskProductIndex: 0,
+    taskSkuIndex: 0,
+    taskQuantity: '1',
+    taskUnitCost: '',
+    taskAmount: '0.00',
+    taskDraftReady: false,
+    taskCatalogLoading: false,
+    taskIdempotencyLocked: false,
+    taskToolSummary: '',
+    taskAgentSummary: '',
+    taskId: '',
+    taskStatus: '',
     personPath: '',
     garmentPath: '',
     personImage: '',
@@ -711,6 +773,266 @@ Page({
     const input = event.detail.value;
     if (input !== this.data.input) this._pendingChatRequestKey = '';
     this.setData({ input, canSend: Boolean(input.trim()) || this.data.attachmentsReady, error: '' });
+  },
+
+  toggleTaskMode() {
+    if (this.data.loading) return;
+    if (this._pendingTaskRequestKey) {
+      this.setData({ error: '提交结果尚未确认，请使用同一请求重试，避免重复采购。' });
+      return;
+    }
+    const enabled = !this.data.taskMode;
+    const previousMessage = this.data.taskPreview && this.data.taskPreview.message || '';
+    this.setData({
+      taskMode: enabled,
+      taskPreview: null,
+      taskSuppliers: [],
+      taskProducts: [],
+      taskSkuOptions: [],
+      activeMode: '',
+      selectedMode: null,
+      input: previousMessage || this.data.input,
+      canSend: Boolean(previousMessage || this.data.input.trim()),
+      error: '',
+      toolsOpen: false
+    });
+  },
+
+  updateTaskDraftState(changes) {
+    const next = Object.assign({}, this.data, changes || {});
+    const supplier = next.taskSuppliers[next.taskSupplierIndex];
+    const product = next.taskProducts[next.taskProductIndex];
+    const sku = next.taskSkuOptions[next.taskSkuIndex];
+    const quantity = Number(next.taskQuantity);
+    const unitCost = Number(next.taskUnitCost);
+    const ready = Boolean(
+      supplier && supplier.id
+      && product && product.id
+      && sku && sku.variantId
+      && String(next.taskQuantity).trim()
+      && Number.isInteger(quantity) && quantity > 0
+      && String(next.taskUnitCost).trim()
+      && Number.isFinite(unitCost) && unitCost >= 0
+    );
+    this.setData(Object.assign({}, changes || {}, {
+      taskDraftReady: ready,
+      taskAmount: ready ? (quantity * unitCost).toFixed(2) : '0.00'
+    }));
+  },
+
+  onTaskSupplierChange(event) {
+    this.updateTaskDraftState({ taskSupplierIndex: Number(event.detail.value) || 0 });
+  },
+
+  onTaskProductChange(event) {
+    const index = Number(event.detail.value) || 0;
+    const product = this.data.taskProducts[index];
+    const skuOptions = (product && product.skus || []).filter(item => item.variantId && item.isActive !== false);
+    this.updateTaskDraftState({
+      taskProductIndex: index,
+      taskSkuOptions: skuOptions,
+      taskSkuIndex: 0
+    });
+  },
+
+  onTaskSkuChange(event) {
+    this.updateTaskDraftState({ taskSkuIndex: Number(event.detail.value) || 0 });
+  },
+
+  onTaskDraftInput(event) {
+    const field = event.currentTarget.dataset.field;
+    if (field !== 'quantity' && field !== 'unitCost') return;
+    const changes = {};
+    changes[field === 'quantity' ? 'taskQuantity' : 'taskUnitCost'] = event.detail.value;
+    this.updateTaskDraftState(changes);
+  },
+
+  async previewMerchantTask(message) {
+    const preview = await request('/api/merchant/modagpt/task/preview', {
+      method: 'POST',
+      timeout: 30000,
+      data: { message }
+    });
+    const draftRequired = preview.workflow === 'procurement_management' && requestsProcurementDraft(message);
+    let taskSuppliers = [];
+    let taskProducts = [];
+    let taskSkuOptions = [];
+    let taskSupplierIndex = 0;
+    let taskProductIndex = 0;
+    let taskSkuIndex = 0;
+    if (draftRequired) {
+      this.setData({ taskCatalogLoading: true });
+      try {
+        const results = await Promise.all([
+          request('/api/merchant/suppliers'),
+          request('/api/merchant/products')
+        ]);
+        taskSuppliers = (results[0].suppliers || []).filter(supplier => supplier.status === 'active');
+        taskProducts = (results[1].products || []).filter(product =>
+          product.lifecycleStatus !== 'archived'
+          && Array.isArray(product.skus)
+          && product.skus.some(sku => sku.variantId && sku.isActive !== false)
+        );
+        if (taskProducts.length) {
+          taskSkuOptions = taskProducts[0].skus.filter(sku => sku.variantId && sku.isActive !== false);
+        }
+      } finally {
+        this.setData({ taskCatalogLoading: false });
+      }
+    }
+    this._pendingTaskRequestKey = '';
+    this.setData({
+      taskPreview: Object.assign({}, preview, { message, draftRequired }),
+      taskToolSummary: Array.isArray(preview.tools) ? preview.tools.join(' · ') : '—',
+      taskAgentSummary: Array.isArray(preview.agents) ? preview.agents.join(' · ') : '—',
+      taskSuppliers,
+      taskProducts,
+      taskSkuOptions,
+      taskSupplierIndex,
+      taskProductIndex,
+      taskSkuIndex,
+      taskQuantity: '1',
+      taskUnitCost: '',
+      taskDraftReady: false,
+      taskAmount: '0.00',
+      taskId: '',
+      taskStatus: '',
+      taskIdempotencyLocked: false,
+      input: '',
+      canSend: false,
+      error: '',
+      taskCatalogLoading: false
+    }, () => this.updateTaskDraftState({}));
+  },
+
+  cancelTaskPreview() {
+    if (this._pendingTaskRequestKey) {
+      this.setData({ error: '提交结果尚未确认，请使用同一请求重试，避免重复采购。' });
+      return;
+    }
+    const message = this.data.taskPreview && this.data.taskPreview.message || '';
+    this.setData({
+      taskPreview: null,
+      taskSuppliers: [],
+      taskProducts: [],
+      taskSkuOptions: [],
+      input: message,
+      canSend: Boolean(message),
+      taskIdempotencyLocked: false,
+      error: ''
+    });
+  },
+
+  async confirmMerchantTask() {
+    const preview = this.data.taskPreview;
+    if (!preview || this.data.loading) return;
+    let inputs = {};
+    if (preview.draftRequired) {
+      if (!this.data.taskDraftReady) {
+        this.setData({ error: '请选择有效供应商、商品和 SKU，并填写正整数数量及非负单位成本。' });
+        return;
+      }
+      const supplier = this.data.taskSuppliers[this.data.taskSupplierIndex];
+      const product = this.data.taskProducts[this.data.taskProductIndex];
+      const sku = this.data.taskSkuOptions[this.data.taskSkuIndex];
+      inputs = {
+        create_procurement_draft: {
+          supplierId: supplier.id,
+          items: [{
+            productId: product.id,
+            variantId: sku.variantId,
+            quantity: Number(this.data.taskQuantity),
+            unitCost: Number(this.data.taskUnitCost)
+          }],
+          currency: 'EUR'
+        }
+      };
+    }
+    if (!this._pendingTaskRequestKey) this._pendingTaskRequestKey = makeRequestKey('merchant-task');
+    this.setData({ loading: true, error: '', taskIdempotencyLocked: true });
+    try {
+      const created = await request('/api/merchant/modagpt/task', {
+        method: 'POST',
+        timeout: 30000,
+        headers: { 'Idempotency-Key': this._pendingTaskRequestKey },
+        data: {
+          message: preview.message,
+          conversationId: this._conversationId || undefined,
+          inputs
+        }
+      });
+      if (!created || typeof created.taskId !== 'string' || !created.taskId) {
+        throw new Error('MODAGPT_TASK_RESPONSE_INVALID');
+      }
+      this._pendingTaskRequestKey = '';
+      this._activeTaskStatusMessageId = `task-status-${created.taskId}`;
+      const userMessage = { role: 'user', content: preview.message };
+      const statusMessage = {
+        id: this._activeTaskStatusMessageId,
+        role: 'assistant',
+        content: `任务已提交（${created.taskId}），正在读取服务端状态。`,
+        actions: []
+      };
+      this.setData({
+        taskPreview: null,
+        taskMode: true,
+        taskId: created.taskId,
+        taskStatus: statusMessage.content,
+        messages: this.data.messages.concat([userMessage, statusMessage])
+      });
+      await this.pollMerchantTask(created.taskId);
+    } catch (error) {
+      this.setData({ error: merchantTaskErrorMessage(error) });
+    } finally {
+      this.setData({ loading: false });
+    }
+  },
+
+  async pollMerchantTask(taskId) {
+    try {
+      let latest = null;
+      for (let attempt = 0; attempt < 60; attempt += 1) {
+        latest = await request(`/api/merchant/modagpt/task/${encodeURIComponent(taskId)}`, { timeout: 20000 });
+        if (['completed', 'failed', 'dead_letter', 'cancelled', 'waiting_approval'].includes(latest.runtimeStatus)) break;
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      if (!latest || typeof latest.runtimeStatus !== 'string') throw new Error('MODAGPT_TASK_STATUS_INVALID');
+      const terminal = ['completed', 'failed', 'dead_letter', 'cancelled', 'waiting_approval'].includes(latest.runtimeStatus);
+      const errors = Array.isArray(latest.errors) ? latest.errors.filter(item => typeof item === 'string') : [];
+      const finalStatus = latest.runtimeStatus === 'waiting_approval'
+        ? `任务等待商家审批${latest.approvalId ? `（${latest.approvalId}）` : ''}；审批前不会执行敏感操作。${latest.summary || ''}`
+        : ['failed', 'dead_letter', 'cancelled'].includes(latest.runtimeStatus)
+          ? `任务未完成（${latest.runtimeStatus}）：${errors.join('、') || '请检查任务后重试。'}`
+          : latest.runtimeStatus === 'completed'
+            ? latest.status === 'needs_input'
+              ? `任务尚未创建采购草稿：${latest.summary || '请补充必需的采购信息后重新提交。'}`
+              : `任务已完成：${latest.summary || latest.status}。`
+            : `任务仍在处理中，任务编号：${taskId}。`;
+      const messages = this.data.messages.map(item => item.id === this._activeTaskStatusMessageId
+        ? Object.assign({}, item, { content: finalStatus })
+        : item);
+      this.setData({
+        messages,
+        taskStatus: terminal ? '' : finalStatus,
+        taskId: terminal ? '' : taskId
+      });
+    } catch (error) {
+      const finalStatus = `任务已受理（${taskId}），但暂时无法读取状态：${merchantTaskErrorMessage(error)}`;
+      const messages = this.data.messages.map(item => item.id === this._activeTaskStatusMessageId
+        ? Object.assign({}, item, { content: finalStatus })
+        : item);
+      this.setData({ messages, taskStatus: finalStatus, taskId });
+    }
+  },
+
+  async retryMerchantTaskStatus() {
+    if (!this.data.taskId || this.data.loading) return;
+    this.setData({ loading: true });
+    try {
+      await this.pollMerchantTask(this.data.taskId);
+    } finally {
+      this.setData({ loading: false });
+    }
   },
 
   toggleTools() {
@@ -1076,7 +1398,7 @@ Page({
     const question = this.data.input.trim();
     if ((!question && this.data.activeMode !== 'tryon') || this.data.loading) return;
     this.stopWelcomeSequence();
-    if (!this._pendingChatRequestKey) this._pendingChatRequestKey = makeRequestKey('modagpt');
+    if (!this.data.taskMode && !this._pendingChatRequestKey) this._pendingChatRequestKey = makeRequestKey('modagpt');
     let responseReceived = false;
     try {
     const auth = await requireMerchantSession(this);
@@ -1092,6 +1414,11 @@ Page({
     }
     syncTabBar(this, auth, 'assistant');
     const displayQuestion = question || '请根据我上传的人物和服装图片生成虚拟试衣效果。';
+    if (this.data.taskMode) {
+      this.setData({ loading: true, error: '', toolsOpen: false });
+      await this.previewMerchantTask(displayQuestion);
+      return;
+    }
     const userMessage = { role: 'user', content: displayQuestion };
     this.setData({ messages: this.data.messages.concat([userMessage]), input: '', canSend: false, loading: true, error: '', toolsOpen: false });
     let response;
@@ -1205,7 +1532,9 @@ Page({
       messages: this.data.messages.filter((message, index, messages) =>
         !(index === messages.length - 1 && message.role === 'user' && message.content === (question || '请根据我上传的人物和服装图片生成虚拟试衣效果。'))
       ),
-      error: error.message || 'ModaUI 暂时无法回复，请稍后重试。'
+      error: this.data.taskMode
+        ? merchantTaskErrorMessage(error)
+        : error.message || 'ModaUI 暂时无法回复，请稍后重试。'
     });
     } finally {
     this.setData({ loading: false });

@@ -52,6 +52,47 @@
       <view wx:if="{{loading}}" class="thinking"><view class="thinking-dot"></view><text>ModaUI 正在思考…</text></view>
       <view id="message-bottom" class="scroll-bottom"></view>
     </view>
+    <view wx:if="{{taskPreview}}" class="task-preview-card">
+      <text class="task-preview-title">执行前预览 · {{taskPreview.workflow}}</text>
+      <text class="task-preview-summary">{{taskPreview.summary}}</text>
+      <text class="task-preview-message">{{taskPreview.message}}</text>
+      <text class="task-preview-meta">{{taskPreview.sideEffects}}</text>
+      <text class="task-preview-meta">工具：{{taskToolSummary}} · 角色：{{taskAgentSummary}}</text>
+      <text wx:if="{{taskPreview.requiresApprovalForSensitiveActions}}" class="task-preview-meta">敏感操作仍需商家审批。</text>
+      <view wx:if="{{taskPreview.draftRequired}}" class="task-draft-fields">
+        <view wx:if="{{taskCatalogLoading}}" class="task-catalog-loading">正在读取本商家的供应商和商品…</view>
+        <picker range="{{taskSuppliers}}" range-key="name" value="{{taskSupplierIndex}}" bindchange="onTaskSupplierChange" disabled="{{taskIdempotencyLocked}}">
+          <view class="task-picker">供应商：{{taskSuppliers[taskSupplierIndex].name || '请选择供应商'}} <text>⌄</text></view>
+        </picker>
+        <picker range="{{taskProducts}}" range-key="name" value="{{taskProductIndex}}" bindchange="onTaskProductChange" disabled="{{taskIdempotencyLocked}}">
+          <view class="task-picker">商品：{{taskProducts[taskProductIndex].name || '请选择商品'}} <text>⌄</text></view>
+        </picker>
+        <picker range="{{taskSkuOptions}}" range-key="sku" value="{{taskSkuIndex}}" bindchange="onTaskSkuChange" disabled="{{taskIdempotencyLocked}}">
+          <view class="task-picker">SKU：{{taskSkuOptions[taskSkuIndex].sku || '请选择 SKU'}} <text>⌄</text></view>
+        </picker>
+        <label class="task-field">
+          <text>采购数量</text>
+          <input type="number" value="{{taskQuantity}}" min="1" bindinput="onTaskDraftInput" data-field="quantity" disabled="{{taskIdempotencyLocked}}" />
+        </label>
+        <label class="task-field">
+          <text>单位成本（EUR）</text>
+          <input type="digit" value="{{taskUnitCost}}" min="0" bindinput="onTaskDraftInput" data-field="unitCost" disabled="{{taskIdempotencyLocked}}" />
+        </label>
+        <text class="task-amount">草稿预计金额：€{{taskAmount}}</text>
+        <text wx:if="{{!taskSuppliers.length}}" class="task-catalog-empty">没有可用的启用供应商。</text>
+        <text wx:if="{{!taskProducts.length}}" class="task-catalog-empty">没有包含有效 SKU 的商品。</text>
+      </view>
+      <view class="task-preview-actions">
+        <button class="task-secondary-button" bindtap="cancelTaskPreview" disabled="{{loading || taskIdempotencyLocked}}">返回修改</button>
+        <button class="task-primary-button" bindtap="confirmMerchantTask" loading="{{loading}}" disabled="{{loading || (taskPreview.draftRequired && !taskDraftReady)}}">
+          {{taskIdempotencyLocked ? '用同一请求重试' : '确认并执行'}}
+        </button>
+      </view>
+    </view>
+    <view wx:if="{{taskStatus}}" class="task-status-card">
+      <text>{{taskStatus}}</text>
+      <button wx:if="{{taskId}}" class="task-status-retry" bindtap="retryMerchantTaskStatus" loading="{{loading}}" disabled="{{loading}}">查询状态</button>
+    </view>
   </scroll-view>
 
   <scroll-view wx:elif="{{section === 'create'}}" class="section-scroll" scroll-y>
@@ -182,7 +223,13 @@
 
   <view wx:if="{{error}}" class="error-note">{{error}}</view>
   <view wx:if="{{section === 'chat'}}" class="composer-dock">
-    <view wx:if="{{!activeMode && !toolsOpen}}" class="quick-actions">
+    <view class="task-mode-row">
+      <button class="task-mode-toggle {{taskMode ? 'task-mode-toggle-active' : ''}}" bindtap="toggleTaskMode" aria-pressed="{{taskMode}}" disabled="{{loading}}">
+        {{taskMode ? '退出业务任务' : '业务任务'}}
+      </button>
+      <text wx:if="{{taskMode}}" class="task-mode-hint">预览后确认，业务由服务端执行</text>
+    </view>
+    <view wx:if="{{!taskMode && !activeMode && !toolsOpen}}" class="quick-actions">
       <button wx:for="{{quickModes}}" wx:key="id" class="quick-action" data-mode="{{item.id}}" bindtap="selectMode">{{item.title}}</button>
     </view>
     <view wx:if="{{toolsOpen}}" class="tools-menu">
@@ -191,14 +238,14 @@
       <button wx:for="{{modes}}" wx:key="id" class="tool-option" data-mode="{{item.id}}" bindtap="selectMode">{{item.title}}</button>
     </view>
     <view class="composer">
-      <button class="composer-tool {{toolsOpen ? 'composer-tool-active' : ''}}" bindtap="toggleTools" aria-label="创作工具">
+      <button wx:if="{{!taskMode}}" class="composer-tool {{toolsOpen ? 'composer-tool-active' : ''}}" bindtap="toggleTools" aria-label="创作工具">
         <text class="composer-plus">＋</text>
       </button>
-      <textarea class="composer-input" value="{{input}}" placeholder="{{activeMode === 'tryon' ? '补充描述（可选）' : '询问 ModaUI'}}" placeholder-class="composer-placeholder" maxlength="500" auto-height adjust-position="{{true}}" bindinput="onInput" />
+      <textarea class="composer-input" value="{{input}}" disabled="{{loading || taskPreview}}" placeholder="{{taskMode ? '描述要执行的业务任务，例如比较供应商或创建采购草稿…' : activeMode === 'tryon' ? '补充描述（可选）' : '询问 ModaUI'}}" placeholder-class="composer-placeholder" maxlength="500" auto-height adjust-position="{{true}}" bindinput="onInput" />
       <button class="voice-button" bindtap="showVoiceNotice" aria-label="语音输入">
         <view class="voice-glyph"><view class="voice-head"></view><view class="voice-stem"></view><view class="voice-base"></view></view>
       </button>
-      <button class="send-button {{canSend && !loading ? 'send-button-active' : ''}}" bindtap="sendMessage" loading="{{loading}}" disabled="{{loading || (!canSend && activeMode !== 'tryon')}}" aria-label="发送消息">↑</button>
+      <button class="send-button {{canSend && !loading ? 'send-button-active' : ''}}" bindtap="sendMessage" loading="{{loading}}" disabled="{{loading || taskPreview || (!canSend && activeMode !== 'tryon')}}" aria-label="{{taskMode ? '预览业务任务' : '发送消息'}}">↑</button>
     </view>
     <button wx:if="{{navigationAvailable}}" class="nav-handle" bindtap="toggleNavigation" bindtouchstart="onNavTouchStart" catchtouchmove="onNavTouchMove" bindtouchend="onNavTouchEnd" bindtouchcancel="onNavTouchCancel" aria-label="{{navigationOpen ? '收起商家导航' : '展开商家导航'}}" aria-expanded="{{navigationOpen}}">
       <view class="nav-handle-bar {{navigationOpen ? 'nav-handle-bar--open' : ''}}"></view>

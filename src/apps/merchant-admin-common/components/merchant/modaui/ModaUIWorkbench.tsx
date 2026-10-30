@@ -24,6 +24,7 @@ import {
 import { apiGet, apiPost, ApiError } from '../../../../../api/client';
 import { requestModaGptImage } from '../../../../../api/modagptImageTasks';
 import { useB2B } from '../../../../../context/B2BContext';
+import type { Product } from '../../../../../types/b2b';
 import { buildFashionDesignConceptPrompt, buildModelStudioPrompt } from '../../../../../shared/modagptImageContract';
 import { ModaCoreAnchor, ModaCoreStageProvider } from './ModaCoreStage';
 import type { ModaCoreVisualState } from './modaCoreEngine';
@@ -95,11 +96,32 @@ type WorkbenchResult = {
 
 type WorkbenchEntry =
   | { id: string; kind: 'request'; text: string; capability: WorkbenchCapabilityId; at: number }
+  | { id: string; kind: 'task'; role: 'user' | 'assistant'; text: string; at: number }
   | { id: string; kind: 'plan'; plan: ModaWorkbenchPlan; at: number }
   | { id: string; kind: 'status'; tone: 'running' | 'failed' | 'info'; text: string; at: number }
   | { id: string; kind: 'result'; result: WorkbenchResult; at: number };
 
 type WorkbenchAssets = { person: string; garment: string; personName: string; garmentName: string };
+type MerchantTaskPreview = {
+  message: string;
+  workflow: string;
+  goal: string;
+  agents: string[];
+  tools: string[];
+  summary: string;
+  sideEffects: string;
+  requiresApprovalForSensitiveActions: boolean;
+  draftRequired: boolean;
+};
+type ProcurementSupplierOption = { id: string; name: string; status: string };
+type ProcurementCatalog = { suppliers: ProcurementSupplierOption[]; products: Product[] };
+type ProcurementDraftFields = {
+  supplierId: string;
+  productId: string;
+  variantId: string;
+  quantity: string;
+  unitCost: string;
+};
 
 const studioDirections = [
   'full-body front view on a clean seamless studio background with commercial lighting',
@@ -158,6 +180,32 @@ function entitlementSnapshot(entitlements: WorkbenchEntitlements | null): Workbe
   };
 }
 
+function requestsProcurementDraft(message: string): boolean {
+  return /(?:创建|生成|准备|新建).{0,12}(?:采购草稿|采购单|采购订单|进货单|补货订单)/i.test(message);
+}
+
+function merchantTaskErrorCopy(error: unknown, isIt: boolean): string {
+  const code = error instanceof ApiError ? error.code : error instanceof Error ? error.message : '';
+  const known: Record<string, [string, string]> = {
+    MODAGPT_TASK_PERMISSION_REQUIRED: ['当前员工没有采购管理权限，任务未执行。', 'L’utente non dispone dei permessi di acquisto. Attività non eseguita.'],
+    EMPLOYEE_PERMISSION_REQUIRED: ['当前员工没有采购管理权限，任务未执行。', 'L’utente non dispone dei permessi di acquisto. Attività non eseguita.'],
+    MODAGPT_TASK_WORKFLOW_UNAVAILABLE: ['当前商家行业暂不支持此任务。', 'Questo settore non supporta l’attività richiesta.'],
+    MODAGPT_TASK_NOT_FOUND: ['任务不存在或不属于当前商家。', 'Attività non trovata o non appartenente a questo negozio.'],
+    REQUEST_TIMEOUT: ['请求超时；如已提交，请使用同一任务重试或查询状态。', 'Richiesta scaduta: riprova con la stessa attività o controllane lo stato.']
+  };
+  if (code && known[code]) return isIt ? known[code][1] : known[code][0];
+  if (error instanceof ApiError && error.status === 401) {
+    return isIt ? 'Sessione scaduta: accedi di nuovo.' : '登录已过期，请重新登录。';
+  }
+  if (error instanceof ApiError && error.status === 403) {
+    return isIt ? 'Permesso di acquisto mancante; attività non eseguita.' : '缺少采购管理权限，任务未执行。';
+  }
+  if (error instanceof Error && error.message && !/^[A-Z0-9_]{6,}$/.test(error.message)) return error.message;
+  return isIt
+    ? `Impossibile completare l’attività${code ? ` (${code})` : ''}. Verifica i dati o riprova.`
+    : `任务未能完成${code ? `（${code}）` : ''}。请检查权限和输入后重试。`;
+}
+
 
 export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
   isIt,
@@ -169,6 +217,21 @@ export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
   const { localizeCopy } = useB2B();
   const [capability, setCapability] = useState<WorkbenchCapabilityId | null>(initialCapability);
   const [draft, setDraft] = useState('');
+  const [taskMode, setTaskMode] = useState(false);
+  const [taskPreview, setTaskPreview] = useState<MerchantTaskPreview | null>(null);
+  const [taskCatalog, setTaskCatalog] = useState<ProcurementCatalog | null>(null);
+  const [taskCatalogLoading, setTaskCatalogLoading] = useState(false);
+  const [taskDraft, setTaskDraft] = useState<ProcurementDraftFields>({
+    supplierId: '',
+    productId: '',
+    variantId: '',
+    quantity: '1',
+    unitCost: ''
+  });
+  const [taskStartedAt, setTaskStartedAt] = useState<number | null>(null);
+  const [taskRetryLocked, setTaskRetryLocked] = useState(false);
+  const [pendingTaskId, setPendingTaskId] = useState<string | null>(null);
+  const taskIdempotencyKeyRef = useRef<string | null>(null);
   const [assets, setAssets] = useState<WorkbenchAssets>({ person: '', garment: '', personName: '', garmentName: '' });
   const [entries, setEntries] = useState<WorkbenchEntry[]>([]);
   const [entitlements, setEntitlements] = useState<WorkbenchEntitlements | null>(null);
@@ -244,22 +307,23 @@ export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
   }, [coreLife]);
 
   useEffect(() => {
-    if (!running) {
+    const startedAt = running?.startedAt ?? taskStartedAt;
+    if (startedAt === null) {
       setElapsed(0);
       return;
     }
     setElapsed(0);
     const timer = window.setInterval(() => {
-      setElapsed(Math.max(0, Math.round((Date.now() - running.startedAt) / 1000)));
+      setElapsed(Math.max(0, Math.round((Date.now() - startedAt) / 1000)));
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [running]);
+  }, [running, taskStartedAt]);
 
   useEffect(() => {
     const stream = streamRef.current;
     if (!stream) return;
     stream.scrollTop = stream.scrollHeight;
-  }, [entries.length, running]);
+  }, [entries.length, running, taskPreview, pendingTaskId]);
 
   useEffect(() => {
     if (initialCapability) return;
@@ -335,9 +399,197 @@ export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
     }));
   };
 
+  const previewMerchantTask = async (message: string) => {
+    if (!message || taskStartedAt !== null || taskPreview) return;
+    setTaskStartedAt(Date.now());
+    setNotice(null);
+    try {
+      const preview = await apiPost<{
+        success: true;
+        workflow: string;
+        goal: string;
+        agents: string[];
+        tools: string[];
+        summary: string;
+        sideEffects: string;
+        requiresApprovalForSensitiveActions: boolean;
+      }>('/api/merchant/modagpt/task/preview', { message });
+      const draftRequired = preview.workflow === 'procurement_management' && requestsProcurementDraft(message);
+      if (draftRequired) {
+        setTaskCatalogLoading(true);
+        const [supplierResult, productResult] = await Promise.all([
+          apiGet<{ success: true; suppliers: ProcurementSupplierOption[] }>('/api/merchant/suppliers'),
+          apiGet<{ success: true; products: Product[] }>('/api/merchant/products')
+        ]);
+        const activeSuppliers = supplierResult.suppliers.filter(supplier => supplier.status === 'active');
+        const eligibleProducts = productResult.products.filter(product =>
+          product.lifecycleStatus !== 'archived' && product.skus.some(sku => Boolean(sku.variantId) && sku.isActive !== false)
+        );
+        const firstProduct = eligibleProducts[0];
+        const firstVariant = firstProduct?.skus.find(sku => Boolean(sku.variantId) && sku.isActive !== false);
+        setTaskCatalog({ suppliers: supplierResult.suppliers, products: productResult.products });
+        setTaskDraft({
+          supplierId: activeSuppliers[0]?.id || '',
+          productId: firstProduct?.id || '',
+          variantId: firstVariant?.variantId || '',
+          quantity: '1',
+          unitCost: ''
+        });
+      } else {
+        setTaskCatalog(null);
+        setTaskDraft({ supplierId: '', productId: '', variantId: '', quantity: '1', unitCost: '' });
+      }
+      taskIdempotencyKeyRef.current = null;
+      setTaskRetryLocked(false);
+      setTaskPreview({ message, ...preview, draftRequired });
+      setDraft('');
+    } catch (error) {
+      setNotice({ text: merchantTaskErrorCopy(error, isIt), tone: 'warn' });
+    } finally {
+      setTaskCatalogLoading(false);
+      setTaskStartedAt(null);
+    }
+  };
+
+  const pollMerchantTask = async (taskId: string, statusEntryId: string) => {
+    let latest: {
+      runtimeStatus: string;
+      status: string;
+      summary: string | null;
+      approvalId: string | null;
+      errors: string[];
+    } | null = null;
+    try {
+      for (let attempt = 0; attempt < 60; attempt += 1) {
+        const task = await apiGet<{
+          success: true;
+          runtimeStatus: string;
+          status: string;
+          summary: string | null;
+          approvalId: string | null;
+          errors: string[];
+        }>(`/api/merchant/modagpt/task/${encodeURIComponent(taskId)}`);
+        latest = task;
+        if (['completed', 'failed', 'dead_letter', 'cancelled', 'waiting_approval'].includes(task.runtimeStatus)) break;
+        await new Promise(resolve => window.setTimeout(resolve, 1_000));
+      }
+      if (!latest) throw new Error('MODAGPT_TASK_STATUS_INVALID');
+      const finalMessage = latest.runtimeStatus === 'waiting_approval'
+        ? `任务等待商家审批${latest.approvalId ? `（${latest.approvalId}）` : ''}；审批前不会执行敏感操作。${latest.summary || ''}`
+        : ['failed', 'dead_letter', 'cancelled'].includes(latest.runtimeStatus)
+          ? `任务未完成（${latest.runtimeStatus}）：${latest.errors.join('、') || '请检查任务后重试。'}`
+          : latest.runtimeStatus === 'completed'
+            ? latest.status === 'needs_input'
+              ? `任务尚未创建采购草稿：${latest.summary || '请补充必需的采购信息后重新提交。'}`
+              : `任务已完成：${latest.summary || latest.status}。`
+            : `任务仍在处理中，任务编号：${taskId}。`;
+      setEntries(current => current.map(entry =>
+        entry.id === statusEntryId && entry.kind === 'task'
+          ? { ...entry, text: finalMessage }
+          : entry
+      ));
+      setPendingTaskId(
+        ['completed', 'failed', 'dead_letter', 'cancelled', 'waiting_approval'].includes(latest.runtimeStatus)
+          ? null
+          : taskId
+      );
+    } catch (error) {
+      setEntries(current => current.map(entry =>
+        entry.id === statusEntryId && entry.kind === 'task'
+          ? { ...entry, text: `任务已受理（${taskId}），但暂时无法读取状态：${merchantTaskErrorCopy(error, isIt)}` }
+          : entry
+      ));
+      setPendingTaskId(taskId);
+    }
+  };
+
+  const confirmMerchantTask = async () => {
+    const preview = taskPreview;
+    if (!preview || taskStartedAt !== null) return;
+    let inputs: Record<string, unknown> = {};
+    if (preview.draftRequired) {
+      const validSupplier = taskSuppliers.some(supplier => supplier.id === taskDraft.supplierId);
+      const validProduct = taskProducts.some(product => product.id === taskDraft.productId);
+      const validVariant = taskVariants.some(variant => variant.variantId === taskDraft.variantId);
+      if (!taskDraftValid || !validSupplier || !validProduct || !validVariant) {
+        setNotice({ text: localizeCopy('请选择有效供应商、商品和 SKU，并填写正整数数量及非负单位成本。', 'Seleziona un fornitore, un prodotto e uno SKU validi; inserisci quantità intera e costo non negativo.'), tone: 'warn' });
+        return;
+      }
+      inputs = {
+        create_procurement_draft: {
+          supplierId: taskDraft.supplierId,
+          items: [{
+            productId: taskDraft.productId,
+            variantId: taskDraft.variantId,
+            quantity: Number(taskDraft.quantity),
+            unitCost: Number(taskDraft.unitCost)
+          }],
+          currency: 'EUR'
+        }
+      };
+    }
+
+    const idempotencyKey = taskIdempotencyKeyRef.current || newId('merchant-task');
+    taskIdempotencyKeyRef.current = idempotencyKey;
+    setTaskRetryLocked(true);
+    setTaskStartedAt(Date.now());
+    setNotice(null);
+    try {
+      const created = await apiPost<{ success: true; taskId: string; status: string }>(
+        '/api/merchant/modagpt/task',
+        { message: preview.message, inputs },
+        30_000,
+        { 'Idempotency-Key': idempotencyKey }
+      );
+      taskIdempotencyKeyRef.current = null;
+      setTaskRetryLocked(false);
+      setTaskPreview(null);
+      setTaskCatalog(null);
+      setPendingTaskId(created.taskId);
+      const statusEntryId = newId('task');
+      setEntries(current => [
+        ...current,
+        { id: newId('task'), kind: 'task', role: 'user', text: preview.message, at: Date.now() },
+        { id: statusEntryId, kind: 'task', role: 'assistant', text: `任务已提交（${created.taskId}），正在读取服务端状态。`, at: Date.now() }
+      ]);
+      await pollMerchantTask(created.taskId, statusEntryId);
+    } catch (error) {
+      setNotice({ text: merchantTaskErrorCopy(error, isIt), tone: 'warn' });
+    } finally {
+      setTaskStartedAt(null);
+    }
+  };
+
+  const cancelMerchantTaskPreview = () => {
+    if (taskRetryLocked) {
+      setNotice({ text: localizeCopy('提交结果尚未确认，请使用同一请求重试，避免重复采购。', 'Esito non confermato: riprova con la stessa richiesta per evitare duplicati.'), tone: 'warn' });
+      return;
+    }
+    if (taskPreview) setDraft(taskPreview.message);
+    setTaskPreview(null);
+    setTaskCatalog(null);
+    setNotice(null);
+    taskIdempotencyKeyRef.current = null;
+  };
+
+  const switchTaskMode = (enabled: boolean) => {
+    if (busy || taskRetryLocked) return;
+    if (taskPreview) cancelMerchantTaskPreview();
+    setTaskMode(enabled);
+    setNotice(null);
+  };
+
   const submit = async () => {
-    if (running) return;
+    if (running || taskStartedAt !== null) return;
     const text = draft.trim();
+    if (taskMode) {
+      if (!text) {
+        setNotice({ text: localizeCopy('请先描述要执行的业务任务。', 'Descrivi prima l’attività da eseguire.'), tone: 'warn' });
+        return;
+      }
+      await previewMerchantTask(text);
+      return;
+    }
     const nextPlan = planModaWorkbenchTask({
       text,
       capability,
@@ -569,13 +821,30 @@ export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
   const activeCapability = capability ?? plan.capability;
   const missingCopy = describeMissingWorkbenchInputs(plan.missing);
   const laterMissingCopy = describeMissingWorkbenchInputs(plan.laterMissing);
-  const busy = running !== null;
-  const showTryOnSlots = activeCapability === 'tryon';
+  const busy = running !== null || taskStartedAt !== null;
+  const showTryOnSlots = !taskMode && activeCapability === 'tryon';
   const statusLabel = busy
     ? localizeCopy(`执行中 · 已用 ${elapsed}s`, `In corso · ${elapsed}s`)
     : notice?.tone === 'warn'
       ? localizeCopy('需要处理', 'Da verificare')
       : localizeCopy('待机', 'Inattivo');
+  const taskSuppliers = (taskCatalog?.suppliers || []).filter(supplier => supplier.status === 'active');
+  const taskProducts = (taskCatalog?.products || []).filter(product =>
+    product.lifecycleStatus !== 'archived' && product.skus.some(sku => Boolean(sku.variantId) && sku.isActive !== false)
+  );
+  const selectedTaskProduct = taskProducts.find(product => product.id === taskDraft.productId) || null;
+  const taskVariants = selectedTaskProduct?.skus.filter(sku => Boolean(sku.variantId) && sku.isActive !== false) || [];
+  const taskDraftValid = Boolean(
+    taskDraft.supplierId
+    && taskDraft.productId
+    && taskDraft.variantId
+    && taskDraft.quantity.trim()
+    && Number.isInteger(Number(taskDraft.quantity))
+    && Number(taskDraft.quantity) > 0
+    && taskDraft.unitCost.trim()
+    && Number.isFinite(Number(taskDraft.unitCost))
+    && Number(taskDraft.unitCost) >= 0
+  );
 
   const useSavedDesign = async (design: SavedDesign, target: 'recolor' | 'tryon') => {
     try {
@@ -726,10 +995,14 @@ export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
         <div className="flex min-h-0 flex-1">
           {!focusMode && (
             <nav
-              aria-label={localizeCopy('五项创作', 'Cinque funzioni')}
+              aria-label={taskMode ? localizeCopy('经营任务', 'Attività aziendali') : localizeCopy('五项创作', 'Cinque funzioni')}
               className="hidden w-[216px] shrink-0 flex-col gap-1 overflow-y-auto border-r border-neutral-200 bg-white px-2 py-3 lg:flex"
             >
-              {WORKBENCH_CAPABILITIES.map(item => {
+              {taskMode ? (
+                <p className="rounded-2xl bg-neutral-50 px-3 py-2 text-[11px] leading-5 text-neutral-600">
+                  {localizeCopy('任务由服务端按商家行业和员工权限执行。', 'Le attività sono eseguite dal server secondo settore e permessi.')}
+                </p>
+              ) : WORKBENCH_CAPABILITIES.map(item => {
                 const availability = resolveWorkbenchAvailability(item.id, snapshot);
                 const selected = activeCapability === item.id;
                 const Icon = capabilityIcons[item.id];
@@ -800,6 +1073,19 @@ export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
                       <p className="mt-1 text-[10px] text-white/60">{isIt ? label.labelIt : label.labelZh}</p>
                     </div>
                   );
+                }
+                if (entry.kind === 'task') {
+                  return entry.role === 'user'
+                    ? (
+                      <div key={entry.id} className="ml-auto max-w-[88%] whitespace-pre-wrap rounded-2xl bg-neutral-900 px-3.5 py-2.5 text-[13px] leading-6 text-white sm:max-w-[70%]">
+                        {entry.text}
+                      </div>
+                    )
+                    : (
+                      <div key={entry.id} role="status" className="max-w-[92%] whitespace-pre-wrap rounded-2xl border border-neutral-200 bg-white px-3 py-2.5 text-[11px] leading-5 text-neutral-700">
+                        {entry.text}
+                      </div>
+                    );
                 }
                 if (entry.kind === 'plan') {
                   return (
@@ -892,10 +1178,154 @@ export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
                 );
               })}
 
+              {taskPreview && (
+                <section aria-label={localizeCopy('任务执行前预览', 'Anteprima attività')} className="max-w-[680px] rounded-2xl border border-neutral-300 bg-white p-3 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[12px] font-semibold text-neutral-900">
+                        {localizeCopy('执行前预览', 'Anteprima')} · {taskPreview.workflow}
+                      </p>
+                      <p className="mt-1 whitespace-pre-wrap text-[11px] leading-5 text-neutral-600">{taskPreview.summary}</p>
+                    </div>
+                    {taskCatalogLoading && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-neutral-500" />}
+                  </div>
+                  <p className="mt-2 whitespace-pre-wrap rounded-xl bg-neutral-50 p-2.5 text-[11px] leading-5 text-neutral-700">{taskPreview.message}</p>
+                  <p className="mt-2 text-[10px] leading-4 text-neutral-500">{taskPreview.sideEffects}</p>
+                  <p className="mt-1 break-words text-[10px] text-neutral-400">
+                    {localizeCopy('工具：', 'Strumenti: ')}{taskPreview.tools.join(' · ') || '—'}
+                    {' · '}{localizeCopy('角色：', 'Ruoli: ')}{taskPreview.agents.join(' · ') || '—'}
+                  </p>
+                  {taskPreview.requiresApprovalForSensitiveActions && (
+                    <p className="mt-1 text-[10px] font-medium text-neutral-700">{localizeCopy('敏感操作仍需商家审批。', 'Le azioni sensibili richiedono approvazione.')}</p>
+                  )}
+                  {taskPreview.draftRequired && (
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <label className="grid gap-1 text-[10px] font-medium text-neutral-600">
+                        {localizeCopy('启用供应商', 'Fornitore attivo')}
+                        <select
+                          value={taskDraft.supplierId}
+                          disabled={taskRetryLocked || taskCatalogLoading}
+                          onChange={event => setTaskDraft(current => ({ ...current, supplierId: event.currentTarget.value }))}
+                          className="min-h-9 rounded-lg border border-neutral-300 bg-white px-2 text-[11px] text-neutral-800 disabled:bg-neutral-100"
+                        >
+                          <option value="">{localizeCopy('请选择供应商', 'Seleziona un fornitore')}</option>
+                          {taskSuppliers.map(supplier => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
+                        </select>
+                      </label>
+                      <label className="grid gap-1 text-[10px] font-medium text-neutral-600">
+                        {localizeCopy('商品', 'Prodotto')}
+                        <select
+                          value={taskDraft.productId}
+                          disabled={taskRetryLocked || taskCatalogLoading}
+                          onChange={event => {
+                            const product = taskProducts.find(item => item.id === event.currentTarget.value);
+                            const firstVariant = product?.skus.find(sku => Boolean(sku.variantId) && sku.isActive !== false);
+                            setTaskDraft(current => ({
+                              ...current,
+                              productId: product?.id || '',
+                              variantId: firstVariant?.variantId || ''
+                            }));
+                          }}
+                          className="min-h-9 rounded-lg border border-neutral-300 bg-white px-2 text-[11px] text-neutral-800 disabled:bg-neutral-100"
+                        >
+                          <option value="">{localizeCopy('请选择商品', 'Seleziona un prodotto')}</option>
+                          {taskProducts.map(product => <option key={product.id} value={product.id}>{product.styleNo} · {product.name}</option>)}
+                        </select>
+                      </label>
+                      <label className="grid gap-1 text-[10px] font-medium text-neutral-600">
+                        {localizeCopy('SKU / 规格', 'SKU / variante')}
+                        <select
+                          value={taskDraft.variantId}
+                          disabled={taskRetryLocked || taskCatalogLoading || !taskVariants.length}
+                          onChange={event => setTaskDraft(current => ({ ...current, variantId: event.currentTarget.value }))}
+                          className="min-h-9 rounded-lg border border-neutral-300 bg-white px-2 text-[11px] text-neutral-800 disabled:bg-neutral-100"
+                        >
+                          <option value="">{localizeCopy('请选择 SKU', 'Seleziona uno SKU')}</option>
+                          {taskVariants.map(variant => (
+                            <option key={variant.variantId} value={variant.variantId}>
+                              {[variant.sku, variant.color, variant.size].filter(Boolean).join(' · ')}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="grid gap-1 text-[10px] font-medium text-neutral-600">
+                        {localizeCopy('采购数量', 'Quantità')}
+                        <input
+                          type="number"
+                          min="1"
+                          step="1"
+                          value={taskDraft.quantity}
+                          disabled={taskRetryLocked}
+                          onChange={event => setTaskDraft(current => ({ ...current, quantity: event.currentTarget.value }))}
+                          className="min-h-9 rounded-lg border border-neutral-300 bg-white px-2 text-[11px] text-neutral-800 disabled:bg-neutral-100"
+                        />
+                      </label>
+                      <label className="grid gap-1 text-[10px] font-medium text-neutral-600 sm:col-span-2">
+                        {localizeCopy('单位成本（EUR）', 'Costo unitario (EUR)')}
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={taskDraft.unitCost}
+                          disabled={taskRetryLocked}
+                          onChange={event => setTaskDraft(current => ({ ...current, unitCost: event.currentTarget.value }))}
+                          className="min-h-9 rounded-lg border border-neutral-300 bg-white px-2 text-[11px] text-neutral-800 disabled:bg-neutral-100"
+                        />
+                      </label>
+                      {taskCatalog && (!taskSuppliers.length || !taskProducts.length) && (
+                        <p role="status" className="text-[10px] leading-4 text-neutral-600 sm:col-span-2">
+                          {localizeCopy(
+                            !taskSuppliers.length ? '没有可用的启用供应商。' : '没有可用于采购的商品 SKU。',
+                            !taskSuppliers.length ? 'Nessun fornitore attivo disponibile.' : 'Nessun prodotto con SKU acquistabile.'
+                          )}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  <div className="mt-3 flex flex-wrap justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={cancelMerchantTaskPreview}
+                      disabled={busy || taskRetryLocked}
+                      className="min-h-8 rounded-lg border border-neutral-300 px-3 text-[11px] font-semibold text-neutral-700 disabled:opacity-50"
+                    >
+                      {localizeCopy('返回修改', 'Modifica')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void confirmMerchantTask()}
+                      disabled={busy || taskCatalogLoading || (taskPreview.draftRequired && !taskDraftValid)}
+                      className="min-h-8 rounded-lg bg-neutral-900 px-3 text-[11px] font-semibold text-white disabled:bg-neutral-300"
+                    >
+                      {taskStartedAt !== null
+                        ? localizeCopy('提交中…', 'Invio…')
+                        : taskRetryLocked
+                          ? localizeCopy('用同一请求重试', 'Riprova stessa richiesta')
+                          : localizeCopy('确认并执行', 'Conferma ed esegui')}
+                    </button>
+                  </div>
+                </section>
+              )}
+              {pendingTaskId && taskStartedAt === null && (
+                <div role="status" className="flex max-w-[680px] items-center justify-between gap-3 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-[10px] text-neutral-600">
+                  <span>{localizeCopy(`任务 ${pendingTaskId} 尚未终结。`, `Attività ${pendingTaskId} non ancora conclusa.`)}</span>
+                  <button type="button" onClick={() => {
+                    const statusEntry = [...entries].reverse().find(entry => entry.kind === 'task' && entry.role === 'assistant');
+                    if (statusEntry) {
+                      setTaskStartedAt(Date.now());
+                      void pollMerchantTask(pendingTaskId, statusEntry.id).finally(() => setTaskStartedAt(null));
+                    }
+                  }} className="shrink-0 rounded-lg border border-neutral-300 px-2 py-1 font-semibold text-neutral-700">
+                    {localizeCopy('查询状态', 'Aggiorna')}
+                  </button>
+                </div>
+              )}
               {busy && (
                 <div role="status" className="flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-[11px] text-sky-900">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  {localizeCopy(`真实图像任务执行中 · 已用 ${elapsed}s`, `Attività immagine reale · ${elapsed}s`)}
+                  {taskStartedAt !== null
+                    ? localizeCopy(`ModaUI 业务任务处理中 · 已用 ${elapsed}s`, `Attività ModaUI in corso · ${elapsed}s`)
+                    : localizeCopy(`真实图像任务执行中 · 已用 ${elapsed}s`, `Attività immagine reale · ${elapsed}s`)}
                 </div>
               )}
             </div>
@@ -904,7 +1334,32 @@ export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
               className="min-w-0 shrink-0 border-t border-neutral-200 bg-white px-2 pt-2 sm:px-4"
               style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
             >
-              <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-2 lg:hidden">
+              <div className="flex items-center gap-1.5 pb-2">
+                <button
+                  type="button"
+                  aria-pressed={!taskMode}
+                  disabled={busy || taskRetryLocked}
+                  onClick={() => switchTaskMode(false)}
+                  className={`min-h-8 rounded-xl border px-3 text-[11px] font-semibold disabled:opacity-50 ${!taskMode ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-200 bg-white text-neutral-600'}`}
+                >
+                  {localizeCopy('创作', 'Creatività')}
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={taskMode}
+                  disabled={busy || taskRetryLocked}
+                  onClick={() => switchTaskMode(true)}
+                  className={`min-h-8 rounded-xl border px-3 text-[11px] font-semibold disabled:opacity-50 ${taskMode ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-200 bg-white text-neutral-600'}`}
+                >
+                  {localizeCopy('业务任务', 'Attività')}
+                </button>
+                {taskMode && (
+                  <span className="ml-auto text-[10px] text-neutral-500">
+                    {localizeCopy('预览后确认，业务由服务端执行', 'Anteprima e conferma; esecuzione server-side')}
+                  </span>
+                )}
+              </div>
+              {!taskMode && <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-2 lg:hidden">
                 {WORKBENCH_CAPABILITIES.map(item => {
                   const availability = resolveWorkbenchAvailability(item.id, snapshot);
                   const selected = activeCapability === item.id;
@@ -932,7 +1387,7 @@ export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
                     </button>
                   );
                 })}
-              </div>
+              </div>}
 
               {showTryOnSlots && (
                 <div className="grid gap-2 pb-2 sm:grid-cols-2">
@@ -974,7 +1429,7 @@ export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
               )}
 
 
-              <div className="flex flex-wrap items-center gap-1.5 pb-1.5 text-[10px]">
+              {!taskMode && <div className="flex flex-wrap items-center gap-1.5 pb-1.5 text-[10px]">
                 <span className="font-semibold text-neutral-700">
                   {isIt ? getWorkbenchCapability(activeCapability).labelIt : getWorkbenchCapability(activeCapability).labelZh}
                 </span>
@@ -993,14 +1448,16 @@ export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
                     {isIt ? laterMissingCopy.it.replace(/^Serve ancora: /, '') : laterMissingCopy.zh.replace(/^还需要：/, '')}
                   </span>
                 )}
-              </div>
+              </div>}
 
+              {notice && (
                 <div
                   role="status"
                   className={`mb-1.5 rounded-xl border px-2.5 py-1.5 text-[11px] leading-5 ${notice.tone === 'warn' ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-sky-200 bg-sky-50 text-sky-900'}`}
                 >
                   {notice.text}
                 </div>
+              )}
                 {entitlementsError && (
                   <div role="status" className="mb-1.5 rounded-xl border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[11px] leading-5 text-rose-900">
                     {localizeCopy('套餐与额度未能加载，生成仍会由服务端校验。', 'Piano e crediti non caricati: il server verificherà comunque.')}
@@ -1008,24 +1465,25 @@ export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
                 )}
 
               <div className="flex min-w-0 items-end gap-1.5 rounded-3xl border border-neutral-300 bg-white p-1.5 shadow-sm">
-                <button
+                {!taskMode && <button
                   type="button"
                   onClick={() => garmentInputRef.current?.click()}
                   aria-label={localizeCopy('添加服装图片', 'Aggiungi immagine capo')}
                   className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-neutral-500 hover:bg-neutral-100"
                 >
                   <ImagePlus className="h-4 w-4" />
-                </button>
-                <button
+                </button>}
+                {!taskMode && <button
                   type="button"
                   onClick={() => personInputRef.current?.click()}
                   aria-label={localizeCopy('添加人物图片', 'Aggiungi immagine persona')}
                   className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-neutral-500 hover:bg-neutral-100"
                 >
                   <UserRound className="h-4 w-4" />
-                </button>
+                </button>}
                 <textarea
                   value={draft}
+                  disabled={busy || Boolean(taskPreview)}
                   onChange={event => {
                     setDraft(event.target.value);
                     coreLife.emit({ type: 'input:change', length: event.target.value.length });
@@ -1039,22 +1497,26 @@ export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
                     }
                   }}
                   rows={1}
-                  aria-label={localizeCopy('描述你的创作需求', 'Descrivi la tua richiesta')}
-                  placeholder={localizeCopy('描述你想做什么，或拖入服装图、人物图…', 'Descrivi cosa vuoi creare o trascina un’immagine…')}
+                  aria-label={taskMode ? localizeCopy('描述要执行的业务任务', 'Descrivi l’attività aziendale') : localizeCopy('描述你的创作需求', 'Descrivi la tua richiesta')}
+                  placeholder={taskMode
+                    ? localizeCopy('描述要执行的业务任务，例如比较供应商或创建采购草稿…', 'Descrivi l’attività, ad esempio confrontare fornitori o creare una bozza…')
+                    : localizeCopy('描述你想做什么，或拖入服装图、人物图…', 'Descrivi cosa vuoi creare o trascina un’immagine…')}
                   className="max-h-32 min-h-10 min-w-0 flex-1 resize-none bg-transparent px-1 py-2 text-[13px] leading-5 outline-none placeholder:text-neutral-400"
                 />
                 <button
                   type="button"
                   onClick={() => void submit()}
-                  disabled={busy}
+                  disabled={busy || Boolean(taskPreview)}
                   className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-2xl bg-neutral-900 px-3 text-[12px] font-semibold text-white transition hover:bg-neutral-800 disabled:bg-neutral-300 disabled:text-neutral-500"
                 >
                   {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                  {busy ? `${elapsed}s` : localizeCopy('生成', 'Genera')}
+                  {busy ? `${elapsed}s` : taskMode ? localizeCopy('预览任务', 'Anteprima') : localizeCopy('生成', 'Genera')}
                 </button>
               </div>
               <p className="mt-1 text-[10px] text-neutral-400">
-                {localizeCopy('Enter 生成 · Shift+Enter 换行 · 每张图片按服务端额度计费', 'Invio genera · Shift+Invio a capo · ogni immagine consuma crediti')}
+                {taskMode
+                  ? localizeCopy('Enter 预览 · Shift+Enter 换行 · 确认后才提交服务端任务', 'Invio anteprima · Shift+Invio a capo · invio al server solo dopo conferma')
+                  : localizeCopy('Enter 生成 · Shift+Enter 换行 · 每张图片按服务端额度计费', 'Invio genera · Shift+Invio a capo · ogni immagine consuma crediti')}
               </p>
             </footer>
 
@@ -1339,5 +1801,3 @@ async function loadRemoteImageDataUrl(url: string): Promise<string> {
     reader.readAsDataURL(blob);
   });
 }
-
-

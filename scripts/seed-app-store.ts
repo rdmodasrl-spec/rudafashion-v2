@@ -1,5 +1,7 @@
 
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
+import { createModauiAiToolsManifest } from '../src/server/modauiAiTools';
+import { reconcileAiToolRegistry } from '../src/server/aiToolRegistry';
 
 const prisma = new PrismaClient();
 
@@ -85,6 +87,42 @@ async function main() {
       ]),
     },
   });
+
+  // 4. MODAUI AI Tools：免费原生应用。Manifest 只声明已真实接通的工具能力。
+  const aiToolsCat = await prisma.appCategory.findUnique({ where: { slug: 'ai-tools' } });
+  if (!aiToolsCat) throw new Error('AI Tools category not found');
+
+  const aiToolsManifest = createModauiAiToolsManifest({ trialDays: 7 });
+  const aiToolsApp = await prisma.app.upsert({
+    where: { appId: 'modaui-ai-tools' },
+    update: {},
+    create: {
+      appId: 'modaui-ai-tools',
+      name: 'MODAUI AI Tools',
+      slug: 'modaui-ai-tools',
+      description: '专业 AI 创作与营销工作台：当前已接通商品文案创作与多语言翻译。',
+      detailedIntro: '本应用按 Tool Manifest 声明的能力逐项开放。已接通：商品文案创作（标题、正文、标签）、多语言翻译（意大利语/英语/简体中文）。图片工作室、视频工作室、发布中心尚未接通对应供应商接口，因此不在此版本提供，也不提供占位式假功能。',
+      icon: 'Sparkles',
+      categoryId: aiToolsCat.id,
+      version: '1.0.0',
+      status: 'published',
+      pricingType: 'free',
+      pricePlan: {},
+      developer: 'RUDA FASHION',
+      permissions: JSON.stringify(['ai.tools.use']),
+      features: JSON.stringify(['商品文案创作', '多语言翻译']),
+      manifest: aiToolsManifest as unknown as Prisma.InputJsonValue
+    }
+  });
+  // 已有应用不回写 Manifest：管理员在后台保存的版本优先于种子数据。
+  if (aiToolsApp.manifest === null || aiToolsApp.manifest === undefined) {
+    await prisma.app.update({
+      where: { appId: aiToolsApp.appId },
+      data: { manifest: aiToolsManifest as unknown as Prisma.InputJsonValue }
+    });
+  }
+  const reconcile = await reconcileAiToolRegistry(prisma, { appId: aiToolsApp.appId });
+  console.log(`MODAUI AI Tools manifest reconciled: ${reconcile.tools} tool(s).`);
 
   console.log('App Store seeding completed.');
 }

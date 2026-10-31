@@ -171,7 +171,7 @@ export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({ role, in
   return (
     <div className="flex flex-col items-center gap-2">
       {!(intent === 'register' && role === 'merchant') && (
-        <div className="flex items-center gap-3 text-[10px] uppercase tracking-[0.2em] text-neutral-400">
+        <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-neutral-600">
           <span className="h-px flex-1 bg-neutral-200" />
           <span>{localizeCopy("或使用 Google", "oppure continua con Google")}</span>
           <span className="h-px flex-1 bg-neutral-200" />

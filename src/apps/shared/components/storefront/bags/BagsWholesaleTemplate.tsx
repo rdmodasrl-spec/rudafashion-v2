@@ -22,6 +22,10 @@ export const BagsWholesaleTemplate: React.FC<Props> = ({ data, onExit, initialPr
   const [activeProduct, setActiveProduct] = useState<StorefrontProduct | null>(null);
   const [matrix, setMatrix] = useState<Matrix>({});
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [rfqOpen, setRfqOpen] = useState(false);
+  const [rfqBusy, setRfqBusy] = useState(false);
+  const [rfqResult, setRfqResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [rfqNote, setRfqNote] = useState('');
 
   const merchant = data.merchant;
 
@@ -39,6 +43,7 @@ export const BagsWholesaleTemplate: React.FC<Props> = ({ data, onExit, initialPr
     styles: data.products.length,
     inStock: data.products.filter(product => product.availableStock > 0).length,
     categories: data.categories.length,
+    packSizes: new Set(data.products.map(product => product.packSize)).size,
     units: data.products.reduce((sum, product) => sum + product.availableStock, 0)
   }), [data.products, data.categories]);
 
@@ -114,7 +119,7 @@ export const BagsWholesaleTemplate: React.FC<Props> = ({ data, onExit, initialPr
   return (
     <div data-storefront-template="bags_wholesale" className="min-h-screen bg-neutral-50 pb-24 text-neutral-950 lg:pb-0">
       <div className="bg-neutral-950 text-neutral-300">
-        <div className="mx-auto flex h-9 max-w-[1440px] items-center justify-between px-4 text-[11px] sm:px-8">
+        <div className="mx-auto flex h-9 max-w-[1440px] items-center justify-between px-4 text-[12px] sm:px-8">
           <span>{merchant.name} · B2B 批发采购</span>
           <span className="hidden sm:inline">{data.isWholesaleAuthorized ? '批发价已生效' : '登录采购账号查看批发价'}</span>
         </div>
@@ -129,7 +134,7 @@ export const BagsWholesaleTemplate: React.FC<Props> = ({ data, onExit, initialPr
               <input
                 value={query}
                 onChange={event => setQuery(event.target.value)}
-                placeholder="搜索款号 / 品类"
+                placeholder="搜索款号"
                 aria-label="搜索批发商品"
                 className="h-10 w-full rounded-sm border border-neutral-300 bg-white pl-9 pr-3 text-sm outline-none focus:border-neutral-950"
               />
@@ -142,7 +147,7 @@ export const BagsWholesaleTemplate: React.FC<Props> = ({ data, onExit, initialPr
             >
               <ShoppingCart className="h-4 w-4" strokeWidth={1.7} />
               {data.cartCount > 0 && (
-                <span className="absolute -right-1.5 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-neutral-950 px-1 text-[11px] font-semibold text-white tabular-nums">{data.cartCount}</span>
+                <span className="absolute -right-1.5 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-neutral-950 px-1 text-[12px] font-semibold text-white tabular-nums">{data.cartCount}</span>
               )}
             </button>
           </div>
@@ -223,7 +228,7 @@ export const BagsWholesaleTemplate: React.FC<Props> = ({ data, onExit, initialPr
                                       <Plus className="h-3 w-3" strokeWidth={1.7} />
                                     </button>
                                   </div>
-                                  <span className="mt-1 block text-[11px] tabular-nums text-neutral-500">{stock > 0 ? `可售 ${stock}` : '售罄'}</span>
+                                  <span className="mt-1 block text-[12px] tabular-nums text-neutral-500">{stock > 0 ? `可售 ${stock}` : '售罄'}</span>
                                 </td>
                               );
                             })}
@@ -233,6 +238,14 @@ export const BagsWholesaleTemplate: React.FC<Props> = ({ data, onExit, initialPr
                     </table>
                   </div>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => { setRfqResult(null); setRfqOpen(true); }}
+                  className="mt-3 inline-flex items-center gap-1.5 border border-neutral-300 px-4 py-2.5 text-xs font-medium hover:border-neutral-950"
+                >
+                  询价 / 报价申请
+                </button>
 
                 <div className="mt-5 hidden items-center justify-between gap-4 border-t border-neutral-200 pt-4 lg:flex">
                   <div className="text-sm">
@@ -261,7 +274,10 @@ export const BagsWholesaleTemplate: React.FC<Props> = ({ data, onExit, initialPr
               {[
                 { label: '在售款式', value: stats.styles },
                 { label: '有货款式', value: stats.inStock },
-                { label: '品类', value: stats.categories },
+                // 品类为 0 说明商品未填分类，显示 0 属于无意义指标，改为真实的整包规格数
+                stats.categories > 0
+                  ? { label: '品类', value: stats.categories }
+                  : { label: '整包规格', value: stats.packSizes },
                 { label: '可售件数', value: stats.units }
               ].map(item => (
                 <div key={item.label} className="border border-neutral-200 bg-white px-4 py-3">
@@ -286,7 +302,7 @@ export const BagsWholesaleTemplate: React.FC<Props> = ({ data, onExit, initialPr
 
             <div className="mt-6 flex items-baseline justify-between">
               <p className="text-sm text-neutral-600"><span className="font-semibold text-neutral-950 tabular-nums">{rows.length}</span> 款批发商品</p>
-              <p className="text-xs text-neutral-500">{data.isWholesaleAuthorized ? '批发价已生效' : '未登录：仅显示零售参考价'}</p>
+              <p className="text-xs text-neutral-500">{data.isWholesaleAuthorized ? '批发价已生效' : '登录采购账号后显示批发价'}</p>
             </div>
 
             <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
@@ -295,16 +311,16 @@ export const BagsWholesaleTemplate: React.FC<Props> = ({ data, onExit, initialPr
                   <button type="button" onClick={() => openProduct(product)} className="text-left">
                     <StorefrontImage src={product.images[0]} alt={product.name} ratio="1 / 1" />
                     <div className="px-3 pt-2.5">
-                      <p className="truncate text-sm font-medium">{product.name}</p>
+                      <p className="line-clamp-2 text-sm font-medium leading-snug">{product.name}</p>
                       <p className="mt-0.5 truncate text-xs text-neutral-500">{product.styleNo} · {product.material || product.category}</p>
                     </div>
                   </button>
                   <div className="mt-auto px-3 pb-3 pt-2">
-                    <div className="flex items-baseline justify-between">
-                      <span className="text-sm font-semibold tabular-nums">{priceText(product.unitPrice, data.isWholesaleAuthorized)}</span>
-                      <span className="text-[11px] tabular-nums text-neutral-500">{product.availableStock > 0 ? `可售 ${product.availableStock}` : '售罄'}</span>
+                    <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between">
+                      <span className="whitespace-nowrap text-sm font-semibold tabular-nums">{priceText(product.unitPrice, data.isWholesaleAuthorized, true)}</span>
+                      <span className="whitespace-nowrap text-[12px] tabular-nums text-neutral-500">{product.availableStock > 0 ? `可售 ${product.availableStock}` : '售罄'}</span>
                     </div>
-                    <div className="mt-0.5 text-[11px] text-neutral-500">起订 {product.moq} 件 · 整包 {product.packSize}</div>
+                    <div className="mt-0.5 text-[12px] text-neutral-500">起订 {product.moq} 件 · 整包 {product.packSize}</div>
                     <button
                       type="button"
                       onClick={() => openProduct(product)}
@@ -374,7 +390,7 @@ export const BagsWholesaleTemplate: React.FC<Props> = ({ data, onExit, initialPr
                       const value = matrix[key] || 0;
                       return (
                         <label key={key} className={`flex items-center justify-between border px-2.5 py-2 text-xs ${stock <= 0 ? 'border-neutral-200 bg-neutral-50 text-neutral-400' : 'border-neutral-300'}`}>
-                          <span>{size || '均码'}<span className="ml-1.5 text-[11px] text-neutral-500">{stock > 0 ? `库存 ${stock}` : '售罄'}</span></span>
+                          <span>{size || '均码'}<span className="ml-1.5 text-[12px] text-neutral-500">{stock > 0 ? `库存 ${stock}` : '售罄'}</span></span>
                           <input
                             value={value || ''}
                             onChange={event => setCellQuantity(key, Number(event.target.value.replace(/\D/g, '')) || 0, stock)}
@@ -394,6 +410,73 @@ export const BagsWholesaleTemplate: React.FC<Props> = ({ data, onExit, initialPr
             <div className="sticky bottom-0 border-t border-neutral-200 bg-white px-4 py-3 pb-[max(12px,env(safe-area-inset-bottom))]">
               <button type="button" onClick={() => setSheetOpen(false)} className="w-full bg-neutral-950 py-3 text-sm font-medium text-white">完成 · 合计 {matrixUnits} 件</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {rfqOpen && activeProduct && (
+        <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center" role="dialog" aria-modal="true" aria-label="询价">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setRfqOpen(false)} />
+          <div className="relative w-full max-w-md bg-white p-5 sm:rounded-sm">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-sm font-semibold">询价 · {activeProduct.styleNo}</p>
+                <p className="mt-0.5 text-xs text-neutral-500">{activeProduct.name}</p>
+              </div>
+              <button type="button" onClick={() => setRfqOpen(false)} aria-label="关闭询价" className="grid h-8 w-8 place-items-center text-neutral-500">✕</button>
+            </div>
+            <label className="mt-4 block text-xs text-neutral-600">
+              询价数量（件）
+              <input
+                value={matrixTotal || activeProduct.moq}
+                readOnly
+                className="mt-1 h-10 w-full border border-neutral-300 bg-neutral-50 px-3 text-sm tabular-nums"
+              />
+            </label>
+            <label className="mt-3 block text-xs text-neutral-600">
+              备注（可选）
+              <textarea
+                value={rfqNote}
+                onChange={event => setRfqNote(event.target.value)}
+                rows={3}
+                maxLength={500}
+                className="mt-1 w-full border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-950"
+                placeholder="交期、包装或颜色要求"
+              />
+            </label>
+            {rfqResult && (
+              <p className={`mt-3 text-xs ${rfqResult.ok ? 'text-emerald-700' : 'text-rose-700'}`}>{rfqResult.message}</p>
+            )}
+            <button
+              type="button"
+              disabled={rfqBusy}
+              onClick={async () => {
+                setRfqBusy(true);
+                setRfqResult(null);
+                const quantity = matrixTotal > 0 ? matrixTotal : activeProduct.moq;
+                const result = await data.createBuyerRfq({
+                  title: `${activeProduct.styleNo} 询价 · ${activeProduct.name}`,
+                  description: rfqNote || `询价 ${quantity} 件`,
+                  category: activeProduct.category,
+                  targetQuantity: quantity,
+                  targetPrice: activeProduct.unitPrice,
+                  targetCurrency: 'EUR',
+                  deadlineAt: new Date(Date.now() + 14 * 86400000).toISOString(),
+                  preferredCountries: [],
+                  productIds: [activeProduct.id],
+                  merchantId: data.merchant?.id,
+                  remarks: rfqNote
+                });
+                setRfqBusy(false);
+                setRfqResult(result.ok
+                  ? { ok: true, message: `已提交，询价单号 ${result.rfqNo}。商家可在后台「询价」中查看。` }
+                  : { ok: false, message: data.authRole === 'buyer' ? (result.error || '提交失败，请稍后重试。') : '请先登录采购账号后再询价。' });
+              }}
+              className="mt-4 w-full bg-neutral-950 py-3 text-sm font-medium text-white disabled:opacity-50"
+            >
+              {rfqBusy ? '提交中…' : '提交询价'}
+            </button>
+            <p className="mt-2 text-[12px] leading-5 text-neutral-500">提交后写入商家询价记录，商家在后台可见并可回复报价。</p>
           </div>
         </div>
       )}

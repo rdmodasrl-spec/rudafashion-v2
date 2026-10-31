@@ -16204,6 +16204,119 @@ async function startServer() {
     }
   });
 
+  // ================= 买家询价 RFQ（真实持久化） =================
+  const serializeRfqView = (row: {
+    id: string; rfqNo: string; title: string; buyerCompanyName: string; description: string;
+    category: string; targetQuantity: number; targetPrice: unknown; targetCurrency: string;
+    deadlineAt: Date | null; preferredCountries: string[]; productIds: string[];
+    status: string; createdAt: Date;
+  }) => ({
+    id: row.id,
+    rfqNo: row.rfqNo,
+    title: row.title,
+    buyerCompany: row.buyerCompanyName || undefined,
+    description: row.description || undefined,
+    category: row.category,
+    targetQuantity: row.targetQuantity,
+    targetPrice: Number(row.targetPrice || 0),
+    targetCurrency: row.targetCurrency,
+    deadlineAt: (row.deadlineAt || row.createdAt).toISOString(),
+    preferredCountries: row.preferredCountries || [],
+    productIds: row.productIds || [],
+    status: (row.status || 'OPEN').toUpperCase(),
+    createdAt: row.createdAt.toISOString()
+  });
+
+  const nextRfqNo = () => `RFQ-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+
+  app.get('/api/buyer/rfq', requireBuyerAuth, async (req: AuthRequest, res) => {
+    try {
+      const rows = await prisma.rfqRequest.findMany({
+        where: { buyerCustomerId: String(req.buyer?.customerId || '') },
+        orderBy: { createdAt: 'desc' },
+        take: 200
+      });
+      res.json(rows.map(serializeRfqView));
+    } catch (error) {
+      sendInternalError(res, error, 'buyer-rfq-list');
+    }
+  });
+
+  app.post('/api/buyer/rfq', requireBuyerAuth, async (req: AuthRequest, res) => {
+    try {
+      const customerId = String(req.buyer?.customerId || '');
+      if (!customerId) return sendApiError(res, new BusinessError('BUYER_AUTH_REQUIRED', 'Buyer authentication is required', { statusCode: 401 }));
+      const body = req.body || {};
+      const title = typeof body.title === 'string' ? body.title.trim().slice(0, 160) : '';
+      if (!title) return sendApiError(res, new BusinessError('RFQ_TITLE_REQUIRED', 'title is required', { statusCode: 400 }));
+      const targetQuantity = Number(body.targetQuantity);
+      if (!Number.isFinite(targetQuantity) || targetQuantity <= 0) {
+        return sendApiError(res, new BusinessError('RFQ_QUANTITY_INVALID', 'targetQuantity must be a positive number', { statusCode: 400 }));
+      }
+      const productIds = Array.isArray(body.productIds) ? body.productIds.filter((value: unknown) => typeof value === 'string').slice(0, 100) : [];
+      // 授权校验：询价商品必须对当前买家可见，避免通过 RFQ 探测受限商品
+      if (productIds.length) {
+        const authorizedVisibility = await getAuthorizedProductVisibility(req);
+        const visibleCount = await prisma.product.count({
+          where: { id: { in: productIds }, lifecycleStatus: 'published', AND: [{ OR: authorizedVisibility }] }
+        });
+        if (visibleCount !== productIds.length) {
+          return sendApiError(res, new BusinessError('RFQ_PRODUCT_NOT_VISIBLE', 'One or more products are not visible to this buyer', { statusCode: 403 }));
+        }
+      }
+      const deadlineAt = body.deadlineAt ? new Date(String(body.deadlineAt)) : null;
+      if (deadlineAt && Number.isNaN(deadlineAt.getTime())) {
+        return sendApiError(res, new BusinessError('RFQ_DEADLINE_INVALID', 'deadlineAt is invalid', { statusCode: 400 }));
+      }
+      const customer = await prisma.customer.findUnique({
+        where: { id: customerId },
+        select: { companyName: true, contactPerson: true, phone: true, email: true }
+      }).catch(() => null);
+      const created = await prisma.rfqRequest.create({
+        data: {
+          rfqNo: nextRfqNo(),
+          buyerCustomerId: customerId,
+          buyerCompanyName: customer?.companyName || '',
+          buyerContactPerson: customer?.contactPerson || '',
+          buyerPhone: customer?.phone || '',
+          buyerEmail: customer?.email || null,
+          merchantId: typeof body.merchantId === 'string' && body.merchantId.trim() ? body.merchantId.trim() : null,
+          title,
+          description: typeof body.description === 'string' ? body.description.slice(0, 4000) : '',
+          category: typeof body.category === 'string' ? body.category.slice(0, 120) : '',
+          targetQuantity,
+          targetPrice: Number.isFinite(Number(body.targetPrice)) ? Number(body.targetPrice) : 0,
+          targetCurrency: typeof body.targetCurrency === 'string' && body.targetCurrency.trim() ? body.targetCurrency.trim().toUpperCase().slice(0, 8) : 'EUR',
+          deadlineAt,
+          preferredCountries: Array.isArray(body.preferredCountries) ? body.preferredCountries.filter((value: unknown) => typeof value === 'string').slice(0, 20) : [],
+          productIds,
+          status: 'submitted',
+          remarks: typeof body.remarks === 'string' ? body.remarks.slice(0, 2000) : null
+        }
+      });
+      res.status(201).json({ id: created.id, rfqNo: created.rfqNo });
+    } catch (error) {
+      sendInternalError(res, error, 'buyer-rfq-create');
+    }
+  });
+
+  app.get('/api/merchant/rfq', requireMerchantAuth, async (req: AuthRequest, res) => {
+    try {
+      const merchantId = String(req.merchant?.merchantId || '');
+      if (!merchantId) return sendApiError(res, new BusinessError('MERCHANT_AUTH_REQUIRED', 'Merchant authentication is required', { statusCode: 401 }));
+      // 租户隔离：商家只能看到指定给自己的询价。未指定商家的询价归平台处理，
+      // 不能因为 merchantId 为 null 就向所有商家广播（否则形成跨租户数据泄漏）。
+      const rows = await prisma.rfqRequest.findMany({
+        where: { merchantId },
+        orderBy: { createdAt: 'desc' },
+        take: 200
+      });
+      res.json(rows.map(serializeRfqView));
+    } catch (error) {
+      sendInternalError(res, error, 'merchant-rfq-list');
+    }
+  });
+
   app.get('/api/products/:id', async (req, res) => {
     try {
       const authorizedVisibility = await getAuthorizedProductVisibility(req);

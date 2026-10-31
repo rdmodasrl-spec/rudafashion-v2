@@ -16,10 +16,8 @@ const root = process.cwd();
 const KNOWN_UNIMPLEMENTED = [
   // 平台后台邮件管理中控：列表统计接口缺失。
   '/api/admin/email/overview',
-  // RFQ 询价：无 Prisma 模型、无任何服务端路由，但买家/商家前端入口仍在。
-  '/api/buyer/rfq',
+  // RFQ 询价：列表/创建路由已实现，报价与接受子流程仍缺服务端实现。
   '/api/buyer/rfq/*/accept/*',
-  '/api/merchant/rfq',
   '/api/merchant/rfq/*/quote',
   // 站内消息线程：服务端只有订单维度 orders/:id/messages，无全局线程接口。
   '/api/messages/threads',

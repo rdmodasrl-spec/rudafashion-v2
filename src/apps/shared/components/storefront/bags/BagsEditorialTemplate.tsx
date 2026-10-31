@@ -66,7 +66,7 @@ export const BagsEditorialTemplate: React.FC<Props> = ({ data, onExit, initialPr
         <div className="mx-auto flex h-16 max-w-[1320px] items-center justify-between px-5 sm:h-20 sm:px-8">
           <button type="button" onClick={() => go('home')} className="text-left">
             <span className="block font-serif text-xl tracking-[0.28em] sm:text-2xl">{(merchant.name || 'RUDA').toUpperCase()}</span>
-            <span className="mt-0.5 block text-[10px] uppercase tracking-[0.34em] text-neutral-500">Pelletteria italiana</span>
+            <span className="mt-0.5 block text-[12px] uppercase tracking-[0.34em] text-neutral-500">Pelletteria italiana</span>
           </button>
           <nav aria-label="主导航" className="hidden items-center gap-9 md:flex">
             {NAV.map(item => (
@@ -105,26 +105,40 @@ export const BagsEditorialTemplate: React.FC<Props> = ({ data, onExit, initialPr
       <main>
         {view === 'home' && (
           <>
-            <section className="relative">
-              {hero?.images.length ? (
-                <StorefrontImage src={hero.images[0]} alt={hero.name} ratio="16 / 9" priority className="max-h-[86svh]" />
-              ) : (
-                <div className="h-[42svh] w-full bg-neutral-100" aria-hidden="true" />
-              )}
-              <div className="mx-auto -mt-16 max-w-[1320px] px-5 sm:-mt-24 sm:px-8">
-                <div className="grid gap-8 bg-[#fbfaf8] pt-8 lg:grid-cols-[minmax(0,0.55fr)_minmax(0,0.45fr)] lg:items-end">
-                  <h1 className="font-serif text-4xl leading-[1.05] tracking-[-0.02em] sm:text-6xl">
+            {/* 编辑型首屏：左文右图的不对称双栏。图框固定 4:5，白底商品图用 contain 完整呈现，
+                不靠裁切放大冒充大片，商家换成实拍大片后自然铺满同一画框。 */}
+            <section className="mx-auto max-w-[1320px] px-5 pb-16 pt-10 sm:px-8 sm:pb-24 sm:pt-16">
+              <div className="grid gap-10 lg:grid-cols-[minmax(0,0.46fr)_minmax(0,0.54fr)] lg:items-center lg:gap-16">
+                <div>
+                  <p className="text-[12px] uppercase tracking-[0.34em] text-neutral-500">Pelletteria italiana</p>
+                  <h1 className="mt-6 font-serif text-4xl leading-[1.08] tracking-[-0.02em] sm:text-5xl lg:text-6xl">
                     皮革与时间<br />共同完成的形状
                   </h1>
-                  <div className="lg:pb-2">
-                    <p className="max-w-md text-sm leading-7 text-neutral-600">
-                      {((merchant as unknown as { description_zh?: string }).description_zh) || merchant.description || '精选意大利皮具工坊，从选皮到缝制遵循传统工序。'}
-                    </p>
-                    <button type="button" onClick={() => go('collection')} className="mt-6 inline-flex items-center gap-2 border-b border-neutral-950 pb-1 text-xs uppercase tracking-[0.22em]">
+                  {data.brandStory && (
+                    <p className="mt-7 max-w-md text-sm leading-7 text-neutral-600">{data.brandStory}</p>
+                  )}
+                  <div className="mt-9 flex flex-wrap items-center gap-x-8 gap-y-4">
+                    <button type="button" onClick={() => go('collection')} className="inline-flex items-center gap-2 border-b border-neutral-950 pb-1 text-xs uppercase tracking-[0.22em]">
                       浏览系列 <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.7} />
                     </button>
+                    {hero && (
+                      <button type="button" onClick={() => openProduct(hero)} className="text-xs uppercase tracking-[0.22em] text-neutral-500 hover:text-neutral-950">
+                        {hero.styleNo}
+                      </button>
+                    )}
                   </div>
                 </div>
+                {hero?.images.length ? (
+                  <button type="button" onClick={() => openProduct(hero)} className="group block text-left">
+                    <StorefrontImage src={hero.images[0]} alt={hero.name} ratio="4 / 5" priority fit="contain" className="!bg-[#f0ece5] transition-opacity group-hover:opacity-95" />
+                    <span className="mt-4 flex items-baseline justify-between gap-4">
+                      <span className="font-serif text-lg">{hero.name}</span>
+                      <span className="text-xs uppercase tracking-[0.18em] text-neutral-500">{hero.styleNo}</span>
+                    </span>
+                  </button>
+                ) : (
+                  <div className="aspect-[4/5] w-full bg-[#f0ece5]" aria-hidden="true" />
+                )}
               </div>
             </section>
 
@@ -146,7 +160,7 @@ export const BagsEditorialTemplate: React.FC<Props> = ({ data, onExit, initialPr
                       <span className="font-serif text-lg leading-tight">{product.name}</span>
                       <span className="shrink-0 text-xs tabular-nums text-neutral-600">{priceText(product.unitPrice, data.isWholesaleAuthorized)}</span>
                     </div>
-                    <span className="mt-1 block text-[11px] uppercase tracking-[0.18em] text-neutral-500">{product.material || product.category} · {product.styleNo}</span>
+                    <span className="mt-1 block text-[12px] uppercase tracking-[0.18em] text-neutral-500">{product.material || product.category} · {product.styleNo}</span>
                   </button>
                 ))}
               </div>
@@ -157,15 +171,20 @@ export const BagsEditorialTemplate: React.FC<Props> = ({ data, onExit, initialPr
                 <div className="mx-auto grid max-w-[1320px] gap-10 px-5 py-20 sm:px-8 sm:py-28 lg:grid-cols-2 lg:items-center">
                   <StorefrontImage src={secondary.images[0]} alt={secondary.name} ratio="3 / 4" />
                   <div className="lg:pl-10">
-                    <p className="text-[11px] uppercase tracking-[0.28em] text-neutral-500">Materiali</p>
-                    <h2 className="mt-4 font-serif text-3xl leading-tight sm:text-4xl">从选皮开始<br />决定一只包的性格</h2>
-                    <p className="mt-6 max-w-md text-sm leading-7 text-neutral-600">
-                      我们只使用经鞣制的整张牛皮，保留自然纹理。每一批皮料的软硬、光泽与毛孔都不相同，因此每只成品都是唯一的。
-                    </p>
+                    <p className="text-[12px] uppercase tracking-[0.28em] text-neutral-500">Materiali</p>
+                    <h2 className="mt-4 font-serif text-3xl leading-tight sm:text-4xl">{secondary.name}</h2>
+                    {secondary.description && (
+                      <p className="mt-6 max-w-md text-sm leading-7 text-neutral-600">{secondary.description}</p>
+                    )}
                     <dl className="mt-8 grid grid-cols-2 gap-6 border-t border-neutral-200 pt-6 text-sm">
-                      <div><dt className="text-xs uppercase tracking-[0.18em] text-neutral-500">材质</dt><dd className="mt-1">{secondary.material || '头层牛皮'}</dd></div>
-                      <div><dt className="text-xs uppercase tracking-[0.18em] text-neutral-500">产地</dt><dd className="mt-1">{secondary.origin || '意大利'}</dd></div>
+                      {secondary.material && <div><dt className="text-xs uppercase tracking-[0.18em] text-neutral-500">材质</dt><dd className="mt-1">{secondary.material}</dd></div>}
+                      {secondary.composition && <div><dt className="text-xs uppercase tracking-[0.18em] text-neutral-500">成分</dt><dd className="mt-1">{secondary.composition}</dd></div>}
+                      {secondary.origin && <div><dt className="text-xs uppercase tracking-[0.18em] text-neutral-500">产地</dt><dd className="mt-1">{secondary.origin}</dd></div>}
+                      <div><dt className="text-xs uppercase tracking-[0.18em] text-neutral-500">款号</dt><dd className="mt-1 tabular-nums">{secondary.styleNo}</dd></div>
                     </dl>
+                    <button type="button" onClick={() => openProduct(secondary)} className="mt-8 inline-flex items-center gap-2 border-b border-neutral-950 pb-1 text-xs uppercase tracking-[0.22em]">
+                      查看作品 <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.7} />
+                    </button>
                   </div>
                 </div>
               </section>
@@ -176,7 +195,7 @@ export const BagsEditorialTemplate: React.FC<Props> = ({ data, onExit, initialPr
                 <h2 className="font-serif text-2xl leading-tight sm:text-3xl">关于<br />{merchant.name}</h2>
                 <div>
                   <p className="max-w-xl text-sm leading-7 text-neutral-600">
-                    {data.contact.address || 'Prato, Italia'} · 我们为欧洲的精品店与买手提供现货与订货服务。
+                    {data.brandStory || data.contact.address || data.contact.city || '联系方式与品牌资料由商家在后台维护。'}
                   </p>
                   <div className="mt-8 flex flex-wrap gap-x-10 gap-y-3 text-sm">
                     {data.contact.phone && <a href={`tel:${data.contact.phone}`} className="border-b border-neutral-300 pb-0.5">{data.contact.phone}</a>}
@@ -219,7 +238,7 @@ export const BagsEditorialTemplate: React.FC<Props> = ({ data, onExit, initialPr
                 <StorefrontGallery images={activeProduct.images} alt={activeProduct.name} ratio="4 / 5" priority />
               </div>
               <div className="lg:sticky lg:top-28 lg:self-start">
-                <p className="text-[11px] uppercase tracking-[0.28em] text-neutral-500">{activeProduct.category}</p>
+                <p className="text-[12px] uppercase tracking-[0.28em] text-neutral-500">{activeProduct.category}</p>
                 <h1 className="mt-3 font-serif text-3xl leading-tight sm:text-4xl">{activeProduct.name}</h1>
                 <p className="mt-4 text-xl tabular-nums">{priceText(activeProduct.unitPrice, data.isWholesaleAuthorized)}</p>
                 <p className="mt-1 text-xs text-neutral-500">{formatStock(activeProduct.availableStock)} · 起订 {activeProduct.moq} 件</p>
@@ -259,7 +278,7 @@ export const BagsEditorialTemplate: React.FC<Props> = ({ data, onExit, initialPr
 
         {view === 'maison' && (
           <section className="mx-auto max-w-[1320px] px-5 py-16 sm:px-8 sm:py-24">
-            <p className="text-[11px] uppercase tracking-[0.28em] text-neutral-500">Maison</p>
+            <p className="text-[12px] uppercase tracking-[0.28em] text-neutral-500">Maison</p>
             <h1 className="mt-4 max-w-2xl font-serif text-3xl leading-tight sm:text-5xl">{merchant.name}</h1>
             <div className="mt-12 grid gap-12 lg:grid-cols-2">
               <div className="space-y-6 text-sm leading-8 text-neutral-700">

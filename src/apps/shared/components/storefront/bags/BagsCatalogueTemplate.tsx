@@ -67,7 +67,7 @@ export const BagsCatalogueTemplate: React.FC<Props> = ({ data, onExit, initialPr
   const filterPanel = (
     <div className="space-y-8">
       <div>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-500">分类</p>
+        <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-neutral-500">分类</p>
         <ul className="mt-3 space-y-1">
           <li>
             <button type="button" onClick={() => setCategory('all')} className={`flex w-full items-center justify-between px-2 py-1.5 text-left text-sm ${category === 'all' ? 'bg-neutral-100 font-semibold' : 'text-neutral-700 hover:bg-neutral-50'}`}>
@@ -86,7 +86,7 @@ export const BagsCatalogueTemplate: React.FC<Props> = ({ data, onExit, initialPr
       </div>
       {data.materials.length > 0 && (
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-500">材质</p>
+          <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-neutral-500">材质</p>
           <div className="mt-3 flex flex-wrap gap-1.5">
             <button type="button" onClick={() => setMaterial('all')} className={`border px-2.5 py-1 text-xs ${material === 'all' ? 'border-neutral-950 bg-neutral-950 text-white' : 'border-neutral-300 text-neutral-700'}`}>全部</button>
             {data.materials.map(item => (
@@ -97,7 +97,7 @@ export const BagsCatalogueTemplate: React.FC<Props> = ({ data, onExit, initialPr
       )}
       {data.colors.length > 0 && (
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-500">颜色</p>
+          <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-neutral-500">颜色</p>
           <div className="mt-3 flex flex-wrap gap-1.5">
             <button type="button" onClick={() => setColor('all')} className={`border px-2.5 py-1 text-xs ${color === 'all' ? 'border-neutral-950 bg-neutral-950 text-white' : 'border-neutral-300 text-neutral-700'}`}>全部</button>
             {data.colors.map(item => (
@@ -224,9 +224,9 @@ export const BagsCatalogueTemplate: React.FC<Props> = ({ data, onExit, initialPr
           ) : aboutOpen ? (
             <section className="max-w-2xl">
               <h1 className="text-2xl font-semibold">{merchant.name}</h1>
-              <p className="mt-4 text-sm leading-7 text-neutral-700">
-                {((merchant as unknown as { description_zh?: string }).description_zh) || merchant.description || '意大利皮具批发商，提供现货与订货服务。'}
-              </p>
+              {data.brandStory && (
+                <p className="mt-4 text-sm leading-7 text-neutral-700">{data.brandStory}</p>
+              )}
               <dl className="mt-8 space-y-4 border-t border-neutral-200 pt-6 text-sm">
                 {data.contact.address && <div><dt className="text-xs uppercase tracking-[0.16em] text-neutral-500">地址</dt><dd className="mt-1">{data.contact.address}</dd></div>}
                 {data.contact.phone && <div><dt className="text-xs uppercase tracking-[0.16em] text-neutral-500">电话</dt><dd className="mt-1"><a className="border-b border-neutral-300" href={`tel:${data.contact.phone}`}>{data.contact.phone}</a></dd></div>}
@@ -252,9 +252,9 @@ export const BagsCatalogueTemplate: React.FC<Props> = ({ data, onExit, initialPr
                       <StorefrontImage src={product.images[0]} alt={product.name} ratio="1 / 1" className="border border-neutral-200 transition-colors group-hover:border-neutral-400" />
                       <span className="mt-2.5 block truncate text-sm font-medium">{product.name}</span>
                       <span className="mt-0.5 block text-xs text-neutral-500">{product.styleNo}</span>
-                      <span className="mt-1 flex items-center justify-between text-xs">
-                        <span className="tabular-nums text-neutral-900">{priceText(product.unitPrice, data.isWholesaleAuthorized)}</span>
-                        <span className="text-neutral-500">{product.availableStock > 0 ? `${product.availableStock}` : '售罄'}</span>
+                      <span className="mt-1 flex items-center justify-between gap-2 text-xs">
+                        <span className="whitespace-nowrap tabular-nums text-neutral-900">{priceText(product.unitPrice, data.isWholesaleAuthorized, true)}</span>
+                        <span className="whitespace-nowrap text-neutral-500">{product.availableStock > 0 ? `可售 ${product.availableStock}` : '售罄'}</span>
                       </span>
                     </button>
                   </li>

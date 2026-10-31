@@ -71,7 +71,7 @@ export const StorefrontGallery: React.FC<{
               onError={() => setFailed(previous => ({ ...previous, [index]: true }))}
               className="h-full w-full object-cover"
             />
-            <span className="pointer-events-none absolute bottom-2 right-2 bg-white/90 px-2 py-1 text-[11px] text-neutral-700 opacity-0 transition-opacity group-hover:opacity-100">点击放大</span>
+            <span className="pointer-events-none absolute bottom-2 right-2 bg-white/90 px-2 py-1 text-[12px] text-neutral-700 opacity-0 transition-opacity group-hover:opacity-100">点击放大</span>
           </button>
         ) : (
           <div className="absolute inset-0 grid place-items-center">
@@ -97,7 +97,7 @@ export const StorefrontGallery: React.FC<{
             >
               ›
             </button>
-            <span className="absolute bottom-2 left-2 bg-white/90 px-1.5 py-0.5 text-[11px] tabular-nums text-neutral-700">{index + 1} / {usable.length}</span>
+            <span className="absolute bottom-2 left-2 bg-white/90 px-1.5 py-0.5 text-[12px] tabular-nums text-neutral-700">{index + 1} / {usable.length}</span>
           </>
         )}
       </div>
@@ -115,7 +115,7 @@ export const StorefrontGallery: React.FC<{
               className={`relative h-16 w-14 shrink-0 overflow-hidden border ${thumbIndex === index ? 'border-neutral-950' : 'border-neutral-200'}`}
             >
               {failed[thumbIndex] ? (
-                <span className="grid h-full w-full place-items-center bg-neutral-100 text-[10px] text-neutral-500">无图</span>
+                <span className="grid h-full w-full place-items-center bg-neutral-100 text-[12px] text-neutral-500">无图</span>
               ) : (
                 <img
                   src={image}

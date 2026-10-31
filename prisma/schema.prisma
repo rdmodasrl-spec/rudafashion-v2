@@ -3280,6 +3280,39 @@ model RiskAlert {
   @@index([type, createdAt])
 }
 
+/// 买家询价（RFQ）。此前前端调用 /api/buyer/rfq 但服务端与数据表都不存在，
+/// 本模型与 migration 20261031234000_buyer_rfq 一起补齐真实业务链路。
+model RfqRequest {
+  id                   String    @id @default(uuid())
+  rfqNo                String    @unique
+  buyerCustomerId      String
+  buyerCompanyName     String    @default("")
+  buyerContactPerson   String    @default("")
+  buyerPhone           String    @default("")
+  buyerEmail           String?
+  merchantId           String?
+  title                String
+  description          String    @default("")
+  category             String    @default("")
+  targetQuantity       Int       @default(0)
+  targetPrice          Decimal   @default(0) @db.Decimal(14, 2)
+  targetCurrency       String    @default("EUR")
+  deadlineAt           DateTime?
+  preferredCountries   String[]
+  productIds           String[]
+  items                Json?
+  status               String    @default("submitted")
+  remarks              String?
+  quoteCount           Int       @default(0)
+  convertedOrderNo     String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([buyerCustomerId, createdAt])
+  @@index([merchantId, status])
+  @@index([status, createdAt])
+}
+
 model SalesQuote {
   id                    String                @id @default(uuid())
   quoteNo               String                @unique
@@ -4095,3 +4128,4 @@ model MerchantPromotionBenefit {
   @@index([sourceMerchantId, sourceType, createdAt], map: "MerchantPromotionBenefit_sourceMerchantId_sourceType_createdAt_")
   @@index([subscriptionId])
 }
+

@@ -38,6 +38,9 @@ export type StorefrontProduct = {
   subCategory: string;
   material: string;
   origin: string;
+  /** 商品自有描述（真实数据），供编辑型模板做工艺/材质叙事 */
+  description: string;
+  composition: string;
   images: string[];
   colors: string[];
   sizes: string[];
@@ -57,6 +60,20 @@ function uniqueValues(values: Array<string | undefined | null>): string[] {
   return values.filter((value, index, list): value is string => Boolean(value) && list.indexOf(value) === index);
 }
 
+/**
+ * 品牌叙事文案：只接受商家自己写的介绍。
+ * 演示账号/后台种子数据的说明文字（含「演示 / 测试 / 后台 / DEMO」）不是品牌故事，
+ * 渲染到官网品牌区会暴露内部信息，因此这里统一拦截而不是交给各模板各写一份判断。
+ */
+const NON_BRAND_COPY = /(演示|测试用途|测试数据|后台|DEMO|dummy|placeholder)/i;
+
+export function resolveBrandStory(raw?: string | null): string {
+  const text = (raw || '').trim();
+  if (!text) return '';
+  if (NON_BRAND_COPY.test(text)) return '';
+  return text.length > 400 ? `${text.slice(0, 400)}…` : text;
+}
+
 export function mapProductForStorefront(product: Product, unitPrice: number, tierPrice: number | null): StorefrontProduct {
   const skus = product.skus || [];
   const availableStock = skus.reduce((sum, sku) => sum + Number(sku.stockCentral || 0), 0);
@@ -66,8 +83,10 @@ export function mapProductForStorefront(product: Product, unitPrice: number, tie
     styleNo: product.styleNo,
     category: product.category || '',
     subCategory: product.subCategory || '',
-    material: product.fabric || '',
+    material: product.fabric_zh || product.fabric || '',
     origin: product.origin_zh || product.origin || '',
+    description: resolveBrandStory(product.description_zh || product.description),
+    composition: product.composition || '',
     images: (product.images || []).filter(Boolean),
     colors: uniqueValues(product.colors?.length ? product.colors : skus.map(sku => sku.color)),
     sizes: uniqueValues(product.sizes?.length ? product.sizes : skus.map(sku => sku.size)),
@@ -116,7 +135,9 @@ export function useStorefrontData(merchantId?: string | null) {
     return merchants[0] || null;
   }, [merchantId, merchants]);
 
-  const canViewWholesale = Boolean(context.canViewWholesaleProducts);
+  // 授权来源必须与 MerchantStoreView / 公共 API 一致：context 只暴露 isRegisteredWholesale
+  // （已认证且审核通过的采购账号），不存在 canViewWholesaleProducts 字段。
+  const canViewWholesale = Boolean(context.isRegisteredWholesale);
   const isVaultApproved = Boolean(
     context.authRole === 'merchant'
     || (merchant && typeof context.hasVaultAccess === 'function' && context.hasVaultAccess(merchant.id))
@@ -165,9 +186,14 @@ export function useStorefrontData(merchantId?: string | null) {
     city: merchant?.city || ''
   };
 
+  const brandStory = resolveBrandStory(
+    (merchant as unknown as { description_zh?: string })?.description_zh || merchant?.description
+  );
+
   return {
     merchant,
     contact,
+    brandStory,
     products,
     categories,
     materials,
@@ -176,6 +202,8 @@ export function useStorefrontData(merchantId?: string | null) {
     isVaultApproved,
     hiddenWholesaleCount,
     addToCart: context.addToCart as (item: any) => void,
+    createBuyerRfq: context.createBuyerRfq as (payload: any) => Promise<{ ok: boolean; id?: string; rfqNo?: string; error?: string }>,
+    authRole: context.authRole as string | undefined,
     addMultipleToCart: context.addMultipleToCart as (items: any[]) => void,
     cartCount: Array.isArray(context.cart) ? context.cart.length : 0,
     setCurrentView: context.setCurrentView as (view: string) => void

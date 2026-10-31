@@ -67,6 +67,35 @@ export const StorefrontPreview: React.FC<{ templateId: string; merchantId: strin
     typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('product')
   );
 
+  /**
+   * 深链 SEO：每个商品 URL 必须有唯一的 title / description / canonical。
+   * 预览环境整体 noindex，但元信息仍需正确，换成正式店铺路由后可直接复用。
+   */
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+    const product = activeProductId ? base.products.find(item => item.id === activeProductId) : null;
+    const previousTitle = document.title;
+    const upsert = (name: string, content: string) => {
+      let tag = document.head.querySelector<HTMLMetaElement>(`meta[name="${name}"]`);
+      if (!tag) { tag = document.createElement('meta'); tag.name = name; document.head.appendChild(tag); }
+      tag.content = content;
+      return tag;
+    };
+    let canonical = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+    if (!canonical) { canonical = document.createElement('link'); canonical.rel = 'canonical'; document.head.appendChild(canonical); }
+
+    const merchantName = base.merchant?.name || 'RUDA';
+    if (product) {
+      document.title = `${product.name} · ${product.styleNo} · ${merchantName}`;
+      upsert('description', (product.description || `${merchantName} ${product.name}（${product.styleNo}）`).slice(0, 160));
+    } else {
+      document.title = `${merchantName} · RUDA`;
+      upsert('description', base.brandStory ? base.brandStory.slice(0, 160) : `${merchantName} 商品目录与批发订货`);
+    }
+    canonical.href = window.location.href.split('#')[0];
+    return () => { document.title = previousTitle; };
+  }, [activeProductId, base.products, base.merchant, base.brandStory]);
+
   // 商品深链与浏览器前进/后退保持一致
   useEffect(() => {
     const onPop = () => {
@@ -99,20 +128,20 @@ export const StorefrontPreview: React.FC<{ templateId: string; merchantId: strin
 
   return (
     <div data-preview-template={current}>
-      <div className="sticky top-0 z-[60] flex flex-wrap items-center gap-2 border-b border-neutral-800 bg-neutral-950 px-3 py-2 text-neutral-200">
-        <span className="mr-1 text-[11px] uppercase tracking-[0.18em] text-neutral-500">模板预览 · 隔离环境，未影响线上店铺</span>
+      <div className="sticky top-0 z-[60] flex flex-nowrap items-center gap-2 overflow-x-auto border-b border-neutral-800 bg-neutral-950 px-3 py-2 text-neutral-200">
+        <span className="mr-1 hidden shrink-0 text-[12px] uppercase tracking-[0.18em] text-neutral-500 sm:inline">模板预览 · 隔离环境，未影响线上店铺</span>
         {TEMPLATES.map(template => (
           <button
             key={template.id}
             type="button"
             onClick={() => switchTemplate(template.id)}
             aria-pressed={current === template.id}
-            className={`border px-2.5 py-1 text-[11px] transition-colors ${current === template.id ? 'border-white bg-white text-neutral-950' : 'border-neutral-700 hover:border-neutral-400'}`}
+            className={`shrink-0 border px-2.5 py-1 text-[12px] transition-colors ${current === template.id ? 'border-white bg-white text-neutral-950' : 'border-neutral-700 hover:border-neutral-400'}`}
           >
             {template.name}
           </button>
         ))}
-        <span className="ml-auto text-[11px] text-neutral-500">
+        <span className="ml-auto shrink-0 whitespace-nowrap text-[12px] text-neutral-500">
           {data.merchant ? `${data.merchant.name} · ${data.products.length} 款` : '未找到商家'}
           {demoFill && demoProducts.length > 0 ? ' · 含版式评审演示数据' : ''}
         </span>

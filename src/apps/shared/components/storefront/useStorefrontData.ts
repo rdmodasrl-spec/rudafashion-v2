@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useB2B } from '../../../../context/B2BContext';
 import { apiGet } from '../../../../api/client';
+import { normalizeMediaUrl } from '../premium3d/capability';
 import type { Merchant, Product } from '../../../../types/b2b';
 
 export type StorefrontVisibilityContext = {
@@ -41,6 +42,10 @@ export type StorefrontProduct = {
   /** 商品自有描述（真实数据），供编辑型模板做工艺/材质叙事 */
   description: string;
   composition: string;
+  /** 商家上传的真实 3D 模型；没有就是 null，模板不得伪造 */
+  model: { url: string; scaleMeters?: number; initialAngleDeg?: number; poster?: string } | null;
+  /** 真实多角度照片（media role=detail），用于 360° 图片环视，与 3D 模型区分 */
+  angleFrames: string[];
   images: string[];
   colors: string[];
   sizes: string[];
@@ -87,7 +92,9 @@ export function mapProductForStorefront(product: Product, unitPrice: number, tie
     origin: product.origin_zh || product.origin || '',
     description: resolveBrandStory(product.description_zh || product.description),
     composition: product.composition || '',
-    images: (product.images || []).filter(Boolean),
+    model: resolveProductModel(product),
+    angleFrames: resolveAngleFrames(product),
+    images: (product.images || []).filter(Boolean).map(normalizeMediaUrl),
     colors: uniqueValues(product.colors?.length ? product.colors : skus.map(sku => sku.color)),
     sizes: uniqueValues(product.sizes?.length ? product.sizes : skus.map(sku => sku.size)),
     unitPrice,
@@ -99,6 +106,33 @@ export function mapProductForStorefront(product: Product, unitPrice: number, tie
     isClearance: product.status === 'clearance',
     skus
   };
+}
+
+/**
+ * 真实 3D 模型：只认 media 里 type === 'model' 且通过审核的条目。
+ * 没有就返回 null —— 模板必须回落到真实商品图，不允许生成假模型。
+ */
+export function resolveProductModel(product: Product): StorefrontProduct['model'] {
+  const media = (product.media || []).filter(item => item.type === 'model' && item.url);
+  const usable = media.filter(item => (item.reviewStatus || 'approved') === 'approved');
+  const picked = usable[0];
+  if (!picked) return null;
+  return {
+    url: normalizeMediaUrl(picked.url),
+    scaleMeters: picked.modelScaleMeters,
+    initialAngleDeg: picked.modelInitialAngleDeg,
+    poster: picked.poster ? normalizeMediaUrl(picked.poster) : undefined
+  };
+}
+
+/** 360° 图片环视帧：真实多角度照片，按上传顺序。不足 3 张不具备环视价值。 */
+export function resolveAngleFrames(product: Product): string[] {
+  const detail = (product.media || [])
+    .filter(item => item.type === 'image' && (item.role === 'detail' || item.role === 'main') && item.url)
+    .map(item => normalizeMediaUrl(item.url));
+  const merged = (product.images || []).filter(Boolean);
+  const unique = Array.from(new Set([...merged, ...detail]));
+  return unique.length >= 3 ? unique : [];
 }
 
 export function useStorefrontData(merchantId?: string | null) {

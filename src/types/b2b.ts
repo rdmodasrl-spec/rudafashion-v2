@@ -26,7 +26,11 @@ export interface SKUItem {
 
 export type WarehouseCode = 'central';
 
-export type ProductMediaType = 'image' | 'video';
+/**
+ * 商品媒体类型。`model` 是商家上传的真实 3D 模型（GLB/GLTF），
+ * 与普通图片/视频并列存放在同一 media 数组，不新建第二套媒体系统。
+ */
+export type ProductMediaType = 'image' | 'video' | 'model';
 export type ProductMediaRole = 'main' | 'detail' | 'color';
 
 export interface ProductMedia {
@@ -42,6 +46,10 @@ export interface ProductMedia {
   reviewStatus?: 'pending' | 'approved';
   poster?: string;
   alt?: string;
+  /** 仅 type === 'model'：模型真实尺寸（米），用于按正确比例渲染 */
+  modelScaleMeters?: number;
+  /** 仅 type === 'model'：默认相机方位角（度） */
+  modelInitialAngleDeg?: number;
 }
 
 export interface Product {

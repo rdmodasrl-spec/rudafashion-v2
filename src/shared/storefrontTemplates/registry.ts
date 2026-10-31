@@ -17,6 +17,12 @@ export type StorefrontTemplateDefinition = {
   kind: StorefrontTemplateKind;
   /** 行业作用域内的强调色；null 表示沿用 RUDA 墨色 */
   accent: string | null;
+  /**
+   * 模板是否默认启用 3D 视觉能力。
+   * 商家可在模板配置里关闭（URL `?visual3d=0` 也能临时关闭用于验收），
+   * 关闭后组件回落到真实商品图，不影响任何交易功能。
+   */
+  premium3d?: 'immersive' | 'gallery' | 'commerce' | null;
 };
 
 /** 现有三套（颜色皮肤，服装两行业保留） */
@@ -28,9 +34,9 @@ export const LEGACY_STOREFRONT_TEMPLATES: readonly StorefrontTemplateDefinition[
 
 /** 箱包行业三套结构型模板（阶段 B 黄金样板） */
 export const BAGS_STOREFRONT_TEMPLATES: readonly StorefrontTemplateDefinition[] = [
-  { id: 'bags_editorial', name: '意大利编辑版', positioning: '品牌官网：大幅摄影、工艺叙事、系列画册', kind: 'bags-editorial', accent: null },
-  { id: 'bags_catalogue', name: '产品目录版', positioning: '专业目录：分类、筛选、规格检索', kind: 'bags-catalogue', accent: null },
-  { id: 'bags_wholesale', name: '批发电商版', positioning: 'B2B 商城：库存、MOQ、数量矩阵、采购车', kind: 'bags-wholesale', accent: '#7a5c3e' }
+  { id: 'bags_editorial', name: '意大利编辑版', positioning: '品牌官网：3D 沉浸首屏、工艺叙事、系列画册', kind: 'bags-editorial', accent: null, premium3d: 'immersive' },
+  { id: 'bags_catalogue', name: '产品目录版', positioning: '专业目录：3D 商品画廊、分类筛选、规格检索', kind: 'bags-catalogue', accent: null, premium3d: 'gallery' },
+  { id: 'bags_wholesale', name: '批发电商版', positioning: 'B2B 商城：3D 商品检视、库存、MOQ、数量矩阵、采购车', kind: 'bags-wholesale', accent: '#7a5c3e', premium3d: 'commerce' }
 ];
 
 const INDUSTRY_TEMPLATES: Partial<Record<MerchantIndustryTemplateId, readonly StorefrontTemplateDefinition[]>> = {

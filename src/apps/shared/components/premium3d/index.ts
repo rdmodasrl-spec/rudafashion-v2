@@ -1,0 +1,16 @@
+export { Premium3DScene } from './Premium3DScene';
+export type { Premium3DSceneProps, SceneHandle, SceneSetupContext } from './Premium3DScene';
+export * from './capability';
+export { ProductTurntable3D } from './ProductTurntable3D';
+export { ProductDepthHover3D } from './ProductDepthHover3D';
+export { GalleryArc3D } from './GalleryArc3D';
+export { ScrollProductStage3D } from './ScrollProductStage3D';
+export { MaterialStudy3D } from './MaterialStudy3D';
+export type { MaterialPreset } from './MaterialStudy3D';
+export { ProductFlipTransition3D } from './ProductFlipTransition3D';
+export { ImmersiveHeroStage3D } from './ImmersiveHeroStage3D';
+export { FluidBackdrop3D } from './FluidBackdrop3D';
+export { ParticleField3D } from './ParticleField3D';
+export { BrandWordmark3D } from './BrandWordmark3D';
+export { INDUSTRY_PREMIUM_3D, getIndustryPremium3DPlan } from './industryPresets';
+export type { IndustryPremium3DPlan, Premium3DSlot } from './industryPresets';

@@ -267,6 +267,17 @@ RUDA 是持续扩展的多端、多商户产品。必须以当前仓库真实结
 - 授权过滤必须在数据装配层完成，模板只能接收已过滤数据；未授权不得泄漏授权商品的图片、价格、SKU、库存。
 - 无 `webapp-testing` 截图与操作记录的模板，一律视为未验收；未达 90 分标记为未通过，不得用「基本完成」代替。
 
+## 5.9 Premium 3D 组件（ThreeUI 调研结论与使用规则）
+
+- ThreeUI（MIT）**只吸收设计方法与视觉标准**，不整体引入：其 103 个组件多为 iframe + `srcDoc` 内嵌 HTML，无法与 RUDA 商品数据、授权、SEO 打通，且大量目录资产不在 MIT 覆盖范围。
+- RUDA 自研 3D 组件位于 `src/apps/shared/components/premium3d/`，统一经 `Premium3DScene` 渲染。
+- **`three` 只允许出现在 `premium3d/` 目录**；禁止引入 `@react-three/fiber`、`drei`、`ogl`、`regl`（守卫：`tests/premium3d-guards.test.ts`）。
+- 3D 是可选增强：必须有 WebGL 检测、`prefers-reduced-motion`、静态海报降级、`dispose()` 释放、离屏暂停、DPR/纹理上限与低帧率自动降级。
+- 每套模板 **最多 2 个 3D 区块**；3D 不得进入搜索、筛选、矩阵、加购、询价、结账链路。
+- 没有商家上传的真实 GLB 时，**不得生成或声称 3D 模型**；只能用真实多角度照片做「360° 图片环视」并明确标注。
+- 商家可通过 `?visual3d=0` 或模板配置关闭 3D；关闭后必须回落真实商品图。
+- 详见 `docs/engineering/modules/merchant-premium-3d-library.md`。
+
 ## 6. API、契约和集成铁规
 
 - 新增或变更 API 前，先查是否已有同义 endpoint 和服务能力。

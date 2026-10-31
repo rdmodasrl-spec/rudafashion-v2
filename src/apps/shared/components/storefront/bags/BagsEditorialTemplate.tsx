@@ -9,6 +9,8 @@ import { ArrowLeft, ArrowRight, Menu, X } from 'lucide-react';
 import type { StorefrontData, StorefrontProduct } from '../useStorefrontData';
 import { StorefrontImage, formatMoney, formatStock, priceText } from '../primitives';
 import { StorefrontGallery } from '../gallery/StorefrontGallery';
+import { Ruda3DHero, Ruda3DScrollScene, Ruda3DProductViewer } from '../../premium3d/ruda3d';
+import { readPremium3DFlag } from '../../premium3d/usePremium3DFlag';
 
 type View = 'home' | 'collection' | 'product' | 'maison';
 type Props = { data: StorefrontData; onExit?: () => void; initialProductId?: string | null; onProductChange?: (productId: string | null) => void };
@@ -25,6 +27,8 @@ export const BagsEditorialTemplate: React.FC<Props> = ({ data, onExit, initialPr
   const [menuOpen, setMenuOpen] = useState(false);
 
   const merchant = data.merchant;
+  // Editorial 的 3D 是核心体验：商家或验收方可用 ?visual3d=0 关闭，关闭后回落到图片首屏
+  const visual3d = readPremium3DFlag(true);
   const withImage = useMemo(() => data.products.filter(product => product.images.length > 0), [data.products]);
   const featured = useMemo(() => (withImage.length ? withImage : data.products).slice(0, 6), [withImage, data.products]);
   const hero = featured[0];
@@ -105,8 +109,61 @@ export const BagsEditorialTemplate: React.FC<Props> = ({ data, onExit, initialPr
       <main>
         {view === 'home' && (
           <>
-            {/* 编辑型首屏：左文右图的不对称双栏。图框固定 4:5，白底商品图用 contain 完整呈现，
-                不靠裁切放大冒充大片，商家换成实拍大片后自然铺满同一画框。 */}
+            {/* 3D 沉浸首屏：真实 WebGL 场景（影棚地面 + 皮具道具 + 商品主体 + 三点灯光），
+                滚动时摄像机沿关键帧推进；没有 GLB 时商品以真实商品图的立体板呈现，界面不称其为 3D 模型。 */}
+            {visual3d && hero?.images.length ? (
+              <Ruda3DHero
+                productName={hero.name}
+                image={hero.images[0]}
+                modelUrl={hero.model?.url}
+                scrollLength={2.2}
+                subjectOffsetX={0.95}
+                subjectHeight={2.75}
+              >
+                <div className="pointer-events-none absolute inset-0 flex flex-col justify-between px-5 pb-10 pt-24 sm:px-10">
+                  <div className="max-w-md">
+                    <p className="text-[12px] uppercase tracking-[0.34em] text-neutral-600">Pelletteria italiana</p>
+                    <h1 className="mt-5 font-serif text-4xl leading-[1.08] tracking-[-0.02em] sm:text-5xl lg:text-6xl">
+                      皮革与时间<br />共同完成的形状
+                    </h1>
+                  </div>
+                  <div className="pointer-events-auto flex flex-wrap items-end justify-between gap-6">
+                    {data.brandStory && <p className="max-w-sm text-sm leading-7 text-neutral-700">{data.brandStory}</p>}
+                    <div className="flex flex-wrap items-center gap-6">
+                      <button type="button" onClick={() => go('collection')} className="inline-flex items-center gap-2 border-b border-neutral-950 pb-1 text-xs uppercase tracking-[0.22em]">
+                        浏览系列 <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.7} />
+                      </button>
+                      <button type="button" onClick={() => openProduct(hero)} className="text-xs uppercase tracking-[0.22em] text-neutral-600 hover:text-neutral-950">
+                        {hero.styleNo}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </Ruda3DHero>
+            ) : null}
+
+            {/* 3D 滚动叙事：镜头靠近皮革与五金，再环绕另一侧结构；章节文案全部来自真实商家/商品数据 */}
+            {visual3d && hero?.images.length ? (
+              <Ruda3DScrollScene
+                productName={hero.name}
+                image={hero.images[0]}
+                modelUrl={hero.model?.url}
+                chapters={[
+                  {
+                    id: 'chapter-craft',
+                    eyebrow: 'Capitolo 01',
+                    title: '从选皮开始',
+                    body: hero.description || `${hero.name}（${hero.styleNo}）${hero.material ? ` · ${hero.material}` : ''}${hero.origin ? ` · ${hero.origin}` : ''}`
+                  },
+                  { id: 'chapter-detail', eyebrow: 'Capitolo 02', title: '缝线与五金', body: hero.composition || '材质与结构以商品资料为准。' },
+                  { id: 'chapter-form', eyebrow: 'Capitolo 03', title: '结构另一侧', body: `${hero.colors.length ? `颜色 ${hero.colors.join(' / ')}` : ''}${hero.sizes.length ? `　尺寸 ${hero.sizes.join(' / ')}` : ''}` },
+                  { id: 'chapter-maison', eyebrow: 'Capitolo 04', title: data.merchant?.name || 'Maison', body: data.brandStory || data.contact.address || '' }
+                ]}
+              />
+            ) : null}
+
+            {/* 静态首屏（3D 关闭 / WebGL 不可用时的等价排版），保留原有左文右图结构 */}
+            {(!visual3d || !hero?.images.length) && (
             <section className="mx-auto max-w-[1320px] px-5 pb-16 pt-10 sm:px-8 sm:pb-24 sm:pt-16">
               <div className="grid gap-10 lg:grid-cols-[minmax(0,0.46fr)_minmax(0,0.54fr)] lg:items-center lg:gap-16">
                 <div>
@@ -141,6 +198,7 @@ export const BagsEditorialTemplate: React.FC<Props> = ({ data, onExit, initialPr
                 )}
               </div>
             </section>
+            )}
 
             <section className="mx-auto max-w-[1320px] px-5 py-20 sm:px-8 sm:py-28" aria-labelledby="editorial-selection">
               <div className="flex items-baseline justify-between">
@@ -235,7 +293,19 @@ export const BagsEditorialTemplate: React.FC<Props> = ({ data, onExit, initialPr
             </button>
             <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,0.58fr)_minmax(0,0.42fr)]">
               <div>
-                <StorefrontGallery images={activeProduct.images} alt={activeProduct.name} ratio="4 / 5" priority />
+                {visual3d ? (
+                  <Ruda3DProductViewer
+                    productName={activeProduct.name}
+                    productCode={activeProduct.styleNo}
+                    images={activeProduct.images}
+                    model={activeProduct.model}
+                    angleFrames={activeProduct.angleFrames}
+                    ratio="4 / 5"
+                  />
+                ) : (
+                  <StorefrontGallery images={activeProduct.images} alt={activeProduct.name} ratio="4 / 5" priority />
+                )}
+                {visual3d && <div className="mt-4"><StorefrontGallery images={activeProduct.images} alt={activeProduct.name} ratio="1 / 1" /></div>}
               </div>
               <div className="lg:sticky lg:top-28 lg:self-start">
                 <p className="text-[12px] uppercase tracking-[0.28em] text-neutral-500">{activeProduct.category}</p>

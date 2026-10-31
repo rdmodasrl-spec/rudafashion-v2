@@ -9,6 +9,8 @@ import { ArrowLeft, Check, Search, SlidersHorizontal, X } from 'lucide-react';
 import type { StorefrontData, StorefrontProduct } from '../useStorefrontData';
 import { StorefrontImage, formatStock, priceText } from '../primitives';
 import { StorefrontGallery } from '../gallery/StorefrontGallery';
+import { Ruda3DGallery, Ruda3DProductViewer } from '../../premium3d/ruda3d';
+import { readPremium3DFlag } from '../../premium3d/usePremium3DFlag';
 
 type Props = { data: StorefrontData; onExit?: () => void; initialProductId?: string | null; onProductChange?: (productId: string | null) => void };
 
@@ -30,8 +32,11 @@ export const BagsCatalogueTemplate: React.FC<Props> = ({ data, onExit, initialPr
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [activeProduct, setActiveProduct] = useState<StorefrontProduct | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [detailMode, setDetailMode] = useState<'3d' | 'image'>('3d');
 
   const merchant = data.merchant;
+  // 目录版的 3D 只出现在「画廊区 + 详情页」，不进入检索路径，避免影响浏览效率
+  const visual3d = readPremium3DFlag(true);
 
   useEffect(() => {
     if (!initialProductId) { setActiveProduct(null); return; }
@@ -178,7 +183,42 @@ export const BagsCatalogueTemplate: React.FC<Props> = ({ data, onExit, initialPr
               </button>
               <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,0.5fr)_minmax(0,0.5fr)]">
                 <div>
-                  <StorefrontGallery images={activeProduct.images} alt={activeProduct.name} ratio="1 / 1" priority />
+                  {visual3d ? (
+                    <>
+                      <div className="mb-3 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setDetailMode('3d')}
+                          aria-pressed={detailMode === '3d'}
+                          className={`border px-3 py-1.5 text-xs ${detailMode === '3d' ? 'border-neutral-950 bg-neutral-950 text-white' : 'border-neutral-300 text-neutral-700'}`}
+                        >
+                          三维查看
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDetailMode('image')}
+                          aria-pressed={detailMode === 'image'}
+                          className={`border px-3 py-1.5 text-xs ${detailMode === 'image' ? 'border-neutral-950 bg-neutral-950 text-white' : 'border-neutral-300 text-neutral-700'}`}
+                        >
+                          商品图片
+                        </button>
+                      </div>
+                      {detailMode === '3d' ? (
+                        <Ruda3DProductViewer
+                          productName={activeProduct.name}
+                          productCode={activeProduct.styleNo}
+                          images={activeProduct.images}
+                          model={activeProduct.model}
+                          angleFrames={activeProduct.angleFrames}
+                          ratio="1 / 1"
+                        />
+                      ) : (
+                        <StorefrontGallery images={activeProduct.images} alt={activeProduct.name} ratio="1 / 1" priority />
+                      )}
+                    </>
+                  ) : (
+                    <StorefrontGallery images={activeProduct.images} alt={activeProduct.name} ratio="1 / 1" priority />
+                  )}
                 </div>
                 <div>
                   <h1 className="text-2xl font-semibold leading-tight">{activeProduct.name}</h1>
@@ -244,6 +284,22 @@ export const BagsCatalogueTemplate: React.FC<Props> = ({ data, onExit, initialPr
                   </select>
                 </label>
               </div>
+
+              {visual3d && rows.length >= 3 && (
+                <section className="mb-10" aria-labelledby="catalogue-3d-gallery">
+                  <div className="mb-4 flex items-baseline justify-between gap-4">
+                    <h2 id="catalogue-3d-gallery" className="text-sm font-semibold uppercase tracking-[0.18em] text-neutral-600">三维商品画廊</h2>
+                    <span className="text-xs text-neutral-500">拖拽旋转 · 点击底部分类进入商品</span>
+                  </div>
+                  <Ruda3DGallery
+                    items={rows.slice(0, 7).map(product => ({ id: product.id, image: product.images[0], title: product.name }))}
+                    onSelect={id => {
+                      const target = rows.find(product => product.id === id);
+                      if (target) { setActiveProduct(target); onProductChange?.(target.id); }
+                    }}
+                  />
+                </section>
+              )}
 
               <ul className="mt-5 grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-4">
                 {rows.map(product => (

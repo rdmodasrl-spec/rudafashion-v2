@@ -33,6 +33,14 @@ const miniCore = read('merchant-miniprogram/utils/moda-core.js');
 const miniWelcome = read('merchant-miniprogram/pages/assistant/index.wxml');
 const miniPage = read('merchant-miniprogram/pages/assistant/index.js');
 
+/**
+ * 数字生命核心（ModaUI）的零依赖与无贴图约束。
+ *
+ * 说明：`three` 已由 P2 阶段 Premium 3D 组件按产品决策正式引入，因此全局禁止关系改为：
+ * 1) 仍然禁止 @react-three/fiber、drei、ogl、regl —— 避免并存第二套 3D 运行时；
+ * 2) 数字生命核心自己的源码不得引用 three / R3F；
+ * 3) `three` 只允许出现在 premium3d 目录，防止 3D 依赖扩散到业务模块。
+ */
 test('数字生命核心零新增依赖，且不含任何头像图片、贴图或视频', () => {
   const pkg = JSON.parse(read('package.json')) as {
     dependencies?: Record<string, string>;
@@ -40,7 +48,7 @@ test('数字生命核心零新增依赖，且不含任何头像图片、贴图�
   };
   for (const field of ['dependencies', 'devDependencies'] as const) {
     const deps = pkg[field] ?? {};
-    for (const banned of ['three', '@react-three/fiber', '@react-three/drei', 'ogl', 'regl']) {
+    for (const banned of ['@react-three/fiber', '@react-three/drei', 'ogl', 'regl']) {
       assert.equal(deps[banned], undefined, `${banned} must not be added`);
     }
   }
@@ -48,6 +56,7 @@ test('数字生命核心零新增依赖，且不含任何头像图片、贴图�
     assert.doesNotMatch(source, /new Image\(|createImageBitmap|texImage2D|createTexture/i);
     assert.doesNotMatch(source, /\.(png|jpe?g|webp|gif|svg)/i);
     assert.doesNotMatch(source, /<img|<image/i);
+    assert.doesNotMatch(source, /from 'three'|from "three"|@react-three/i, '数字生命核心不得引入 three / R3F');
   }
 });
 

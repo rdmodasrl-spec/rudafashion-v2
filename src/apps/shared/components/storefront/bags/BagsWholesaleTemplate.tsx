@@ -10,6 +10,8 @@ import { ArrowLeft, Minus, Plus, Search, ShoppingCart, X } from 'lucide-react';
 import type { StorefrontData, StorefrontProduct } from '../useStorefrontData';
 import { StorefrontImage, formatMoney, formatStock, priceText } from '../primitives';
 import { StorefrontGallery } from '../gallery/StorefrontGallery';
+import { Ruda3DProductViewer, Ruda3DHero } from '../../premium3d/ruda3d';
+import { readPremium3DFlag } from '../../premium3d/usePremium3DFlag';
 
 type Props = { data: StorefrontData; onExit?: () => void; initialProductId?: string | null; onProductChange?: (productId: string | null) => void };
 type Matrix = Record<string, number>;
@@ -115,6 +117,8 @@ export const BagsWholesaleTemplate: React.FC<Props> = ({ data, onExit, initialPr
   }
 
   const accent = '#7a5c3e';
+  // 电商版的 3D 只服务于「看清商品」，不进入搜索、矩阵、加购、询价路径
+  const visual3d = readPremium3DFlag(true);
 
   return (
     <div data-storefront-template="bags_wholesale" className="min-h-screen bg-neutral-50 pb-24 text-neutral-950 lg:pb-0">
@@ -170,7 +174,23 @@ export const BagsWholesaleTemplate: React.FC<Props> = ({ data, onExit, initialPr
             </button>
             <div className="mt-5 grid gap-8 lg:grid-cols-[minmax(0,0.46fr)_minmax(0,0.54fr)]">
               <div>
-                <StorefrontGallery images={activeProduct.images} alt={activeProduct.name} ratio="4 / 5" priority />
+                {visual3d ? (
+                  <>
+                    <Ruda3DProductViewer
+                      productName={activeProduct.name}
+                      productCode={activeProduct.styleNo}
+                      images={activeProduct.images}
+                      model={activeProduct.model}
+                      angleFrames={activeProduct.angleFrames}
+                      ratio="4 / 5"
+                    />
+                    <div className="mt-3">
+                      <StorefrontGallery images={activeProduct.images} alt={activeProduct.name} ratio="1 / 1" />
+                    </div>
+                  </>
+                ) : (
+                  <StorefrontGallery images={activeProduct.images} alt={activeProduct.name} ratio="4 / 5" priority />
+                )}
               </div>
               <div>
                 <p className="text-xs text-neutral-500">{activeProduct.styleNo} · {activeProduct.material || activeProduct.category}</p>
@@ -270,6 +290,31 @@ export const BagsWholesaleTemplate: React.FC<Props> = ({ data, onExit, initialPr
           </section>
         ) : (
           <>
+            {visual3d && rows.length > 0 && (
+              <section className="mb-6" aria-label="品牌三维展示">
+                <div className="mb-2 flex items-baseline justify-between">
+                  <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-neutral-600">品牌 3D 陈列</h2>
+                  <span className="text-xs text-neutral-500">滚动查看镜头推进 · 不进入采购路径</span>
+                </div>
+                <Ruda3DHero
+                  productName={rows[0].name}
+                  image={rows[0].images[0]}
+                  modelUrl={rows[0].model?.url}
+                  scrollLength={1.35}
+                >
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 bg-gradient-to-t from-black/30 to-transparent px-5 pb-5 pt-12 text-white">
+                    <div>
+                      <p className="text-[12px] uppercase tracking-[0.28em] opacity-80">{merchant.name}</p>
+                      <p className="mt-1 font-serif text-xl">{rows[0].name}</p>
+                    </div>
+                    <button type="button" onClick={() => openProduct(rows[0])} className="pointer-events-auto border border-white/70 px-3 py-1.5 text-xs">
+                      查看商品
+                    </button>
+                  </div>
+                </Ruda3DHero>
+              </section>
+            )}
+
             <section className="grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label="经营数据">
               {[
                 { label: '在售款式', value: stats.styles },

@@ -33,6 +33,7 @@ const LazyPurchaseOrderView = lazy(() => import('./components/frontend/PurchaseO
 const LazyOrdersView = lazy(() => import('./components/frontend/OrdersView').then(m => ({ default: m.OrdersView })));
 const LazyOrderCenterView = lazy(() => import('./components/frontend/OrderCenterView').then(m => ({ default: m.OrderCenterView })));
 const LazyStorefrontPreview = lazy(() => import('./components/storefront/StorefrontPreview').then(m => ({ default: m.StorefrontPreview })));
+const LazyPremium3DLab = lazy(() => import('./components/premium3d/Premium3DLab').then(m => ({ default: m.Premium3DLab })));
 
 // ---- NEW: Consumer (C端零售)
 const LazyConsumerStore = lazy(() => import('./components/consumer/ConsumerStore').then(m => ({ default: m.ConsumerStore })));
@@ -480,6 +481,18 @@ const MainContent: React.FC = () => {
         <PlatformSupportWidget />
         <NotificationToasts />
       </div>
+    );
+  }
+
+  // ================= Premium 3D 组件实验室（仅带 premiumLab=1 时生效，noindex） =================
+  const premiumLab = typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search).get('premiumLab')
+    : null;
+  if (premiumLab === '1') {
+    return (
+      <Suspense fallback={<LoadingFallback label="加载 3D 组件实验室..." />}>
+        <LazyPremium3DLab />
+      </Suspense>
     );
   }
 

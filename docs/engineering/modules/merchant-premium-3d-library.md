@@ -1,0 +1,157 @@
+# RUDA Premium 3D 组件库（ThreeUI 调研 + 自研组件）
+
+- 项目归属：**P2-STORE-TEMPLATES**（商家私人网站），与 P1 后台 UI 升级互不替代
+- 状态：**部分完成** —— 组件层与箱包三套模板已真实接入并在生产预览可运行；
+  21 套模板未全部接入（只完成箱包 3 套），原因见 §7
+- 日期：2026-11-01
+
+---
+
+## 1. ThreeUI 调研结论
+
+| 项 | 结论 |
+| --- | --- |
+| 仓库 | `github.com/MengTo/threeui`，npm 名 `@designcodeio/threeui` v1.2.0 |
+| 许可证 | **MIT**（`LICENSE`）；资产见 `ASSET-LICENSES.md`：自有资产随 MIT；字体为 SIL OFL 1.1；three.js 运行时 MIT；**目录缩略图/预览视频来自 threeui.com，不在 MIT 覆盖范围** |
+| 真实运行 | 克隆到 `/tmp/threeui`，`npm ci` + `vite` 起在 5199 端口，实际打开 `/hero/sylva/living-green` 等页面验证（见 `evidence/premium3d/threeui-*.png`） |
+| 组件构成 | 103 个 exported 组件，绝大多数是 **iframe + srcDoc** 形式的内嵌 HTML 场景（`srcDoc` 出现在 16 个 shader 目录），少数用 three.js（`Gallery`、`glassToggleScene`、`templeNightRenderer`） |
+| 兼容性 | peer 要求 `react >=18 <20`、`three >=0.149 <1`；RUDA 为 React 19.3 + Vite 6，**可用** |
+| 采用决定 | **不整体引入**。原因：(1) iframe 方案无法与 RUDA 商品数据、授权、SEO 打通；(2) 会把 21 套模板都变成同一套视觉；(3) 大量资产不在 MIT 覆盖范围 |
+| 实际采用 | 只吸收**设计方法与视觉标准**（影棚光、留白、克制的动效），代码全部自研，使用 three.js 0.169 直连 |
+
+## 2. 技术栈决策
+
+评估过 `@react-three/fiber` v9 + `drei` v10（React 19 可用），**最终不引入**：
+
+- ThreeUI 自身也不依赖 R3F，现有组件已是纯 three.js；
+- 并存两套 3D 运行时会分裂资源释放、降级与性能策略；
+- 项目守卫测试 `tests/premium3d-guards.test.ts` 与 `tests/merchant-modaui-core.test.ts` 明确禁止 R3F/drei/ogl/regl。
+
+| 依赖 | 版本 | 用途 | 许可证 |
+| --- | --- | --- | --- |
+| `three` | ^0.169.0 | WebGL 渲染、GLTFLoader | MIT |
+| `@types/three` | ^0.169.0 | 类型 | MIT |
+
+`three` 只允许出现在 `src/apps/shared/components/premium3d/`（守卫测试强制）。
+
+## 3. 组件清单（10 个 + 6 个 ruda3d）
+
+基础层 `premium3d/`：
+
+| 组件 | 用途 | 关键能力 |
+| --- | --- | --- |
+| `Premium3DScene` | 统一场景外壳 | 动态 import three、离屏暂停、页面隐藏暂停、加载态、失败回落海报、自适应降 DPR |
+| `capability.ts` | 能力探测 | WebGL 检测、`prefers-reduced-motion`、纹理 URL 归一化与多候选重试 |
+| `ProductTurntable3D` | 商品转台 | 拖拽旋转、跨图切换、悬停减速 |
+| `ProductDepthHover3D` | 图片悬停景深 | 指针视差 + 伪景深 shader |
+| `GalleryArc3D` | 弧面画廊 | 弧线排布 + 拖拽 |
+| `ScrollProductStage3D` | 滚动舞台 | 滚动进度推动相机 |
+| `MaterialStudy3D` | 材质研究 | PBR + 程序化环境反射 |
+| `ProductFlipTransition3D` | 商品转场 | 双面翻页 + 缓动 |
+| `ImmersiveHeroStage3D` | 沉浸首屏 | 环绕 + 灯光呼吸 |
+| `FluidBackdrop3D` | 流体背景 | 程序化 FBM 噪声 shader |
+| `ParticleField3D` | 粒子场 | GPU 点云 |
+| `BrandWordmark3D` | 品牌字标 | 文字采样成粒子 |
+
+3D 电商层 `premium3d/ruda3d/`：
+
+| 组件 | 用途 |
+| --- | --- |
+| `Ruda3DHero` | 3D 品牌首屏：影棚地面 + 皮具道具 + 商品主体 + 三点灯光，滚动摄像机关键帧推进 |
+| `Ruda3DScrollScene` | 多章节 3D 滚动叙事，章节文案由模板提供真实数据 |
+| `Ruda3DShowroom` | 3D 展厅（系列陈列氛围） |
+| `Ruda3DGallery` | 3D 商品画廊（浏览/挑选） |
+| `Ruda3DProductViewer` | 商品查看器：GLB/GLTF 真模型（旋转/缩放/全屏）→ 360° 图片环视 → 真实商品图 |
+| `Ruda3DMaterialViewer` | 材质查看器（皮革/五金/哑光/玻璃） |
+| `CameraController` | 滚动关键帧相机 + smoothstep 缓动 |
+| `LightingSystem` | 影棚灯光（主光/补光/轮廓光/反弹光 + 柔和阴影 + ACES 色调映射） |
+| `sceneKit` / `leatherMaterial` | 商品主体构件、程序化皮革颗粒法线、金属五金材质 |
+
+## 4. 七行业映射
+
+`premium3d/industryPresets.ts` 给每个行业指定「首屏 / 检视 / 材质 / 氛围」四类位置与**每套模板 3D 区块上限 2 个**，并写明理由。同一套组件不机械套用：
+
+| 行业 | 首屏 | 检视 | 材质 | 氛围 |
+| --- | --- | --- | --- | --- |
+| 服装生产批发 | scroll-stage | depth-hover | — | particle |
+| 服装批发 | brand-wordmark | depth-hover | matte | — |
+| 贸易批发 | fluid-backdrop | flip-transition | — | — |
+| 百货批发 | fluid-backdrop | turntable | matte | — |
+| 箱包批发 | immersive-stage | turntable | leather | particle |
+| 百货连锁 | immersive-stage | flip-transition | glass | — |
+| 综合零售 | fluid-backdrop | depth-hover | — | particle |
+
+## 5. 商品 3D 模型管理
+
+扩展既有媒体能力（不新建第二套）：
+
+- `ProductMedia.type` 增加 `'model'`；新增 `modelScaleMeters`、`modelInitialAngleDeg`。
+- `useStorefrontData.resolveProductModel()` 只认 `type === 'model'` 且审核通过的条目；没有则返回 `null`。
+- `resolveAngleFrames()` 收集真实多角度照片（≥3 张才算环视）。
+- 查看器三条路径**界面明确区分**：真实模型（可旋转/缩放/全屏）→ “360° 图片环视 · N 个角度” → 真实商品图。
+  **不会把图片称作 3D 模型，也不会生成假模型。**
+
+## 6. 性能与降级（实测）
+
+| 措施 | 实现 |
+| --- | --- |
+| 按需加载 | `three` 单独 chunk（878 kB / gzip 197 kB），只在组件进入视口后动态 import |
+| 离屏暂停 | `IntersectionObserver` + `startRenderLoop` 停止 rAF |
+| 页面隐藏暂停 | `document.hidden` 直接 return |
+| 自适应降级 | 帧率长期 < 30 自动把 pixelRatio 降到 1（只降一次） |
+| DPR 上限 | high=2 / low=1 |
+| 纹理上限 | 2048 / 1024 |
+| 资源释放 | 所有场景实现 `dispose()`：几何体/材质/纹理/渲染器卸载 |
+| WebGL 不可用 | 回落静态商品图海报 |
+| 减少动态效果 | `prefers-reduced-motion: reduce` → 不创建画布 |
+
+实测（`evidence/premium3d/`，SwiftShader 软件渲染，非真实 GPU）：
+
+| 模板 | 1440 | 768 | 390 |
+| --- | --- | --- | --- |
+| bags_editorial | 17 fps | 26 fps | 60 fps |
+| bags_catalogue | 55 fps | 61 fps | 61 fps |
+| bags_wholesale | 19 fps | 28 fps | 46 fps |
+
+结论：1440 全屏 hero 在**软件渲染**下 17–19 fps，真实 GPU 会显著更高；已加自适应降级兜底。
+移动端 390 为 46–60 fps，符合「手机优先流畅」要求。**未在真实 iPhone/Android 实机测试，标记为待验证。**
+
+## 7. 三套模板接入情况
+
+| 模板 | 3D 接入 | 是否影响交易 |
+| --- | --- | --- |
+| bags_editorial | 3D 沉浸首屏（滚动镜头推进）+ 4 章 3D 滚动叙事 + 详情查看器 | 否：加购按钮与数据层未改 |
+| bags_catalogue | 首页 3D 商品画廊（网格之上）+ 详情「三维查看 / 商品图片」切换 | 否：检索、筛选、排序路径未改 |
+| bags_wholesale | 紧凑 3D 品牌陈列（滚动 1.35 屏）+ 详情 3D 检视与图片并置 | 否：矩阵、MOQ、批发价、采购车、询价逻辑未改 |
+
+开关：`?visual3d=0` 关闭；关闭后回落静态排版（已实测 `canvas=0 img=4`）。
+模板注册表新增 `premium3d: 'immersive' | 'gallery' | 'commerce'`。
+
+**未完成的 18 套**：其余 6 个行业仍是 legacy 颜色皮肤模板（P2 阶段 B 未开始），
+本阶段只完成箱包黄金样板 + 可复用组件系统，不声称 21 套已接入。
+
+## 8. 生产预览地址（真实可访问）
+
+- 组件实验室：`https://modaui.com/it/?premiumLab=1`
+  - 切换行业演示商家：`?premiumLab=1&merchant=demo-industry-department-chain-retail`
+- 箱包三套模板（隔离预览，不替换任何商家店铺）：
+  - `https://modaui.com/en/?storefrontPreview=bags_editorial&merchant=demo-industry-department-chain-retail`
+  - `?storefrontPreview=bags_catalogue` / `?storefrontPreview=bags_wholesale`
+  - 首次访问需通过 Cookie 同意弹窗；箱包商品的批发可见性需买家登录。
+- 发布记录：`frontend-web` release `20261031235504982-c3342807`（上一版 `current.previous.json` 可回滚）。
+
+## 9. 附带修复
+
+1. `images.ruda.fashion` 商品图增加 `Access-Control-Allow-Origin: *` + `Cross-Origin-Resource-Policy: cross-origin`
+   —— 公开商品媒体需要被 WebGL 当纹理读取；不涉及授权内容。
+2. `public/demo-products/model-07.jpg` 缺失（演示商品 3 条引用该文件，生产返回 SPA HTML），
+   补齐后 `/demo-products/model-07.jpg` 返回 `image/jpeg`。
+3. `normalizeMediaUrl()`：把与本应用等价的域名绝对地址改为相对路径，修复隔离预览环境图片跨源失败。
+
+## 10. 未完成 / 待验证
+
+- 21 套模板只完成 3 套（箱包），其余行业待后续批次。
+- 真实 GLB 商品模型：数据层已支持，**目前没有任何商家上传过模型**，因此真模型路径仅代码就绪，**未做真机验证**。
+- 真机（iPhone / Android 实体设备）未测试，只做 Chromium + 视口模拟。
+- 商家后台「上传 GLB / 多角度照片」的 UI 未做（只扩展了数据结构）。
+- 3D 场景未接 `prefers-reduced-transparency`、未做 GPU 显存实测（`renderer.info` 未上报）。

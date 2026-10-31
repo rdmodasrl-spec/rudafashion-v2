@@ -22864,6 +22864,10 @@ async function startServer() {
       if (!allowedTypes.includes(contentType)) return res.status(404).end();
 
       res.setHeader('Content-Type', contentType);
+      // 商品图需要被 WebGL 当作纹理使用（three.js TextureLoader 走 CORS），
+      // 这些对象本身就是公开商品媒体，不涉及授权内容，因此放开跨源读取。
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
       if (object.ContentLength != null) res.setHeader('Content-Length', String(object.ContentLength));
       if (object.ETag) res.setHeader('ETag', object.ETag);
       if (object.ContentRange) res.setHeader('Content-Range', object.ContentRange);

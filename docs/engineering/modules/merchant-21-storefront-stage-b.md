@@ -178,3 +178,99 @@
 ### 8.8 证据
 
 `docs/engineering/evidence/p2-stage-b-bags/`（三套 1440/390 + 矩阵详情）；本轮深链/画廊测试记录见提交说明。
+
+---
+
+## 9. 第三轮整改（2026-10-31 深夜 → 11-01 凌晨）
+
+本轮把第二轮的三项阻塞全部落地，并在**隔离库 + 隔离实例**上完成可复现的四态授权实测。
+所有数字均来自本次真实运行，命令与脚本随提交入库。
+
+### 9.1 P0 商品图片 HTTPS —— 已修复（显式 SAN，非通配符）
+
+| 项 | 结果 |
+| --- | --- |
+| 方案 | 因 Certbot 2.9.0 只有 nginx/standalone/webroot 插件、**无 DNS 插件**，通配符不可行，改为显式追加 `images.ruda.fashion` 进 SAN（保留原有 11 个域名） |
+| 验证 | `curl` 不带 `-k` 访问真实商品图 → `200`、`image/png`、`1666118 bytes` |
+| 模板表现 | 三套模板 1440/768/390 共 9 组：**裂图 0，失败请求 0** |
+
+### 9.2 P0 授权安全 —— 四态 4/4 通过（服务端过滤，非前端）
+
+隔离环境：独立库 `ruda_p2_authz`（`prisma migrate deploy` 全量执行成功）+ 独立实例 `PORT=4101`，
+独立 JWT 密钥，不触碰生产证书/密钥/数据。
+
+夹具（`scripts/p2/authz-seed.cjs`，含「必须指向 ruda_p2_authz」护栏）：
+商家 1 个、商品 4 款（public / wholesale / private / exclusive）、客户 3 个（approved / approved 无 Vault / pending）、
+Vault 授权 1 条。
+
+| 状态 | `/api/products` 实际返回 | 受限商品详情 | 询价读取 | 用受限商品发起询价 |
+| --- | --- | --- | --- | --- |
+| S1 未登录访客 | `[public]` | 404 / 404 / 404 | 401 | 401 |
+| S2 已登录未审核 | `[public]` | 404 / 404 / 404 | 200 | 403 `RFQ_PRODUCT_NOT_VISIBLE` |
+| S3 已审核无 Vault | `[public, wholesale]` | private 404、wholesale 200、exclusive 404 | 200 | 403 `RFQ_PRODUCT_NOT_VISIBLE` |
+| S4 已审核 + Vault | `[public, wholesale, private, exclusive]` | 全部 200 | 200 | 201 |
+
+`costPrice` / `visibility` / `protectionLevel` 四态**均未出现在公开响应**中。
+结果：**4/4 通过**，可复现命令：
+
+```bash
+DATABASE_URL=<隔离库> node scripts/p2/authz-seed.cjs
+DATABASE_URL=<隔离库> PORT=4101 npx tsx server.ts   # .env 中 JWT_BUYER_SECRET 指向隔离密钥
+P2_AUTHZ_JWT_SECRET=<隔离密钥> node scripts/p2/authz-four-states.cjs
+```
+
+同时修掉两个真实缺陷：
+
+1. `useStorefrontData` 读取了**不存在**的 `context.canViewWholesaleProducts`，导致授权买家在模板里也拿不到批发口径 ——
+   改为 `context.isRegisteredWholesale`（与 `MerchantStoreView`、公共 API 同一判定）。
+2. `/api/merchant/rfq` 原按 `OR [{merchantId},{merchantId:null}]` 查询，会把**所有买家的无主询价广播给任意商家**（跨租户泄漏）——
+   改为严格 `merchantId`。实测：本商家 1 条、其它商家 0 条、无主询价不进入任何商家列表。
+
+### 9.3 P1 真实 RFQ —— 已落地并端到端提交成功
+
+- 模型 `RfqRequest` + `prisma/migrations/20261031234000_buyer_rfq`（已在隔离库验证可执行）
+- `POST/GET /api/buyer/rfq`、`GET /api/merchant/rfq`；创建时做商品可见性校验
+- 电商版模板询价抽屉实测：界面显示真实单号 `RFQ-MVX02R43-EW5M`，库内落库成功，状态 `submitted`
+- 失败路径显示真实错误（未登录提示登录、受限商品 403），无假成功提示
+- 仍缺：`/api/merchant/rfq/:id/quote`、`/api/buyer/rfq/:id/accept`（商家报价与买家接受），已登记在 `tests/api-route-existence.test.ts` 的未实现清单
+
+### 9.4 P1 深链元信息
+
+深链打开商品时同步 `document.title`、`meta[name=description]`、`link[rel=canonical]`；
+实测 `Vault 链条包 · 限量 · P2-AUTHZ-PRIVATE · P2 AUTHZ`，不同商品标题不再复用。
+预览环境仍整体 `noindex,nofollow`。
+
+### 9.5 P2 视觉精修（本轮实际改动）
+
+| 模板 | 改动 | 目的 |
+| --- | --- | --- |
+| 编辑版 | 全幅裁切首屏 → 左文右图不对称首屏；商品图 `contain` + 暖中性底 | 白底商品图不再被裁成局部放大 |
+| 编辑版 | 删除模板杜撰的「整张牛皮 / Prato, Italia / 为欧洲精品店供货」等文案 | 不虚构商家工艺与产地，改用商家真实资料 |
+| 目录版 | 卡片价格/库存对齐、补「可售」标签、关于页改真实品牌故事 | 信息可读性 |
+| 电商版 | 去掉无意义的「品类 0」、窄屏价格与库存竖排 | 手机端不再折行 |
+| 全局 | 新增 `resolveBrandStory()`：演示/后台说明文字不得作为品牌故事渲染 | 防止把内部说明当官网文案 |
+| 全局 | 存储层 **21 处 ≤11px 文案全部提到 12px** | 符合 `design-values.md` 硬底线 |
+
+隔离预览三视口复测（9 组）：**裂图 0 / 横向溢出 0 / <12px 文案 0**。
+
+### 9.6 分数与本阶段结论
+
+| 模板 | 首轮 | 第二轮 | 本轮 | 仍未达 90 的原因（非代码） |
+| --- | ---: | ---: | ---: | --- |
+| 编辑版 | 75 | 80 | **86** | 无品牌级商品摄影；商家无品牌故事/工艺文案可渲染，首屏只能靠版式支撑 |
+| 目录版 | 76 | 82 | **88** | 真实商品无分类层级、无材质/颜色多样性（每款 1 图、1 色），目录密度撑不起来 |
+| 电商版 | 80 | 85 | **88** | 无阶梯价、无尺寸矩阵、无 MOQ 差异；订货矩阵目前只有颜色×尺码单格 |
+
+**阶段 B 状态：部分完成（代码侧 P0/P1 全部完成，P2 视觉终验被数据资产阻塞）。三套均未达 90，不进入下一个行业。**
+
+阻塞输入（需要业务侧提供，不是代码问题）：
+
+1. 箱包类真实商品摄影：每款 ≥3 张、统一比例（编辑器/目录/画廊都依赖它）。
+2. 箱包专属字段：尺寸（长宽高）、五金、容量、肩带；当前 `Product` 只有 `fabric/origin/composition`。
+3. 商品分类层级与材质/颜色多样性，用于目录筛选与系列叙事。
+4. 阶梯价与 SKU 矩阵的真实数据，用于电商版 MOQ/批发价展示。
+
+### 9.7 证据
+
+`docs/engineering/evidence/p2-stage-b-bags/`（本轮新增 `*-authz.png` 9 张 + `catalogue-deeplink-authz.png` + `wholesale-rfq-submit-authz.png`）。
+提交：`8f1224e`（已推送 `rdmodasrl-spec/rudafashion-v2`）。

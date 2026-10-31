@@ -228,6 +228,14 @@ RUDA 是持续扩展的多端、多商户产品。必须以当前仓库真实结
 - 检测通过只代表确定性规则无发现，不替代桌面、手机、小程序真实页面验收。
 - 安装说明与回滚见 `docs/engineering/impeccable-ui-quality.md`。
 
+### 5.5 已有界面审计技能（Redesign）
+
+- 技能位于 `.agents/skills/redesign-existing-projects/SKILL.md`。当用户表示现有界面「很廉价 / 很 AI / 不统一 / 帮我审计这个页面」时读取它，按 Scan → Diagnose → Fix 执行：先输出诊断清单让用户确认范围，再按修复优先级原地修改。
+- 该技能的 Design Values 已改写为 RUDA 真实令牌（`src/index.css` 的 `@theme`、手机端圆角令牌、`lucide-react`、`cubic-bezier(0.22,1,0.36,1)`）。上游默认的深色调色板、标题渐变、图标库替换、后台布局改造一律不适用。
+- 它只补充审计清单，不替代 §16 的 Impeccable 工作流与 `impeccable detect` 门禁；冲突时以本节、§5、§15.5、§16 与 `docs/engineering/mobile-design-system.md` 为准。
+- 只约束本次新写和改动的代码，不得借技能名义批量清理历史 `text-[Npx]`、`italic`、`font-black` 写法，不得重排后台外壳或导航。
+- 安装与 Design Values 改写记录见 `docs/engineering/redesign-skill.md`。
+
 ## 6. API、契约和集成铁规
 
 - 新增或变更 API 前，先查是否已有同义 endpoint 和服务能力。

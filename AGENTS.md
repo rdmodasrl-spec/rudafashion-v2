@@ -426,6 +426,10 @@ RUDA 是持续扩展的多端、多商户产品。必须以当前仓库真实结
 - 任何确需修改布局文件的任务，必须在模块规格先列明不可避免的业务原因、影响区域、前后对比和回滚方式；无业务必要时禁止修改。
 - 验收须对照基准截图检查七行业的顶部、导航、主工作区和各版块 AI 助手栏，并在桌面及手机逐项留证。未取得旧版基准或实机结果时，只能标为「待验证」，不得声称布局保持不变。
 - 七行业 UI 品质升级的审计基线、24 项能力矩阵与 Batch 0–5 计划维护在 `docs/engineering/modules/merchant-seven-industry-ui-upgrade.md`；每批完成后必须更新该文档的进度与覆盖率，不允许只升级共享组件就声称行业已完成。
+- **两个独立项目，不得混用验收**：
+  - `P1-ADMIN-UI`（商家后台七行业 UI 高级化）→ `docs/engineering/modules/merchant-seven-industry-ui-upgrade.md`，Batch 0–5。
+  - `P2-STORE-TEMPLATES`（七行业 21 套商家私人网站模板）→ `docs/engineering/modules/merchant-storefront-21-templates.md`，Batch S0–S5。
+  - 两者共享商家身份、商品/库存/价格/订单/域名/授权 API，但表现层、文档、提交、验收完全分开；任一项目的完成度不得用于替代另一项目的验收。
 
 ## 16. 前端任务自动调用 Impeccable（强制规范）
 

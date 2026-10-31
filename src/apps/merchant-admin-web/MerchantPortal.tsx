@@ -4603,7 +4603,7 @@ export const MerchantPortal: React.FC<{
           aria-label={localizeCopy('打开商家名片', 'Apri scheda negozio')}
           className="flex w-full items-center gap-3 rounded-xl border-b border-neutral-100 px-2 pb-4 pt-2 text-left transition hover:bg-neutral-50 active:bg-neutral-100"
         >
-          <img src={merchantLogo} alt="" className="h-10 w-10 rounded-xl border border-neutral-200 object-cover" />
+          <img src={merchantLogo} alt="" className="h-10 w-10 rounded-xl border border-neutral-200 object-cover" onError={event => { event.currentTarget.onerror = null; event.currentTarget.src = DEFAULT_MERCHANT_LOGO; }} />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-bold text-neutral-950">{currentMerchant.name}</span>
           </span>
@@ -8195,7 +8195,7 @@ export const MerchantPortal: React.FC<{
         <div className="merchant-settings-workspace grid min-h-full gap-4 lg:grid-cols-[232px_minmax(0,1fr)]">
           <aside className="flex max-h-[48vh] flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm lg:sticky lg:top-0 lg:max-h-[calc(100vh-6rem)]">
             <div className="flex items-center gap-3 border-b border-neutral-100 px-4 py-4">
-              <img src={merchantLogo} alt="" className="h-9 w-9 rounded-lg border border-neutral-200 object-cover" />
+              <img src={merchantLogo} alt="" className="h-9 w-9 rounded-lg border border-neutral-200 object-cover" onError={event => { event.currentTarget.onerror = null; event.currentTarget.src = DEFAULT_MERCHANT_LOGO; }} />
               <div className="min-w-0">
                 <p className="truncate text-xs font-bold text-neutral-900">{currentMerchant.name}</p>
                 <p className="mt-0.5 text-[10px] text-neutral-500">{localizeCopy('商家设置', 'RUDA Impostazioni')}</p>

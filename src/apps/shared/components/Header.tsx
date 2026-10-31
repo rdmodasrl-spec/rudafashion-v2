@@ -390,7 +390,7 @@ export const Header: React.FC = () => {
       </div>
 
       <nav aria-label={localizeCopy("商家与特价导航", "Navigazione showroom e offerte")} className="hidden border-t border-neutral-200 md:block">
-        <div className="mx-auto flex max-w-7xl items-center justify-start gap-6 overflow-x-auto px-4 py-3 lg:justify-center lg:gap-7">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-start gap-x-6 gap-y-2 overflow-x-auto px-4 py-3 lg:justify-center lg:gap-x-6">
           {directoryNav.map(item => {
             const itemUrl = new URL(item.path, window.location.origin);
             const isIndustryLink = itemUrl.searchParams.has('businessIndustry');

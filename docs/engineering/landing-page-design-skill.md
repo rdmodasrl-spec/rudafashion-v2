@@ -135,6 +135,24 @@ Scan → Diagnose → Prioritize → Improve → Verify
 - 目录/找店/趋势/About 页的对比度、颜色收敛与多语言。
 - 商家后台核心页与商家手机端试点（生产 `INDUSTRY_DEMO_LOGIN_ENABLED` 未开启，缺少可登录的测试商家账号）。
 
+### 9.1 商家后台试点（第三端，未发布）
+
+按 `AGENTS.md` §15.5「改动前先记录基准截图」，已取得可识别的旧版基准：`evidence/design-pilot-2026-10-31/merchant-admin-baseline-{desktop,mobile}.png`（生产 `ruda.fashion/merchant`，演示商家 001）。
+
+| 项 | 改动 | 依据 |
+| --- | --- | --- |
+| 侧边栏/头部商家 Logo | `MerchantPortal.tsx` 两处 `<img src={merchantLogo}>` 补 `onError` 回落 `DEFAULT_MERCHANT_LOGO`，与商家手机端 `MerchantMobileApp.tsx:2086` 的既有写法一致 | 基准截图显示桌面端 Logo 为浏览器裂图图标，手机端已正确显示品牌默认图；三端必须一致 |
+
+- **不改**：仪表盘布局、胶囊型搜索/快捷操作/KPI 卡片、侧边栏层级、AI 助手栏。§15.5 明确锁定这些既有风格，任何胶囊↔直角、圆角与阴影的调整需产品单独确认后再做。
+- 验证：`tsc` 通过；商家手机端在本地 `PORT=4100` 实测渲染正常、0 张裂图。
+- **待验证**：商家电脑端本地开发环境存在与本次改动无关的 `crypto.randomUUID is not a function` 渲染错误（http 非安全上下文导致），加上发布范围只授权了前台，**商家后台未发布、桌面端视觉未在线上验证**。
+
+### 9.2 发布范围与回滚
+
+- 已发布：`frontend-web`、`frontend-mobile` 两个 release（`scripts/publish-app.ts` 切换 `current.json`，保留 `current.previous.json`）。
+- 未发布：`merchant-admin-*`、`platform-admin-*`，服务端 `dist/server.cjs` 未重建。
+- 回滚：把 `dist/apps/<target>/current.previous.json` 复制回 `current.json`，或重新 `publish-app` 上一版本 releaseId；无数据库变更。
+
 ## 10. 机械检查说明
 
 `tests/design-skills-consistency.test.ts` 断言：

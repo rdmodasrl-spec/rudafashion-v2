@@ -45,6 +45,9 @@
 
 ## 4. Design Values 改写记录
 
+> 数值唯一权威：`docs/engineering/design-values.md`。本节记录「上游值 → RUDA 值 → 来源」的改写过程；若与本文件、技能文件、权威表三者不一致，以权威表为准（`tests/design-skills-consistency.test.ts` 拦截漂移）。新建转化页的策略与结构见 `docs/engineering/landing-page-design-skill.md`。
+
+
 上游默认值与 RUDA 冲突，逐项替换（证据均为现有代码与文档）：
 
 | 上游默认 | RUDA 实际 | 来源 |

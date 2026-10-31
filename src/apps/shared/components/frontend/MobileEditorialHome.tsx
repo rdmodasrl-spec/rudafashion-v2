@@ -50,21 +50,27 @@ type EditorialProductProps = {
   lang: Language;
   onOpen: (productId: string) => void;
   size?: 'feature' | 'compact';
+  priceLabel: string;
+  moqLabel: string;
 };
 
 const EditorialProduct: React.FC<EditorialProductProps> = ({
   product,
   lang,
   onOpen,
-  size = 'compact'
+  size = 'compact',
+  priceLabel,
+  moqLabel
 }) => {
   const name = getLocalizedProductName(product, lang);
+  const merchantLabel = (product.merchantName || product.brand || '').trim();
+  const openProduct = () => onOpen(product.detailProductId || product.id);
 
   return (
     <article className={`editorial-product editorial-product--${size}`}>
       <button
         type="button"
-        onClick={() => onOpen(product.detailProductId || product.id)}
+        onClick={openProduct}
         className="editorial-product__image"
         aria-label={name}
       >
@@ -82,6 +88,12 @@ const EditorialProduct: React.FC<EditorialProductProps> = ({
           </span>
         )}
       </button>
+      <button type="button" onClick={openProduct} className="editorial-product__details">
+        {merchantLabel ? <span className="editorial-product__brand">{merchantLabel}</span> : null}
+        <span className="editorial-product__name">{name}</span>
+        {priceLabel ? <span className="editorial-product__price">{priceLabel}</span> : null}
+        {moqLabel ? <span className="editorial-product__moq">{moqLabel}</span> : null}
+      </button>
     </article>
   );
 };
@@ -95,6 +107,8 @@ export const MobileEditorialHome: React.FC = () => {
     setCatalogSearchQuery,
     quickSearchStyle,
     quickNavigateToProduct,
+    calculateCustomerPrice,
+    localizeCopy,
     cart,
     favorites,
     setActiveBuyerTab
@@ -186,6 +200,8 @@ export const MobileEditorialHome: React.FC = () => {
       lang={lang}
       onOpen={quickNavigateToProduct}
       size={size}
+      priceLabel={`€${calculateCustomerPrice(product.wholesalePrice).toFixed(2)}`}
+      moqLabel={localizeCopy(`起订 ${product.moq} 件`, `Min. ${product.moq} pz`)}
     />
   );
 

@@ -410,7 +410,7 @@ export const Header: React.FC = () => {
                 type="button"
                 onClick={() => navigateDirectory(item.path, item.view)}
                 aria-current={isActive ? 'page' : undefined}
-                className={`shrink-0 border-b pb-1 text-[10px] font-semibold uppercase tracking-[0.16em] transition-colors ${
+                className={`shrink-0 border-b pb-1 pt-1 text-xs font-medium uppercase tracking-[0.08em] transition-colors ${
                   isActive
                     ? 'border-neutral-950 text-neutral-950'
                     : 'border-transparent text-neutral-600 hover:border-neutral-400 hover:text-neutral-950'

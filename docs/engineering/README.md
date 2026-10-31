@@ -12,6 +12,10 @@
 - [`ide-workspace-config.md`](./ide-workspace-config.md)：VS Code / TypeScript 索引边界（`tsconfig.json` 与 `.vscode/settings.json` 排除项）、OOM 处理记录、保留的源码索引范围与回滚方式。
 - [`deployments.md`](./deployments.md)：生产发布记录（构建范围、数据库迁移、应用 release、验证结果与回滚方式）。
 - [`mobile-design-system.md`](./mobile-design-system.md)：三个手机端构建目标的按钮、卡片、图标、圆角、输入框与弹窗令牌，页面验收状态和截图证据。
+- [`design-values.md`](./design-values.md)：**设计值唯一权威表**（字体、中性色阶、字号、间距、圆角、图标、动效、响应式基线）；Impeccable、Redesign、Landing 三个前端技能共同引用，由 `tests/design-skills-consistency.test.ts` 校验不漂移。
+- [`impeccable-ui-quality.md`](./impeccable-ui-quality.md)：Impeccable 设计技能与确定性检测器的安装、配置豁免、使用与回滚。
+- [`redesign-skill.md`](./redesign-skill.md)：`redesign-existing-projects` 既有页面审计技能的安装与 RUDA Design Values 改写记录。
+- [`landing-page-design-skill.md`](./landing-page-design-skill.md)：`landing-page-design` 落地页技能的仓库检查、取舍、三技能分工与渐进式优化流程。
 - [`miniprogram-wxml-directives.md`](./miniprogram-wxml-directives.md)：两个小程序的 WXML `wx:if`/`wx:elif`/`wx:else` 相邻性规则、`Bad attr wx:else` 编译错误成因、检查脚本与 2026-10-28 修复记录。
 - [`../admin-business-closure-audit.md`](../admin-business-closure-audit.md)：平台总后台 32 个页面的闭环状态、证据、断点及未完成验证项。
 - [`audit/2026-10-26-full-closure-audit.md`](./audit/2026-10-26-full-closure-audit.md)：全站功能闭环审计（重点营销推广与智能营销）：总后台与商家端的实际接缝、权限缺口、死接口、P0/P1/P2 整改计划与待决策项。与上一条的分工是：上一条只覆盖平台后台页面，本条覆盖跨端业务链路。
@@ -42,7 +46,8 @@
 - `tests/duplication-guards.test.ts` 固定已确认的重复数字/重复入口清理结果，防止商家后台 Web/手机端与生产链概览重新引入同屏重复。
 - `node scripts/check-wxml-directives.mjs` 与 `tests/miniprogram-wxml-directives.test.ts` 检查两个小程序 WXML 条件指令相邻性、`wx:if`+`wx:for` 同元素和标签平衡。
 - `tests/mobile-design-system.test.ts` 固定手机端圆角令牌、按钮/卡片/图标规范、共享样式引入和禁止回退的 44px/整行长按钮。
-- 执行方式：`node --import tsx --test tests/app-target.test.ts tests/admin-navigation.test.ts tests/duplication-guards.test.ts tests/mobile-design-system.test.ts`。
+- `tests/design-skills-consistency.test.ts` 校验三个前端技能（Impeccable / Redesign / Landing）的 Design Values 与 `design-values.md`、`src/index.css`、`mobile-design-system.css` 不漂移，并拦截被禁用的上游默认值。
+- 执行方式：`node --import tsx --test tests/app-target.test.ts tests/admin-navigation.test.ts tests/duplication-guards.test.ts tests/mobile-design-system.test.ts tests/design-skills-consistency.test.ts`。
 - 构建脚本分别写入 `dist/apps/<target>/releases/`；正式发布必须单独调用发布脚本，不将构建成功视为已发布。
 
 以上是目前能确认的守门范围，不代表认证去重、API 契约、租户隔离、所有页面或所有应用发布流程都已有自动检查。后续按高风险和可判定性逐步补齐，不新增重复测试框架。

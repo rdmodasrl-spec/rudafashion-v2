@@ -414,12 +414,38 @@
 
 .mobile-editorial-product-block--medium {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 4px;
+  gap: 24px 10px;
 }
 
 .mobile-editorial-product-block--large {
   grid-template-columns: minmax(0, 1fr);
   gap: 0;
+}
+
+/* 桌面端独立栅格：移动端保持 2 列/1 列，不把手机版式拉伸到 1440px。 */
+@media (min-width: 1024px) {
+  .mobile-editorial-product-block--medium {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 32px 20px;
+  }
+
+  .mobile-editorial-product-block--large {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 40px 20px;
+  }
+
+  .mobile-editorial-product-block--large .editorial-product__image {
+    aspect-ratio: 4 / 5;
+  }
+
+  /* 单张「大图」块在桌面端改为横向编辑版位，避免出现 1376×1720 的单图。 */
+  .mobile-editorial-product-block--large:has(> :only-child) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mobile-editorial-product-block--large:has(> :only-child) .editorial-product__image {
+    aspect-ratio: 16 / 9;
+  }
 }
 
 .mobile-editorial-product-block .editorial-product--feature {
@@ -788,9 +814,9 @@
 .editorial-product__brand {
   overflow: hidden;
   color: var(--editorial-muted);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: .08em;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: .06em;
   text-overflow: ellipsis;
   text-transform: uppercase;
   white-space: nowrap;
@@ -799,9 +825,9 @@
 .editorial-product__name {
   display: -webkit-box;
   overflow: hidden;
-  margin-top: 3px;
-  font-size: 12px;
-  line-height: 1.3;
+  margin-top: 4px;
+  font-size: 14px;
+  line-height: 1.35;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
@@ -816,7 +842,7 @@
 .editorial-product__moq {
   margin-top: 2px;
   color: var(--editorial-muted);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .mobile-editorial-season {

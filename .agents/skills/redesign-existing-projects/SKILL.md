@@ -34,7 +34,11 @@ This is the RUDA-adapted fork of [`elayadesign/redesign-skill`](https://github.c
 
 ## Design values
 
-All concrete values (fonts, colors, spacing, radius, icons, motion timing) live in the **Design Values** section at the bottom of this file. That section is the single source of truth. The audit below tells you *what to look for*; Design Values tells you *what to replace it with*.
+**权威来源**：`docs/engineering/design-values.md`。本文件末尾的 Design Values 是执行摘要；若与文档不一致，以文档为准并修正本文件（`tests/design-skills-consistency.test.ts` 会拦截漂移）。
+
+All concrete values (fonts, colors, spacing, radius, icons, motion timing) live in the **Design Values** section at the bottom of this file. The audit below tells you *what to look for*; Design Values tells you *what to replace it with*.
+
+**与其它技能的边界**：本技能只做「既有页面诊断 + 原地修复」。新建落地页的诉求收敛、结构与文案用 `.agents/skills/landing-page-design/SKILL.md`（Part A）；工作流与确定性检测用 `.agents/skills/impeccable/`。不要在本技能里重复转化策略，也不要在 landing 技能里重复诊断。
 
 Never invent a font, hex value, spacing number, radius, or easing curve that is not in Design Values. If a situation is not covered there, ask rather than guessing.
 

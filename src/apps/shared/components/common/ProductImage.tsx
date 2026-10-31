@@ -10,7 +10,10 @@ type ProductImageProps = {
   flush?: boolean;
 };
 
-const FALLBACK_IMAGE = '/pwa-512x512.png';
+const FALLBACK_PLACEHOLDER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 500" role="presentation"><rect width="400" height="500" fill="#f5f3ef"/><g fill="none" stroke="#d9d5cc" stroke-width="6" stroke-linecap="square"><rect x="132" y="182" width="136" height="136"/><path d="M132 288l34-34 26 26 18-18 28 28"/><circle cx="240" cy="214" r="12"/></g></svg>`;
+
+// 裂图回落用中性占位，不再使用品牌图标：品牌标识出现在内容区域会被误读为真图。
+const FALLBACK_IMAGE = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(FALLBACK_PLACEHOLDER_SVG)}`;
 
 export const ProductImage: React.FC<ProductImageProps> = ({
   src,

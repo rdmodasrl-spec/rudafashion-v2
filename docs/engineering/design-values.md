@@ -68,6 +68,8 @@
 | 按钮 | `text-sm` | 14 / 20 | semibold |
 | 角标 / 元数据 | `text-xs` | 12 / 16 | medium |
 
+**已登记的例外**：商家手机端首页「五列快捷入口」标签固定 10px（`min-h-[62px]` 紧凑行约束，`tests/merchant-mobile-home-quick-actions.test.ts` 守卫）。该例外只覆盖这一行的标签，不得扩散到其他标签或正文。
+
 **硬底线：新写或修改的前端代码中，正文与标签不得小于 12px。** 禁止 `text-[8px]` / `text-[9px]` / `text-[10px]` / `text-[11px]`。历史存量不批量清理（AGENTS.md §3.5），但改动到某处时必须顺手改到 12px 以上。
 
 ## 4. 间距

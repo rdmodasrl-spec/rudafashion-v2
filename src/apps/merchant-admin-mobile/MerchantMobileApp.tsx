@@ -2366,7 +2366,7 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
                   <span className={`ruda-home-quick-action-icon grid h-8 w-8 place-items-center rounded-lg ${item.featured ? 'bg-neutral-950 text-white' : 'bg-neutral-100 text-neutral-700'}`}>
                     <Icon className="h-4 w-4" strokeWidth={1.8} aria-hidden="true" />
                   </span>
-                  <span className="max-w-full truncate text-xs font-medium leading-4 tracking-tight">{item.label}</span>
+                  <span className="max-w-full truncate text-[10px] font-medium leading-3 tracking-tight">{item.label}</span>
                 </>
               );
               return item.href

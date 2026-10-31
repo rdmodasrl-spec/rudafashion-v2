@@ -12,7 +12,18 @@ function source(relativePath: string) {
 const DESIGN_VALUES = 'docs/engineering/design-values.md';
 const SKILLS = [
   '.agents/skills/redesign-existing-projects/SKILL.md',
-  '.agents/skills/landing-page-design/SKILL.md'
+  '.agents/skills/landing-page-design/SKILL.md',
+  '.agents/skills/frontend-design/SKILL.md',
+  '.agents/skills/brand-guidelines/SKILL.md',
+  '.agents/skills/webapp-testing/SKILL.md'
+];
+
+const MIRRORED_SKILLS = [
+  'redesign-existing-projects',
+  'landing-page-design',
+  'frontend-design',
+  'webapp-testing',
+  'brand-guidelines'
 ];
 
 test('design values doc and every adapted skill exist and are non-trivial', () => {
@@ -53,7 +64,10 @@ test('skills and doc agree with the radius tokens shipped in css', () => {
 });
 
 test('skills carry the RUDA font, accent, icon and motion values', () => {
-  for (const file of SKILLS) {
+  // frontend-design 专注于判断与取舍，数值由 design-values.md 权威定义；
+  // 其余技能必须直接写明 RUDA 的具体值。
+  const VALUE_SKILLS = SKILLS.filter(file => !/frontend-design|brand-guidelines/.test(file));
+  for (const file of VALUE_SKILLS) {
     const skill = source(file);
     assert.match(skill, /cubic-bezier\(0\.22, ?1, ?0\.36, ?1\)/, `${file} uses the RUDA base curve`);
     assert.match(skill, /#201e1a/, `${file} uses the single RUDA accent`);
@@ -89,11 +103,43 @@ test('landing skill scopes part A to new conversion pages and forbids redesign',
 });
 
 test('claude and agents skill mirrors stay identical', () => {
-  for (const name of ['redesign-existing-projects', 'landing-page-design']) {
-    for (const file of ['SKILL.md', 'LICENSE.md']) {
-      const agents = source(`.agents/skills/${name}/${file}`);
-      const claude = source(`.claude/skills/${name}/${file}`);
-      assert.equal(claude, agents, `${name}/${file} mirrors .agents`);
+  for (const name of MIRRORED_SKILLS) {
+    const skill = source(`.agents/skills/${name}/SKILL.md`);
+    assert.equal(source(`.claude/skills/${name}/SKILL.md`), skill, `${name}/SKILL.md mirrors .agents`);
+    // Anthropic 派生技能保留上游 Apache-2.0 原文，其余保留聚合许可证说明。
+    const licenceFile = MIRRORED_SKILLS.indexOf(name) >= 2 ? 'LICENSE.txt' : 'LICENSE.md';
+    assert.equal(
+      source(`.claude/skills/${name}/${licenceFile}`),
+      source(`.agents/skills/${name}/${licenceFile}`),
+      `${name}/${licenceFile} mirrors .agents`
+    );
+  }
+});
+
+test('anthropic derived skills keep their Apache-2.0 licence text', () => {
+  for (const name of ['frontend-design', 'webapp-testing', 'brand-guidelines']) {
+    const licence = source(`.agents/skills/${name}/LICENSE.txt`);
+    assert.match(licence, /Apache License/, `${name} keeps the upstream Apache licence`);
+    assert.match(licence, /Version 2\.0/, `${name} licence is version 2.0`);
+  }
+});
+
+test('anthopic-derived skills must not carry Anthropic brand values', () => {
+  for (const name of ['frontend-design', 'webapp-testing', 'brand-guidelines']) {
+    const lines = source(`.agents/skills/${name}/SKILL.md`).split('\n');
+    for (const line of lines) {
+      // 明确以"删除/禁止/不得"提及上游值是允许的，用来告诉代理不要用。
+      if (/删除|禁止|不得|不要用/.test(line)) continue;
+      for (const banned of ['#d97757', '#141413', '#faf9f5', 'Poppins', 'Lora']) {
+        assert.ok(!line.includes(banned), `${name} must not ship Anthropic brand value ${banned}: ${line.trim()}`);
+      }
     }
   }
+});
+
+test('webapp-testing stays read-only against production and gates demo login', () => {
+  const skill = source('.agents/skills/webapp-testing/SKILL.md');
+  assert.match(skill, /禁止对生产/, 'production write actions are forbidden');
+  assert.match(skill, /INDUSTRY_DEMO_LOGIN_ENABLED/, 'demo login is gated');
+  assert.match(skill, /storefront-template/, 'store template verification is documented');
 });

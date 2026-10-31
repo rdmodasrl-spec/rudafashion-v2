@@ -244,6 +244,15 @@ RUDA 是持续扩展的多端、多商户产品。必须以当前仓库真实结
 - **设计值唯一权威**：`docs/engineering/design-values.md`。三个前端技能（Impeccable、Redesign、Landing）都引用它；技能内数值与文档冲突时以文档为准，`tests/design-skills-consistency.test.ts` 负责拦截漂移。
 - 安装、取舍与三技能分工记录见 `docs/engineering/landing-page-design-skill.md`。
 
+### 5.7 Anthropic 官方技能（Frontend Design / Web App Testing / Brand Guidelines）
+
+- 技能位于 `.agents/skills/{frontend-design,webapp-testing,brand-guidelines}/`，均为 Apache-2.0，按 RUDA 设计系统改写；清单、许可证矩阵与重复能力分析见 `docs/engineering/anthropic-skills.md`。
+- `frontend-design`：判断界面是否读起来像模板、够不够高级。**它产出判断，不产出新品牌**；不得据此更换字体、配色、圆角或图标库。
+- `brand-guidelines`：确认配色/字体/图标是否越界。**不复制数值**，一律以 `docs/engineering/design-values.md` 为准。商家店铺「黑金 / 电商」模板的强调色只允许存在于该店铺作用域，不得进入全局令牌。
+- `webapp-testing`：用仓库已装的 Playwright 验证真实行为、截图取证、跑模板切换回归。**只能打本地或已确认的测试环境**；禁止对生产做写操作；`INDUSTRY_DEMO_LOGIN_ENABLED` 不得擅自开启。
+- 三个技能与既有技能的分工固定：诊断用 `redesign-existing-projects` / `frontend-design`，取值用 `design-values.md` / `landing-page-design`，验证用 `webapp-testing`，门禁用 `impeccable detect`。
+- 上游被拒绝的技能及原因（含 5 个 source-available 技能不得复制）记录在上述文档，不得私自补装。
+
 ## 6. API、契约和集成铁规
 
 - 新增或变更 API 前，先查是否已有同义 endpoint 和服务能力。
@@ -433,9 +442,13 @@ RUDA 是持续扩展的多端、多商户产品。必须以当前仓库真实结
    | 新建落地页 / 入驻页 / 注册页 / 活动页 / 独立站首页 | `landing-page-design` Part A → Part B | 先收敛诉求与结构，再实现 |
    | 既有页面优化、评审、"很廉价/很 AI/不统一" | `redesign-existing-projects` | 先出诊断清单，再按优先级修复 |
    | 响应式 / 触控问题 | `impeccable` 适配流程 + 390/820/1440 实测 | 静态检查不能替代视口验证 |
+   | 判断界面"像不像模板/够不够高级" | `frontend-design` | 产出判断，不换品牌 |
+   | 确认配色/字体/图标是否越界 | `brand-guidelines` | 数值以 `design-values.md` 为准 |
+   | 验证真实行为、截图、模板切换回归 | `webapp-testing` | 只打本地，禁止生产写操作 |
    | 纯后端任务 | 不强制运行前端设计命令 | — |
 
-4. 技能之间的分工是固定的：`impeccable` 负责工作流与确定性检测，`redesign-existing-projects` 负责既有页面诊断，`landing-page-design` 负责新建转化页的策略与文案。不得在同一任务里用两个技能重复诊断同一页面。
+4. 技能之间的分工是固定的：`impeccable` 负责工作流与确定性检测，`redesign-existing-projects` 负责既有页面诊断，`landing-page-design` 负责新建转化页的策略与文案，`frontend-design` 负责视觉取舍判断，`brand-guidelines` 负责品牌边界，`webapp-testing` 负责真实行为验证。不得在同一任务里用两个技能重复诊断同一页面。
+5. 固定顺序：诊断 → 取值 → 实现 → `webapp-testing` 实测（1440 / 820 / 390 + console/网络错误）→ `impeccable detect` → 截图留证。
 
 ### 16.2 设计约束与实际验收
 

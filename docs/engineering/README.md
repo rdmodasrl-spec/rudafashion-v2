@@ -16,6 +16,7 @@
 - [`impeccable-ui-quality.md`](./impeccable-ui-quality.md)：Impeccable 设计技能与确定性检测器的安装、配置豁免、使用与回滚。
 - [`redesign-skill.md`](./redesign-skill.md)：`redesign-existing-projects` 既有页面审计技能的安装与 RUDA Design Values 改写记录。
 - [`landing-page-design-skill.md`](./landing-page-design-skill.md)：`landing-page-design` 落地页技能的仓库检查、取舍、三技能分工与渐进式优化流程。
+- [`anthropic-skills.md`](./anthropic-skills.md)：Anthropic 官方 19 个技能清单、Apache-2.0 / source-available 许可证矩阵、重复能力分析与三技能适配记录；含商家独立店铺三套模板的验收配方。
 - [`miniprogram-wxml-directives.md`](./miniprogram-wxml-directives.md)：两个小程序的 WXML `wx:if`/`wx:elif`/`wx:else` 相邻性规则、`Bad attr wx:else` 编译错误成因、检查脚本与 2026-10-28 修复记录。
 - [`../admin-business-closure-audit.md`](../admin-business-closure-audit.md)：平台总后台 32 个页面的闭环状态、证据、断点及未完成验证项。
 - [`audit/2026-10-26-full-closure-audit.md`](./audit/2026-10-26-full-closure-audit.md)：全站功能闭环审计（重点营销推广与智能营销）：总后台与商家端的实际接缝、权限缺口、死接口、P0/P1/P2 整改计划与待决策项。与上一条的分工是：上一条只覆盖平台后台页面，本条覆盖跨端业务链路。
@@ -46,7 +47,7 @@
 - `tests/duplication-guards.test.ts` 固定已确认的重复数字/重复入口清理结果，防止商家后台 Web/手机端与生产链概览重新引入同屏重复。
 - `node scripts/check-wxml-directives.mjs` 与 `tests/miniprogram-wxml-directives.test.ts` 检查两个小程序 WXML 条件指令相邻性、`wx:if`+`wx:for` 同元素和标签平衡。
 - `tests/mobile-design-system.test.ts` 固定手机端圆角令牌、按钮/卡片/图标规范、共享样式引入和禁止回退的 44px/整行长按钮。
-- `tests/design-skills-consistency.test.ts` 校验三个前端技能（Impeccable / Redesign / Landing）的 Design Values 与 `design-values.md`、`src/index.css`、`mobile-design-system.css` 不漂移，并拦截被禁用的上游默认值。
+- `tests/design-skills-consistency.test.ts` 校验五个前端技能（Impeccable / Redesign / Landing / Frontend Design / Brand Guidelines / Web App Testing）的 Design Values 与 `design-values.md`、`src/index.css`、`mobile-design-system.css` 不漂移，拦截被禁用的上游默认值，并校验 `.agents` 与 `.claude` 镜像一致、Apache 许可证文件存在。
 - 执行方式：`node --import tsx --test tests/app-target.test.ts tests/admin-navigation.test.ts tests/duplication-guards.test.ts tests/mobile-design-system.test.ts tests/design-skills-consistency.test.ts`。
 - 构建脚本分别写入 `dist/apps/<target>/releases/`；正式发布必须单独调用发布脚本，不将构建成功视为已发布。
 

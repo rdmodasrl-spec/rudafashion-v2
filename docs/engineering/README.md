@@ -19,6 +19,8 @@
 - [`anthropic-skills.md`](./anthropic-skills.md)：Anthropic 官方 19 个技能清单、Apache-2.0 / source-available 许可证矩阵、重复能力分析与三技能适配记录；含商家独立店铺三套模板的验收配方。
 - [`modules/merchant-seven-industry-ui-upgrade.md`](./modules/merchant-seven-industry-ui-upgrade.md)：七行业 Premium UI/UX 升级的第一阶段审计（七行业识别、共享组件清单、24 项能力矩阵 54%、重复与缺口、依赖许可证评估、Batch 0–5 优先级计划与逐行业验收清单）。
 - [`modules/merchant-21-storefront-templates.md`](./modules/merchant-21-storefront-templates.md)：**独立项目 P2-STORE-TEMPLATES** —— 阶段 A 现状审计：现有三套模板实为三套 CSS 皮肤（`storefrontTemplate ===` 出现 0 次）、渲染入口与数据/授权/域名/预览/切换/发布现状、21 套映射、服装两行业保留清单、缺失能力 13 项、依赖许可证实测（Tremor 因 React ^18 拒绝）、阶段 A–D 顺序与 100 分验收表。与 P1-ADMIN-UI 相互独立。
+- [`storefront-design-system.md`](./storefront-design-system.md)：**项目二专用**店铺设计系统（3 种布局骨架、行业视觉方向、商家品牌色作用域与对比度规则、图片规范、响应式基线、组件清单）。
+- [`design-skills-registry.md`](./design-skills-registry.md)：6 个已安装设计/测试技能的来源、版本、上游提交号、许可证分类（MIT / Apache-2.0 / 商用 / source-available）、调用条件与适配内容，以及被拒绝安装的资源清单。
 - [`miniprogram-wxml-directives.md`](./miniprogram-wxml-directives.md)：两个小程序的 WXML `wx:if`/`wx:elif`/`wx:else` 相邻性规则、`Bad attr wx:else` 编译错误成因、检查脚本与 2026-10-28 修复记录。
 - [`../admin-business-closure-audit.md`](../admin-business-closure-audit.md)：平台总后台 32 个页面的闭环状态、证据、断点及未完成验证项。
 - [`audit/2026-10-26-full-closure-audit.md`](./audit/2026-10-26-full-closure-audit.md)：全站功能闭环审计（重点营销推广与智能营销）：总后台与商家端的实际接缝、权限缺口、死接口、P0/P1/P2 整改计划与待决策项。与上一条的分工是：上一条只覆盖平台后台页面，本条覆盖跨端业务链路。

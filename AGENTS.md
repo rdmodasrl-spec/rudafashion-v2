@@ -253,6 +253,20 @@ RUDA 是持续扩展的多端、多商户产品。必须以当前仓库真实结
 - 三个技能与既有技能的分工固定：诊断用 `redesign-existing-projects` / `frontend-design`，取值用 `design-values.md` / `landing-page-design`，验证用 `webapp-testing`，门禁用 `impeccable detect`。
 - 上游被拒绝的技能及原因（含 5 个 source-available 技能不得复制）记录在上述文档，不得私自补装。
 
+### 5.8 商家私人网站（项目二）的技能与设计规则
+
+- 设计基线：`docs/engineering/storefront-design-system.md`（布局骨架、行业方向、色彩与授权规则、响应式基线）。**不得用后台组件充当网站模板**，也不得把网站模板的布局套回后台。
+- 技能调用（技能注册表见 `docs/engineering/design-skills-registry.md`）：
+  - 结构与叙事 → `.agents/skills/landing-page-design/`
+  - 视觉取舍与反模板判断 → `.agents/skills/frontend-design/`
+  - 配色/字体是否越界 → `.agents/skills/brand-guidelines/`
+  - 既有 6 套服装模板 → 只用 `.agents/skills/redesign-existing-projects/` 诊断，不得替换
+  - 浏览器验收 → `.agents/skills/webapp-testing/`（预览、切换、授权、三档视口、console 与失败请求）
+  - 门禁 → `.agents/skills/impeccable/scripts/impeccable detect`
+- 商家品牌色只允许在 `data-storefront-template` / 店铺根作用域生效，且正文对比度 ≥4.5:1；不得写入全局令牌。
+- 授权过滤必须在数据装配层完成，模板只能接收已过滤数据；未授权不得泄漏授权商品的图片、价格、SKU、库存。
+- 无 `webapp-testing` 截图与操作记录的模板，一律视为未验收；未达 90 分标记为未通过，不得用「基本完成」代替。
+
 ## 6. API、契约和集成铁规
 
 - 新增或变更 API 前，先查是否已有同义 endpoint 和服务能力。
@@ -428,7 +442,7 @@ RUDA 是持续扩展的多端、多商户产品。必须以当前仓库真实结
 - 七行业 UI 品质升级的审计基线、24 项能力矩阵与 Batch 0–5 计划维护在 `docs/engineering/modules/merchant-seven-industry-ui-upgrade.md`；每批完成后必须更新该文档的进度与覆盖率，不允许只升级共享组件就声称行业已完成。
 - **两个独立项目，不得混用验收**：
   - `P1-ADMIN-UI`（商家后台七行业 UI 高级化）→ `docs/engineering/modules/merchant-seven-industry-ui-upgrade.md`，Batch 0–5。
-  - `P2-STORE-TEMPLATES`（七行业 21 套商家私人网站模板）→ `docs/engineering/modules/merchant-21-storefront-templates.md`，Batch S0–S5。
+  - `P2-STORE-TEMPLATES`（七行业 21 套商家私人网站模板）→ `docs/engineering/modules/merchant-21-storefront-templates.md`，阶段 A–D；设计基线见 `docs/engineering/storefront-design-system.md`。
   - 两者共享商家身份、商品/库存/价格/订单/域名/授权 API，但表现层、文档、提交、验收完全分开；任一项目的完成度不得用于替代另一项目的验收。
 
 ## 16. 前端任务自动调用 Impeccable（强制规范）

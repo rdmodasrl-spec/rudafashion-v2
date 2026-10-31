@@ -5,7 +5,7 @@
 - 范围：`merchant-admin-web`、`merchant-admin-mobile`、`merchant-admin-common`、`merchant-admin-industries`、`merchant-miniprogram`（商家端）
 - 上游规则：`AGENTS.md` §5（UI 铁规）、§15.3（三端联动）、§15.5（七行业 UI 锁定）、§16（技能调用）
 - 项目编号：**P1-ADMIN-UI**
-- **项目边界**：本文件只覆盖「商家后台」的七个行业 UI/UX 高级化。商家私人独立网站的 21 套模板是**另一个独立项目**（`P2-STORE-TEMPLATES`，见 `merchant-storefront-21-templates.md`），Batch 0–5 不含任何网站模板任务，两个项目的验收不可互相替代。
+- **项目边界**：本文件只覆盖「商家后台」的七个行业 UI/UX 高级化。商家私人独立网站的 21 套模板是**另一个独立项目**（`P2-STORE-TEMPLATES`，见 `merchant-21-storefront-templates.md`），Batch 0–5 不含任何网站模板任务，两个项目的验收不可互相替代。
 
 ---
 

@@ -7,6 +7,8 @@ export type UiCopyCatalogEntry = {
 };
 
 const UI_COPY_SOURCE_PAIRS: ReadonlyArray<{ zh: string; it: string }> = [
+  { zh: "起订 {0} 件", it: "Min. {0} pz" },
+  { zh: "价格面议", it: "Prezzo su richiesta" },
   { zh: "首页", it: "Home" },
   { zh: "商品", it: "Prodotti" },
   { zh: "订单", it: "Ordini" },

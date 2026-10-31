@@ -118,6 +118,7 @@ Scan → Diagnose → Prioritize → Improve → Verify
 | 商品卡文案 | `EditorialProduct` 补渲染商家名、商品名、批发价、起订量（复用 CSS 中已有但未使用的 `__details/__brand/__name/__price/__moq`） | 审计 #3：首页商品卡零文字 |
 | 手机端间距 | 中等块 `gap: 10px 4px` → `24px 10px` | 审计 #1 的移动端表现 |
 | 字号底线 | 卡片商家名 12px、商品名 14px、起订量 12px（原 9/12/10px） | 审计 #5：8–11px 泛滥 |
+| 文案兜底 | `getLocalizedProductName` 清理 `【】〔〕[]`，清空后回落 `Articolo RUDA`；价格 ≤0 时显示「价格面议 / Prezzo su richiesta」 | 上线后发现 demo 商品渲染成 `【】 | €0.00`，属既有 i18n 清理漏洞 |
 | 主导航 | `Header` 导航项 `text-[10px] tracking-[0.16em]` → `text-xs tracking-[0.08em]` + `pt-1`（命中区 ≥24px） | 审计 #4 / 触控目标 |
 
 验证（本地 `PORT=4100 npm run dev`，真实数据库只读）：

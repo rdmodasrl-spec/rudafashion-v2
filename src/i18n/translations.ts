@@ -710,7 +710,10 @@ export function getLocalizedProductName(
       return match[1].trim();
     }
     // Remove Chinese characters when an Italian source value is not available.
-    const cleaned = product.name.replace(/[\u4e00-\u9fa5]/g, '').replace(/[()（）]/g, '').trim();
+    const cleaned = product.name
+      .replace(/[\u4e00-\u9fa5]/g, '')
+      .replace(/[()（）【】〔〕[\]]/g, '')
+      .trim();
     return cleaned || (/\p{Script=Han}/u.test(product.name) ? 'Articolo RUDA' : product.name);
   } else {
     if (product.name_zh) return product.name_zh;

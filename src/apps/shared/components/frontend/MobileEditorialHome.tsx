@@ -200,7 +200,11 @@ export const MobileEditorialHome: React.FC = () => {
       lang={lang}
       onOpen={quickNavigateToProduct}
       size={size}
-      priceLabel={`€${calculateCustomerPrice(product.wholesalePrice).toFixed(2)}`}
+      priceLabel={
+        calculateCustomerPrice(product.wholesalePrice) > 0
+          ? `€${calculateCustomerPrice(product.wholesalePrice).toFixed(2)}`
+          : localizeCopy('价格面议', 'Prezzo su richiesta')
+      }
       moqLabel={localizeCopy(`起订 ${product.moq} 件`, `Min. ${product.moq} pz`)}
     />
   );

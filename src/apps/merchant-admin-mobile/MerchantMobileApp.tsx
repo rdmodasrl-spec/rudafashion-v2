@@ -2421,11 +2421,11 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
                     <ProductImage src={product.images[0]} alt={product.name} contain className="h-11 w-11 shrink-0 rounded-md bg-neutral-50" />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-xs font-medium text-neutral-900">{product.styleNo}</span>
-                      <span className="mt-0.5 block truncate text-xs text-neutral-500">{product.name}</span>
+                      <span className="mt-0.5 block truncate text-xs text-neutral-700">{product.name}</span>
                     </span>
                     <span className="shrink-0 text-right">
                       <span className="block text-xs font-medium tabular-nums text-neutral-900">€{product.wholesalePrice.toFixed(2)}</span>
-                      <span className="mt-0.5 block text-xs text-neutral-500">{available} {mobileText('件', 'pz')}</span>
+                      <span className="mt-0.5 block text-xs text-neutral-600">{available} {mobileText('件', 'pz')}</span>
                     </span>
                   </button>;
                 })}

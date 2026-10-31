@@ -4520,7 +4520,7 @@ export const MerchantPortal: React.FC<{
     <div id="merchant-web-layout" className={`merchant-web-layout mx-auto grid min-h-screen w-full max-w-none grid-cols-1 gap-0 lg:gap-0 ${activeTab === 'settings' ? 'lg:grid-cols-1' : assistantPanelOpen && !assistantPanelExpanded ? 'lg:grid-cols-[192px_minmax(0,1fr)_360px]' : 'lg:grid-cols-[192px_minmax(0,1fr)]'}`}>
       <header className="merchant-web-topbar sticky top-0 z-50 col-span-full flex h-14 items-center gap-3 bg-neutral-950 px-3 text-white shadow-sm sm:px-5">
         <div className="flex w-auto min-w-0 shrink-0 items-center gap-2 sm:w-[204px]">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white text-[11px] font-black text-neutral-950">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white text-xs font-semibold text-neutral-950">
             {(merchantCompanyName.charAt(0) || 'R').toUpperCase()}
           </span>
           <span
@@ -4571,7 +4571,7 @@ export const MerchantPortal: React.FC<{
                     <ResultIcon className="h-4 w-4 shrink-0 text-neutral-500" />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-xs font-semibold text-neutral-800">{result.title}</span>
-                      <span className="mt-0.5 block truncate text-[10px] text-neutral-500">{result.detail}</span>
+                      <span className="mt-0.5 block truncate text-xs text-neutral-600">{result.detail}</span>
                     </span>
                   </button>
                 );
@@ -4617,7 +4617,7 @@ export const MerchantPortal: React.FC<{
             </div>
             {dashboardNavIsExpanded && <button type="button" id="merchant-sidebar-growth-analytics" onClick={openMerchantAnalytics} className={settingsSubItemClass(activeTab === 'dashboard' && dashboardNavSection === 'analytics')}><BarChart3 className="h-3.5 w-3.5" />{localizeCopy('经营分析', 'Analisi')}</button>}
             <div className="flex items-center gap-1">
-              <button type="button" id="merchant-sidebar-tab-orders" onClick={() => { openSidebarNav('orders'); setActiveTab('orders'); }} className={`${navItemClass(activeTab === 'orders')} flex-1`}><Truck className="h-4 w-4" />{localizeCopy('订单履约', 'Ordini')}{orderActionCount > 0 && <span className="ml-auto min-w-5 rounded-full bg-neutral-200 px-1.5 py-0.5 text-center text-[10px] font-bold text-neutral-800">{orderActionCount > 99 ? '99+' : orderActionCount}</span>}</button>
+              <button type="button" id="merchant-sidebar-tab-orders" onClick={() => { openSidebarNav('orders'); setActiveTab('orders'); }} className={`${navItemClass(activeTab === 'orders')} flex-1`}><Truck className="h-4 w-4" />{localizeCopy('订单履约', 'Ordini')}{orderActionCount > 0 && <span className="ml-auto min-w-5 rounded-full bg-neutral-200 px-1.5 py-0.5 text-center text-xs font-semibold text-neutral-800">{orderActionCount > 99 ? '99+' : orderActionCount}</span>}</button>
               <button type="button" aria-label={orderNavIsExpanded ? '收起订单菜单' : '展开订单菜单'} aria-expanded={orderNavIsExpanded} onClick={() => toggleSidebarNav('orders')} className="rounded-lg p-2 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"><ChevronDown className={`h-3.5 w-3.5 transition-transform ${orderNavIsExpanded ? 'rotate-180' : ''}`} /></button>
             </div>
             {orderNavIsExpanded && <div className="ml-3 mt-1 space-y-0.5 border-l border-neutral-200 pl-2">
@@ -4649,7 +4649,7 @@ export const MerchantPortal: React.FC<{
           </div>
           <div>
             <div className="flex items-center gap-1">
-              <button type="button" id="merchant-sidebar-tab-customers" onClick={() => { openSidebarNav('customers'); setActiveTab('customers'); }} className={`${navItemClass(customerNavIsActive)} flex-1`}><UserCheck className="h-4 w-4" />{localizeCopy('客户管理', 'Clienti')}{pendingVaultCount > 0 && <span className="ml-auto min-w-5 rounded-full bg-neutral-200 px-1.5 py-0.5 text-center text-[10px] font-bold text-neutral-800">{pendingVaultCount > 99 ? '99+' : pendingVaultCount}</span>}</button>
+              <button type="button" id="merchant-sidebar-tab-customers" onClick={() => { openSidebarNav('customers'); setActiveTab('customers'); }} className={`${navItemClass(customerNavIsActive)} flex-1`}><UserCheck className="h-4 w-4" />{localizeCopy('客户管理', 'Clienti')}{pendingVaultCount > 0 && <span className="ml-auto min-w-5 rounded-full bg-neutral-200 px-1.5 py-0.5 text-center text-xs font-semibold text-neutral-800">{pendingVaultCount > 99 ? '99+' : pendingVaultCount}</span>}</button>
               <button type="button" aria-label={customerNavIsExpanded ? '收起客户菜单' : '展开客户菜单'} aria-expanded={customerNavIsExpanded} onClick={() => toggleSidebarNav('customers')} className="rounded-lg p-2 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"><ChevronDown className={`h-3.5 w-3.5 transition-transform ${customerNavIsExpanded ? 'rotate-180' : ''}`} /></button>
             </div>
             {customerNavIsExpanded && <button type="button" id="merchant-sidebar-tab-vault" onClick={() => setActiveTab('vault_requests')} className={`${settingsSubItemClass(activeTab === 'vault_requests')} relative`}><Lock className="h-3.5 w-3.5" />{localizeCopy('授权申请', 'Richieste private')}{pendingVaultCount > 0 && <span className="ml-auto min-w-5 rounded-full bg-neutral-200 px-1.5 py-0.5 text-center text-[10px] font-bold text-neutral-800">{pendingVaultCount > 99 ? '99+' : pendingVaultCount}</span>}</button>}
@@ -4906,7 +4906,7 @@ export const MerchantPortal: React.FC<{
                         <Package className="h-4 w-4 shrink-0 text-neutral-500" aria-hidden="true" />
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-xs font-semibold text-neutral-800">{product.styleNo} · {product.name_zh || product.name}</span>
-                          <span className="mt-0.5 block truncate text-[10px] text-neutral-500">{product.skus.map(sku => sku.sku).filter(Boolean).join(' · ')}</span>
+                          <span className="mt-0.5 block truncate text-xs text-neutral-600">{product.skus.map(sku => sku.sku).filter(Boolean).join(' · ')}</span>
                         </span>
                       </button>) : <p className="px-4 py-3 text-xs text-neutral-500">没有匹配的商品或 SKU</p>}
                   </div>}
@@ -4959,7 +4959,7 @@ export const MerchantPortal: React.FC<{
                   </div>
                   {merchantProducts.length ? (
                     <div>
-                      <div className="grid grid-cols-[minmax(0,1.7fr)_minmax(70px,0.8fr)_minmax(72px,0.7fr)_minmax(66px,0.7fr)] gap-2 rounded-md bg-neutral-50 px-2 py-2 text-[10px] font-medium text-neutral-500">
+                      <div className="grid grid-cols-[minmax(0,1.7fr)_minmax(70px,0.8fr)_minmax(72px,0.7fr)_minmax(66px,0.7fr)] gap-2 rounded-md bg-neutral-50 px-2 py-2 text-xs font-medium text-neutral-600">
                         <span>商品</span><span>款号</span><span className="text-right">批发价</span><span className="text-right">可售数量</span>
                       </div>
                       <div className="divide-y divide-neutral-100">
@@ -4980,7 +4980,7 @@ export const MerchantPortal: React.FC<{
                               />
                               <span className="min-w-0">
                                 <span className="block truncate text-xs font-medium text-neutral-900">{product.name_zh || product.name}</span>
-                                <span className="mt-0.5 block truncate text-[10px] text-neutral-500">
+                                <span className="mt-0.5 block truncate text-xs text-neutral-600">
                                   {[...new Set(product.skus.map(sku => sku.color).filter(Boolean))].join('/') || '—'}
                                   {' · '}
                                   {[...new Set(product.skus.map(sku => sku.size).filter(Boolean))].join('/') || '—'}
@@ -5027,7 +5027,7 @@ export const MerchantPortal: React.FC<{
                     {lowStockTrimCount > 0 && <button type="button" onClick={() => setActiveTab('materials')} className="flex min-h-[72px] w-full items-center justify-between rounded-lg border border-neutral-100 px-4 text-left text-sm hover:bg-neutral-50">
                       <span className="text-neutral-700">辅料预警</span><span className="flex items-center gap-3"><strong className="tabular-nums text-neutral-900">{lowStockTrimCount}</strong><ArrowRight className="h-4 w-4 text-neutral-400" aria-hidden="true" /></span>
                     </button>}
-                    {inventoryAlerts.slice(0, 3).map(alert => <p key={`${alert.type}-${alert.message}`} className="border-t border-neutral-100 pt-2 text-[11px] text-neutral-600">{alert.message}</p>)}
+                    {inventoryAlerts.slice(0, 3).map(alert => <p key={`${alert.type}-${alert.message}`} className="border-t border-neutral-100 pt-2 text-xs text-neutral-600">{alert.message}</p>)}
                     {!actionableOrderCount && !lowStockSkuCount && !lowStockFabricCount && !lowStockTrimCount && !inventoryAlerts.length && (
                       <p className="flex flex-1 items-center py-2 text-sm text-neutral-500">暂无待办</p>
                     )}

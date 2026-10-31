@@ -176,7 +176,7 @@ export function MerchantGlobalSearch({
                 : <span className="h-8 w-8 shrink-0 rounded-md bg-neutral-100" aria-hidden="true" />}
               <span className="min-w-0 flex-1">
                 <span className={`block truncate text-xs font-semibold ${dark ? 'text-white' : 'text-neutral-900'}`}>{result.title}</span>
-                <span className="mt-0.5 block truncate text-[10px] text-neutral-500">{result.code}</span>
+                <span className="mt-0.5 block truncate text-xs text-neutral-600">{result.code}</span>
               </span>
             </button>
           )) : (

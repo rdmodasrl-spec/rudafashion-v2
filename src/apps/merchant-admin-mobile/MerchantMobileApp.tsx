@@ -2128,7 +2128,7 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
                 }`}
               >
                 <Icon className="h-[18px] w-[18px]" strokeWidth={isActive ? 2.2 : 1.8} aria-hidden="true" />
-                <span className={`truncate text-[10px] leading-3 ${isActive ? 'font-bold' : 'font-medium'}`}>{mobileText(tab.zh, tab.it)}</span>
+                <span className={`truncate text-xs leading-4 ${isActive ? 'font-bold' : 'font-medium'}`}>{mobileText(tab.zh, tab.it)}</span>
                 {tab.badge !== undefined && (
                   <span className="absolute right-1 top-0 min-w-[17px] rounded-full bg-rose-500 px-1 text-center text-[9px] font-black text-white">
                     {tab.badge > 99 ? '99+' : tab.badge}
@@ -2366,7 +2366,7 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
                   <span className={`ruda-home-quick-action-icon grid h-8 w-8 place-items-center rounded-lg ${item.featured ? 'bg-neutral-950 text-white' : 'bg-neutral-100 text-neutral-700'}`}>
                     <Icon className="h-4 w-4" strokeWidth={1.8} aria-hidden="true" />
                   </span>
-                  <span className="max-w-full truncate text-[10px] font-medium leading-3 tracking-tight">{item.label}</span>
+                  <span className="max-w-full truncate text-xs font-medium leading-4 tracking-tight">{item.label}</span>
                 </>
               );
               return item.href
@@ -2394,15 +2394,15 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
           <div className="space-y-4">
             <section className="ruda-home-stat-grid grid grid-cols-3 gap-2">
               <div className="ruda-home-surface ruda-home-enter rounded-xl border px-2.5 py-3">
-                <span className="block truncate text-[11px] text-neutral-500">{mobileText('商品', 'Prodotti')}</span>
+                <span className="block truncate text-xs text-neutral-600">{mobileText('商品', 'Prodotti')}</span>
                 <strong className="mt-1 block text-[21px] font-semibold leading-6 tabular-nums tracking-tight text-neutral-950">{merchantProducts.length}</strong>
               </div>
               <div className="ruda-home-surface ruda-home-enter rounded-xl border px-2.5 py-3">
-                <span className="block truncate text-[11px] text-neutral-500">{mobileText('SKU 现货', 'Disponibili')}</span>
+                <span className="block truncate text-xs text-neutral-600">{mobileText('SKU 现货', 'Disponibili')}</span>
                 <strong className="mt-1 block text-[21px] font-semibold leading-6 tabular-nums tracking-tight text-neutral-950">{availableProductStock.toLocaleString(getIntlLocale(lang))}</strong>
               </div>
               <div className="ruda-home-surface ruda-home-enter rounded-xl border px-2.5 py-3">
-                <span className="block truncate text-[11px] text-neutral-500">{mobileText('待处理订单', 'Ordini aperti')}</span>
+                <span className="block truncate text-xs text-neutral-600">{mobileText('待处理订单', 'Ordini aperti')}</span>
                 <strong className="mt-1 block text-[21px] font-semibold leading-6 tabular-nums tracking-tight text-neutral-950">{orderActionCount}</strong>
               </div>
             </section>
@@ -2474,11 +2474,11 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
               </div>
               <div className="grid grid-cols-2 gap-2.5 p-4">
                 <div className={`rounded-2xl p-3.5 ${lowMaterialCount ? 'bg-rose-50 border border-rose-100' : 'bg-emerald-50 border border-emerald-100'}`}>
-                  <span className={`block text-[10px] font-medium ${lowMaterialCount ? 'text-rose-500' : 'text-emerald-600'}`}>{mobileText('物料预警', 'Materiali')}</span>
+                  <span className={`block text-xs font-medium ${lowMaterialCount ? 'text-rose-600' : 'text-emerald-700'}`}>{mobileText('物料预警', 'Materiali')}</span>
                   <strong className={`mt-1 block text-[22px] font-black ${lowMaterialCount ? 'text-rose-700' : 'text-emerald-700'}`}>{lowMaterialCount}</strong>
                 </div>
                 <div className="rounded-2xl p-3.5 bg-indigo-50 border border-indigo-100">
-                  <span className="block text-[10px] font-medium text-indigo-500">{mobileText('进行工单', 'Lavori')}</span>
+                  <span className="block text-xs font-medium text-indigo-600">{mobileText('进行工单', 'Lavori')}</span>
                   <strong className="mt-1 block text-[22px] font-black text-indigo-700">{activeWorkOrders.length}</strong>
                 </div>
               </div>
@@ -2544,7 +2544,7 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
                 </div>}
               </div>
               {factoryMaterials.length === 0 && factoryWorkOrders.length === 0 && !factoryLoading && (
-                <div className="border-t border-neutral-100 px-4 py-4 text-[11px] text-neutral-400 text-center">{mobileText('暂无生产数据', 'Nessun dato produzione')}</div>
+                <div className="border-t border-neutral-100 px-4 py-4 text-xs text-neutral-500 text-center">{mobileText('暂无生产数据', 'Nessun dato produzione')}</div>
               )}
               </div>
             </details>

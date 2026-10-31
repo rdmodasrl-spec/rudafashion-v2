@@ -32,6 +32,7 @@ const LazyModaGptPublicStudio = lazy(() => import('./components/frontend/ModaGpt
 const LazyPurchaseOrderView = lazy(() => import('./components/frontend/PurchaseOrderView').then(m => ({ default: m.PurchaseOrderView })));
 const LazyOrdersView = lazy(() => import('./components/frontend/OrdersView').then(m => ({ default: m.OrdersView })));
 const LazyOrderCenterView = lazy(() => import('./components/frontend/OrderCenterView').then(m => ({ default: m.OrderCenterView })));
+const LazyStorefrontPreview = lazy(() => import('./components/storefront/StorefrontPreview').then(m => ({ default: m.StorefrontPreview })));
 
 // ---- NEW: Consumer (C端零售)
 const LazyConsumerStore = lazy(() => import('./components/consumer/ConsumerStore').then(m => ({ default: m.ConsumerStore })));
@@ -479,6 +480,23 @@ const MainContent: React.FC = () => {
         <PlatformSupportWidget />
         <NotificationToasts />
       </div>
+    );
+  }
+
+  // ================= 店铺模板隔离预览（Stage B，仅带 storefrontPreview 参数时生效） =================
+  const previewTemplateId = typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search).get('storefrontPreview')
+    : null;
+  if (previewTemplateId) {
+    const previewMerchantId = new URLSearchParams(window.location.search).get('merchant');
+    return (
+      <Suspense fallback={<LoadingFallback label="加载模板预览..." />}>
+        <LazyStorefrontPreview
+          templateId={previewTemplateId}
+          merchantId={previewMerchantId}
+          demoFill={new URLSearchParams(window.location.search).get('demo') === '1'}
+        />
+      </Suspense>
     );
   }
 

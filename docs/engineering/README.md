@@ -20,6 +20,7 @@
 - [`modules/merchant-seven-industry-ui-upgrade.md`](./modules/merchant-seven-industry-ui-upgrade.md)：七行业 Premium UI/UX 升级的第一阶段审计（七行业识别、共享组件清单、24 项能力矩阵 54%、重复与缺口、依赖许可证评估、Batch 0–5 优先级计划与逐行业验收清单）。
 - [`modules/merchant-21-storefront-templates.md`](./modules/merchant-21-storefront-templates.md)：**独立项目 P2-STORE-TEMPLATES** —— 阶段 A 现状审计：现有三套模板实为三套 CSS 皮肤（`storefrontTemplate ===` 出现 0 次）、渲染入口与数据/授权/域名/预览/切换/发布现状、21 套映射、服装两行业保留清单、缺失能力 13 项、依赖许可证实测（Tremor 因 React ^18 拒绝）、阶段 A–D 顺序与 100 分验收表。与 P1-ADMIN-UI 相互独立。
 - [`storefront-design-system.md`](./storefront-design-system.md)：**项目二专用**店铺设计系统（3 种布局骨架、行业视觉方向、商家品牌色作用域与对比度规则、图片规范、响应式基线、组件清单）。
+- [`modules/merchant-21-storefront-stage-b.md`](./modules/merchant-21-storefront-stage-b.md)：**项目二阶段 B 进度** —— 箱包三套结构型模板（编辑版/目录版/电商版）的实现范围、真实数据与授权、隔离预览入口、真实浏览器验证结果、自评分数（75/76/80，未达 90，判为未通过）与下一轮缺口。
 - [`design-skills-registry.md`](./design-skills-registry.md)：6 个已安装设计/测试技能的来源、版本、上游提交号、许可证分类（MIT / Apache-2.0 / 商用 / source-available）、调用条件与适配内容，以及被拒绝安装的资源清单。
 - [`miniprogram-wxml-directives.md`](./miniprogram-wxml-directives.md)：两个小程序的 WXML `wx:if`/`wx:elif`/`wx:else` 相邻性规则、`Bad attr wx:else` 编译错误成因、检查脚本与 2026-10-28 修复记录。
 - [`../admin-business-closure-audit.md`](../admin-business-closure-audit.md)：平台总后台 32 个页面的闭环状态、证据、断点及未完成验证项。

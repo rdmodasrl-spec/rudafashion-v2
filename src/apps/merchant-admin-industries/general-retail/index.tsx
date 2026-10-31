@@ -64,7 +64,7 @@ export const GeneralRetailWorkspace: React.FC<IndustryWorkspaceModuleProps> = ({
       </SectionCard>
       <div className="grid gap-3 lg:grid-cols-2">
         <RecentIndustryOrders orders={workspace.orders} title="最近订单" onOpenOrders={() => setActive('orders')} />
-        <IndustryLowStock balances={workspace.inventory.items} title="零售库存预警" />
+        <IndustryLowStock balances={workspace.inventory.items} title="零售库存预警" loading={workspace.inventory.loading} />
       </div>
     </div>
   );

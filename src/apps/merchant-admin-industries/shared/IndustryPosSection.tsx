@@ -434,7 +434,7 @@ export const IndustryPosSection: React.FC<{
                   <input className={inputClass} inputMode="decimal" placeholder="实存现金" value={closingCash} onChange={event => setClosingCash(event.target.value)} />
                   <input className={inputClass} maxLength={500} placeholder="交班备注（可留空）" value={closingNote} onChange={event => setClosingNote(event.target.value)} />
                 </div>
-                <p className="text-[11px] text-neutral-500">差异 = 实存现金 − 应存现金，交班后不可再修改。</p>
+                <p className="text-xs text-neutral-600">差异 = 实存现金 − 应存现金，交班后不可再修改。</p>
                 <Button variant="primary" busy={shiftBusy} onClick={() => void submitCloseShift()}>确认交班</Button>
               </div>
             </div>
@@ -482,7 +482,7 @@ export const IndustryPosSection: React.FC<{
                 >
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-semibold text-neutral-950">{product.name}</span>
-                    <span className="mt-0.5 block text-[11px] text-neutral-500">{product.styleNo}{sku ? ` · ${sku.sku}` : ''}</span>
+                    <span className="mt-0.5 block text-xs text-neutral-600">{product.styleNo}{sku ? ` · ${sku.sku}` : ''}</span>
                   </span>
                   <span className="shrink-0 text-sm font-semibold tabular-nums">{formatMoney(retailPrice(product))}</span>
                 </button>
@@ -499,7 +499,7 @@ export const IndustryPosSection: React.FC<{
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate text-xs font-semibold text-neutral-900">{line.name}</p>
-                    <p className="text-[11px] text-neutral-500">{line.code} · {line.sku}</p>
+                    <p className="text-xs text-neutral-600">{line.code} · {line.sku}</p>
                   </div>
                   <button type="button" onClick={() => setQuantity(line, 0)} aria-label={`移除 ${line.name}`} className="text-neutral-400 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>
                 </div>
@@ -548,7 +548,7 @@ export const IndustryPosSection: React.FC<{
               <span className="text-xl font-bold tabular-nums">{formatMoney(netTotal)}</span>
             </div>
             <Button variant="primary" className="w-full" busy={busy} onClick={() => void checkout()} disabled={!shift}>完成结算</Button>
-            <p className="text-[11px] text-neutral-500">
+            <p className="text-xs text-neutral-600">
               {shift ? '现金与刷卡由门店线下完成；系统记录销售单、库存变化与班次现金。' : '请先在「班次与现金」开班后再结算。'}
             </p>
           </div>
@@ -575,7 +575,7 @@ export const IndustryPosSection: React.FC<{
               align: 'right',
               render: sale => sale.returnable ? (
                 <Button size="sm" variant="secondary" onClick={() => openReturn(sale)}><Undo2 className="h-3.5 w-3.5" />退货</Button>
-              ) : <span className="text-[11px] text-neutral-400">{sale.source === 'legacy' ? '历史单不支持退货' : '不可退'}</span>
+              ) : <span className="text-xs text-neutral-500">{sale.source === 'legacy' ? '历史单不支持退货' : '不可退'}</span>
             }
           ]}
         />
@@ -601,7 +601,7 @@ export const IndustryPosSection: React.FC<{
                   <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg border border-neutral-200 p-2.5 text-xs">
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-neutral-900">{item.productName}</p>
-                      <p className="text-[11px] text-neutral-500">{item.sku} · 可退 {max} · {formatMoney(item.unitPrice)}</p>
+                      <p className="text-xs text-neutral-600">{item.sku} · 可退 {max} · {formatMoney(item.unitPrice)}</p>
                     </div>
                     <input
                       type="number"

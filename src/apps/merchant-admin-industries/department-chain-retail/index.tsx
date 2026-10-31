@@ -84,7 +84,7 @@ export const DepartmentChainRetailWorkspace: React.FC<IndustryWorkspaceModulePro
       </SectionCard>
       <div className="grid gap-3 lg:grid-cols-2">
         <RecentIndustryOrders orders={workspace.orders} title="最近门店订单" onOpenOrders={() => setActive('orders')} />
-        <IndustryLowStock balances={workspace.inventory.items} title="总部库存预警" threshold={10} />
+        <IndustryLowStock balances={workspace.inventory.items} title="总部库存预警" threshold={10} loading={workspace.inventory.loading} />
       </div>
     </div>
   );

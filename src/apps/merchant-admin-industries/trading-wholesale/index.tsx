@@ -44,10 +44,10 @@ function TradingDashboard({ workspace, capability, onNavigate }: {
         </div>
       </SectionCard>
       <div className="grid gap-3 lg:grid-cols-2">
-        <RecentPurchaseOrders orders={workspace.purchaseOrders.items} title="最近采购单" onOpen={() => onNavigate('procurement')} />
+        <RecentPurchaseOrders orders={workspace.purchaseOrders.items} title="最近采购单" onOpen={() => onNavigate('procurement')} loading={workspace.purchaseOrders.loading} />
         <RecentIndustryOrders orders={workspace.orders} title="最近批发销售" onOpenOrders={() => onNavigate('orders')} />
       </div>
-      <IndustryLowStock balances={workspace.inventory.items} title="可售库存预警" />
+      <IndustryLowStock balances={workspace.inventory.items} title="可售库存预警" loading={workspace.inventory.loading} />
       {!capability.features.stores ? (
         <p className="text-xs text-neutral-500">贸易批发不包含多门店库存与调拨；如需门店经营请使用百货连锁店后台。</p>
       ) : null}

@@ -52,9 +52,9 @@ export const DepartmentWholesaleWorkspace: React.FC<IndustryWorkspaceModuleProps
       </SectionCard>
       <div className="grid gap-3 lg:grid-cols-2">
         <RecentIndustryOrders orders={workspace.orders} title="最近批发订单" onOpenOrders={() => setActive('orders')} />
-        <RecentPurchaseOrders orders={workspace.purchaseOrders.items} title="待跟进采购单" onOpen={() => setActive('procurement')} />
+        <RecentPurchaseOrders orders={workspace.purchaseOrders.items} title="待跟进采购单" onOpen={() => setActive('procurement')} loading={workspace.purchaseOrders.loading} />
       </div>
-      <IndustryLowStock balances={workspace.inventory.items} title="仓储库存预警" threshold={10} />
+      <IndustryLowStock balances={workspace.inventory.items} title="仓储库存预警" threshold={10} loading={workspace.inventory.loading} />
     </div>
   );
 

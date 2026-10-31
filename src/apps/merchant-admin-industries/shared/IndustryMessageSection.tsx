@@ -60,8 +60,8 @@ export const IndustryMessageSection: React.FC<{
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <StatusPill tone={notification.readAt ? 'neutral' : 'warning'}>{notification.readAt ? '已读' : '未读'}</StatusPill>
-                      <span className="text-[11px] font-semibold text-neutral-500">{kindLabels[kind] || '其他'}</span>
-                      <span className="text-[11px] text-neutral-400">{formatDate(notification.createdAt)}</span>
+                      <span className="text-xs font-semibold text-neutral-600">{kindLabels[kind] || '其他'}</span>
+                      <span className="text-xs text-neutral-500">{formatDate(notification.createdAt)}</span>
                     </div>
                     <p className="mt-1 text-sm font-semibold text-neutral-950">{text.title || notification.eventType}</p>
                     {text.message ? <p className="mt-1 text-xs leading-5 text-neutral-600">{text.message}</p> : null}
@@ -89,7 +89,7 @@ export const IndustryMessageSection: React.FC<{
             })}
           </ul>
         )}
-        <p className="mt-3 inline-flex items-center gap-1 text-[11px] text-neutral-500"><BellRing className="h-3.5 w-3.5" />通知由服务端按商家会话隔离，不会显示其他商家消息。</p>
+        <p className="mt-3 inline-flex items-center gap-1 text-xs text-neutral-600"><BellRing className="h-3.5 w-3.5" />通知由服务端按商家会话隔离，不会显示其他商家消息。</p>
       </SectionCard>
     </div>
   );

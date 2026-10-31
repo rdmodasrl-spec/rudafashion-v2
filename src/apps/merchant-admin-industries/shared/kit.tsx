@@ -5,6 +5,7 @@
  * 行业差异由各行业 manifest / 页面表达。
  */
 import React from 'react';
+import { ShieldAlert } from 'lucide-react';
 import { ChevronLeft, ChevronRight, Loader2, Search, X } from 'lucide-react';
 
 export function formatMoney(value: number | string | null | undefined): string {
@@ -155,6 +156,36 @@ export function DataTable<T>({ columns, rows, rowKey, emptyText, minWidth = 720,
     </div>
   );
 }
+
+export const Skeleton: React.FC<{ className?: string }> = ({ className = '' }) => (
+  <span aria-hidden="true" className={`block animate-pulse rounded-md bg-neutral-100 motion-reduce:animate-none ${className}`} />
+);
+
+/** 列表/表格加载骨架：形状贴近真实行，不用转圈。 */
+export const SkeletonRows: React.FC<{ rows?: number; className?: string }> = ({ rows = 3, className = '' }) => (
+  <div className={className} role="status" aria-label="加载中">
+    {Array.from({ length: rows }).map((_, index) => (
+      <div key={index} className="flex items-center justify-between gap-3 py-2">
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <Skeleton className="h-3.5 w-1/2" />
+          <Skeleton className="h-3 w-2/3" />
+        </div>
+        <Skeleton className="h-5 w-16 rounded-full" />
+      </div>
+    ))}
+    <span className="sr-only">正在加载</span>
+  </div>
+);
+
+/** 无权限态：说明原因并给出可执行的下一步，而不是空白页。 */
+export const PermissionState: React.FC<{ title: string; description?: string; action?: React.ReactNode }> = ({ title, description, action }) => (
+  <div className="flex flex-col items-center gap-3 rounded-md border border-neutral-200 bg-white px-6 py-10 text-center">
+    <ShieldAlert aria-hidden="true" className="h-6 w-6 text-neutral-400" />
+    <p className="text-base font-semibold text-neutral-900">{title}</p>
+    {description ? <p className="max-w-md text-sm leading-6 text-neutral-600">{description}</p> : null}
+    {action}
+  </div>
+);
 
 export const EmptyState: React.FC<{ title: string; description?: string; action?: React.ReactNode }> = ({ title, description, action }) => (
   <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-neutral-300 bg-neutral-50 px-4 py-10 text-center">

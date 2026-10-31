@@ -5,18 +5,20 @@ import React from 'react';
 import { ArrowRight } from 'lucide-react';
 import type { Order } from '../../../types/b2b';
 import type { IndustryInventoryBalance, IndustryPurchaseOrder } from './data';
-import { SectionCard, StatusPill, formatDate, formatMoney } from './kit';
+import { SectionCard, SkeletonRows, StatusPill, formatDate, formatMoney } from './kit';
 import { orderStatusLabel } from './IndustryOrdersSection';
 
 export const RecentIndustryOrders: React.FC<{
   orders: Order[];
   title: string;
   onOpenOrders: () => void;
-}> = ({ orders, title, onOpenOrders }) => (
+  loading?: boolean;
+}> = ({ orders, title, onOpenOrders, loading = false }) => (
   <SectionCard
     title={title}
     actions={<button type="button" onClick={onOpenOrders} className="inline-flex items-center gap-1 text-xs font-semibold text-neutral-700 hover:text-neutral-950">查看全部<ArrowRight className="h-3.5 w-3.5" /></button>}
   >
+    {loading && !orders.length ? <SkeletonRows rows={3} /> : (
     <ul className="divide-y divide-neutral-100">
       {orders.slice(0, 5).map(order => (
         <li key={order.id} className="flex items-center justify-between gap-3 py-2 text-sm">
@@ -32,6 +34,7 @@ export const RecentIndustryOrders: React.FC<{
       ))}
       {!orders.length ? <li className="py-6 text-center text-sm text-neutral-500">暂无订单。</li> : null}
     </ul>
+    )}
   </SectionCard>
 );
 
@@ -39,10 +42,12 @@ export const IndustryLowStock: React.FC<{
   balances: IndustryInventoryBalance[];
   title: string;
   threshold?: number;
-}> = ({ balances, title, threshold = 5 }) => {
+  loading?: boolean;
+}> = ({ balances, title, threshold = 5, loading = false }) => {
   const low = balances.filter(item => item.availableQuantity <= threshold).slice(0, 6);
   return (
     <SectionCard title={title} description={`可售数量 ≤ ${threshold} 的 SKU`}>
+      {loading && !balances.length ? <SkeletonRows rows={3} /> : (
       <ul className="divide-y divide-neutral-100">
         {low.map(item => (
           <li key={item.id} className="flex items-center justify-between gap-3 py-2 text-sm">
@@ -55,6 +60,7 @@ export const IndustryLowStock: React.FC<{
         ))}
         {!low.length ? <li className="py-6 text-center text-sm text-neutral-500">暂无库存预警。</li> : null}
       </ul>
+      )}
     </SectionCard>
   );
 };
@@ -63,11 +69,13 @@ export const RecentPurchaseOrders: React.FC<{
   orders: IndustryPurchaseOrder[];
   title: string;
   onOpen: () => void;
-}> = ({ orders, title, onOpen }) => (
+  loading?: boolean;
+}> = ({ orders, title, onOpen, loading = false }) => (
   <SectionCard
     title={title}
     actions={<button type="button" onClick={onOpen} className="inline-flex items-center gap-1 text-xs font-semibold text-neutral-700 hover:text-neutral-950">采购工作区<ArrowRight className="h-3.5 w-3.5" /></button>}
   >
+    {loading && !orders.length ? <SkeletonRows rows={3} /> : (
     <ul className="divide-y divide-neutral-100">
       {orders.slice(0, 5).map(order => (
         <li key={order.id} className="flex items-center justify-between gap-3 py-2 text-sm">
@@ -82,5 +90,6 @@ export const RecentPurchaseOrders: React.FC<{
       ))}
       {!orders.length ? <li className="py-6 text-center text-sm text-neutral-500">暂无采购单。</li> : null}
     </ul>
+    )}
   </SectionCard>
 );

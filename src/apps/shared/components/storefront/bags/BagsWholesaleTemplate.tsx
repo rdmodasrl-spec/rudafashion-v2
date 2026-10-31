@@ -5,17 +5,18 @@
  * 与编辑版/目录版的差异：价格、库存、MOQ 前置；订货以「颜色 × 尺寸矩阵」完成，
  * 手机端使用底部固定操作条 + 抽屉。
  */
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Minus, Plus, Search, ShoppingCart, X } from 'lucide-react';
 import type { StorefrontData, StorefrontProduct } from '../useStorefrontData';
 import { StorefrontImage, formatMoney, formatStock, priceText } from '../primitives';
+import { StorefrontGallery } from '../gallery/StorefrontGallery';
 
-type Props = { data: StorefrontData; onExit?: () => void };
+type Props = { data: StorefrontData; onExit?: () => void; initialProductId?: string | null; onProductChange?: (productId: string | null) => void };
 type Matrix = Record<string, number>;
 
 const cellKey = (color: string, size: string) => `${color}__${size}`;
 
-export const BagsWholesaleTemplate: React.FC<Props> = ({ data, onExit }) => {
+export const BagsWholesaleTemplate: React.FC<Props> = ({ data, onExit, initialProductId = null, onProductChange }) => {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
   const [activeProduct, setActiveProduct] = useState<StorefrontProduct | null>(null);
@@ -56,10 +57,17 @@ export const BagsWholesaleTemplate: React.FC<Props> = ({ data, onExit }) => {
   const matrixUnits = matrixTotal;
   const matrixAmount = activeProduct ? matrixTotal * activeProduct.unitPrice : 0;
 
+  useEffect(() => {
+    if (!initialProductId) { setActiveProduct(null); setMatrix({}); return; }
+    const target = data.products.find(product => product.id === initialProductId);
+    if (target) { setActiveProduct(target); setMatrix({}); }
+  }, [initialProductId, data.products]);
+
   const openProduct = (product: StorefrontProduct) => {
     setActiveProduct(product);
     setMatrix({});
     setSheetOpen(false);
+    onProductChange?.(product.id);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -152,17 +160,12 @@ export const BagsWholesaleTemplate: React.FC<Props> = ({ data, onExit }) => {
       <main className="mx-auto max-w-[1440px] px-4 py-6 sm:px-8 sm:py-8">
         {activeProduct ? (
           <section>
-            <button type="button" onClick={() => setActiveProduct(null)} className="inline-flex items-center gap-2 text-xs text-neutral-600 hover:text-neutral-950">
+            <button type="button" onClick={() => { setActiveProduct(null); onProductChange?.(null); }} className="inline-flex items-center gap-2 text-xs text-neutral-600 hover:text-neutral-950">
               <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.7} /> 返回商品
             </button>
             <div className="mt-5 grid gap-8 lg:grid-cols-[minmax(0,0.46fr)_minmax(0,0.54fr)]">
               <div>
-                <StorefrontImage src={activeProduct.images[0]} alt={activeProduct.name} ratio="4 / 5" priority />
-                <div className="mt-2 grid grid-cols-4 gap-2">
-                  {activeProduct.images.slice(1, 5).map((image, index) => (
-                    <StorefrontImage key={index} src={image} alt={`${activeProduct.name} ${index + 2}`} ratio="1 / 1" />
-                  ))}
-                </div>
+                <StorefrontGallery images={activeProduct.images} alt={activeProduct.name} ratio="4 / 5" priority />
               </div>
               <div>
                 <p className="text-xs text-neutral-500">{activeProduct.styleNo} · {activeProduct.material || activeProduct.category}</p>

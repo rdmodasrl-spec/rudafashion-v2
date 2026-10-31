@@ -1,7 +1,7 @@
 # 项目二 · 阶段 B 进度：箱包三套黄金模板
 
 - 项目：`P2-STORE-TEMPLATES`（与 `P1-ADMIN-UI` 完全独立）
-- 文档状态：**部分完成** —— 三套结构型模板已落地并在隔离预览中真实运行；未达 90 分验收线（见 §5）
+- 文档状态：**部分完成（第二轮整改进行中）** —— 三套结构型模板 + 详情深链 + 多图画廊已落地并实测；图片证书与 RFQ 后端两项受外部条件阻塞（见 §8），仍未达 90 分
 - 日期：2026-10-31
 - 预览入口（隔离，未替换任何商家网站）：`/?storefrontPreview=<模板 id>&merchant=<商家 id>&demo=1`
 
@@ -89,3 +89,92 @@
 ## 7. 下一步
 
 按用户顺序：先补齐 §5 的 1–6 项把箱包三套做到 ≥90，通过后再按同一工程方法推进百货批发（3 套），不得先复制到其他行业。
+
+---
+
+## 8. 第二轮整改（2026-10-31 23:xx）
+
+### 8.1 P0 商品图片 HTTPS —— 根因已定位，修复需授权
+
+| 检查项 | 实测结果 |
+| --- | --- |
+| DNS | `images.ruda.fashion` → `95.232.251.69`（解析正常） |
+| TLS 证书主体 | `CN = ruda.fashion` |
+| SAN 列表 | `admin / b2b / bellissima-prato / buyer / merchant / paris-marais-atelier / ruda.fashion / sartoria-milanese / video / vip / www` —— **不含 `images.ruda.fashion`** |
+| 证书位置 | `/etc/letsencrypt/live/ruda.fashion/fullchain.pem`（Certbot 管理） |
+| nginx vhost | `/etc/nginx/sites-enabled/ruda.fashion`，`server_name ruda.fashion www.ruda.fashion *.ruda.fashion`（vhost 已覆盖该域名，仅证书不覆盖） |
+| 存储配置 | `R2_PUBLIC_URL=https://images.ruda.fashion`（`src/server/r2Environment.ts` 读 `R2_PUBLIC_URL`） |
+| 用 `-k` 跳过校验 | 200 + `image/jpeg`（对象存在、服务正常） |
+
+**结论**：图片服务本身正常，唯一问题是证书 SAN 缺该域名。**不需要改存储或 DNS**。
+
+修复方案（需授权，均属生产配置变更）：
+
+1. **首选**：为证书追加 SAN 或改用通配符
+   `certbot --expand -d ruda.fashion -d www.ruda.fashion -d "*.ruda.fashion"`，随后 `nginx -s reload`。可逆、不动对象存储。
+2. 备选（不碰证书）：把媒体域名切到已在 SAN 内的主机，并在读取时重写 URL。需要放宽 `server.ts:24056` 的 hostname 判断并新增 `MEDIA_URL_REWRITE` 配置，改动面更大。
+
+**未执行原因**：指令明确「不得未经批准修改生产证书、DNS 或存储配置」。本轮只完成诊断与隔离验证，等待授权。
+
+### 8.2 P0 授权安全 —— 服务端已实施，匿名态已实测
+
+服务端过滤存在且生效（不是只有前端 `useStorefrontData.ts`）：
+
+- `server.ts:16312` `/api/products`：`AND: [{ OR: authorizedVisibility }]`
+- `server.ts:16349` `/api/products/:id`：同样的可见性条件
+- `src/server/publicProductVisibility.ts:108` `buildAuthorizedProductVisibility()`：匿名 → 仅 `public` 且非 exclusive；`customer.status === 'approved'` → +`wholesale`；有效 vault 授权 → +该商家的 `private`/exclusive
+
+实测证据（状态 1 未登录访客）：
+
+| 请求 | 结果 |
+| --- | --- |
+| DB 实际分布 | `wholesale 15 / public 11 / private 2` |
+| `GET /api/products`（匿名） | 返回 8 条，`visibility` 全为非 wholesale，**0 泄漏** |
+| `GET /api/products/<wholesale id>`（匿名） | **404 `PRODUCT_NOT_FOUND`** |
+
+**未完成**：状态 2（已登录未认证）、状态 3（已认证买家）、状态 4（vault 已授权）需要测试账号与 vault 授权记录。当前 DB 有 3 个 `approved` 客户但无密码、无 vault 授权记录；创建这些数据属于生产写操作，需授权。建议在 `scripts/isolatedPostgresTestDatabase.ts` 的隔离库上执行四态测试。
+
+### 8.3 P1 商品独立详情 URL —— 已完成并实测
+
+- URL 形态：`?storefrontPreview=<tpl>&merchant=<id>&product=<productId>`，点击商品 `pushState`，关闭 `replaceState`。
+- 实测：点击 → URL 带 `product`；**刷新后详情保留**；**浏览器后退回到列表**；**新标签直接打开深链**正常渲染对应商品。
+- 预览页整体 `noindex,nofollow`；正式站接入时的 SEO（title/description/canonical）需在阶段 C 迁移到 `MerchantStoreView` 路由时补，本轮未伪造。
+
+### 8.4 P1 多图画廊 —— 已完成并实测
+
+新增 `storefront/gallery/StorefrontGallery.tsx`：主图 + 缩略图 + 点击切换 + 放大弹层 + 键盘（←/→/Esc）+ 触控滑动 + 比例固定 + 懒加载 + 失败态。三套模板详情页统一接入。
+
+实测（真实种子商品，3 图 / 2 图）：缩略图数量正确、点击切换、放大弹层打开、`Esc` 关闭、`→` 切换无报错。
+
+**数据限制**：线上 8 个公开商品**每个都只有 1 张图**，因此缩略图在真实数据下不出现（组件行为正确，缺的是商家上传多图）。
+
+### 8.5 P1 真实 RFQ —— 阻塞：后端不存在
+
+| 检查项 | 结果 |
+| --- | --- |
+| 前端调用 | `B2BContext.createBuyerRfq` → `POST /api/buyer/rfq`（`src/context/B2BContext.tsx:3392`） |
+| 服务端路由 | `server.ts` 中 `rfq` 出现 **0 次** |
+| 实际请求 | `POST /api/buyer/rfq` → **404 `Cannot POST /api/buyer/rfq`** |
+| 数据库 | Prisma **无 RFQ 模型**（仅有 `SalesQuote`/`SalesQuoteItem`） |
+
+结论：现有「询价」是**前端调用一个不存在的接口**，属于既有缺陷。要做真实询价必须新建数据模型 + 迁移 + 路由 + 权限，属数据库变更，需授权后实施；**不能在前端做一个假提交**。
+
+### 8.6 本轮分数（仍未达 90）
+
+| 模板 | 上轮 | 本轮 | 变化原因 |
+| --- | ---: | ---: | --- |
+| 编辑版 | 75 | **80** | +多图画廊、+详情深链；图片证书问题未解 |
+| 目录版 | 76 | **82** | 同上，目录检索体验更完整 |
+| 电商版 | 80 | **85** | 同上 + 矩阵与深链配合 |
+
+**结论：三套仍不合格，不进入下一个行业。**
+
+### 8.7 需要拍板的三件事
+
+1. **图片证书**：授权执行 `certbot --expand`（追加 `images.ruda.fashion` 或改 `*.ruda.fashion`）并 reload nginx。
+2. **RFQ 后端**：授权新建 RFQ 模型 + 迁移 + `POST /api/buyer/rfq` 等路由（生产库 schema 变更）。
+3. **四态授权测试**：授权在隔离库创建测试账号与 vault 授权记录（或提供现成测试账号）。
+
+### 8.8 证据
+
+`docs/engineering/evidence/p2-stage-b-bags/`（三套 1440/390 + 矩阵详情）；本轮深链/画廊测试记录见提交说明。

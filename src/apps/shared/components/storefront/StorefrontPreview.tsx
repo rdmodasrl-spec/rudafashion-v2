@@ -63,10 +63,37 @@ export const StorefrontPreview: React.FC<{ templateId: string; merchantId: strin
     return () => { meta.remove(); };
   }, []);
 
+  const [activeProductId, setActiveProductId] = useState<string | null>(() =>
+    typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('product')
+  );
+
+  // 商品深链与浏览器前进/后退保持一致
+  useEffect(() => {
+    const onPop = () => {
+      const params = new URLSearchParams(window.location.search);
+      setActiveProductId(params.get('product'));
+      const tpl = params.get('storefrontPreview');
+      if (tpl) setCurrent(tpl);
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  const handleProductChange = (productId: string | null) => {
+    setActiveProductId(productId);
+    const url = new URL(window.location.href);
+    if (productId) url.searchParams.set('product', productId);
+    else url.searchParams.delete('product');
+    if (productId) window.history.pushState({ productId }, '', url.toString());
+    else window.history.replaceState({}, '', url.toString());
+  };
+
   const switchTemplate = (next: string) => {
     setCurrent(next);
     const url = new URL(window.location.href);
     url.searchParams.set('storefrontPreview', next);
+    url.searchParams.delete('product');
+    setActiveProductId(null);
     window.history.replaceState({}, '', url.toString());
   };
 
@@ -91,9 +118,15 @@ export const StorefrontPreview: React.FC<{ templateId: string; merchantId: strin
         </span>
       </div>
 
-      {current === 'bags_editorial' && <BagsEditorialTemplate data={data} />}
-      {current === 'bags_catalogue' && <BagsCatalogueTemplate data={data} />}
-      {current === 'bags_wholesale' && <BagsWholesaleTemplate data={data} />}
+      {current === 'bags_editorial' && (
+        <BagsEditorialTemplate data={data} initialProductId={activeProductId} onProductChange={handleProductChange} />
+      )}
+      {current === 'bags_catalogue' && (
+        <BagsCatalogueTemplate data={data} initialProductId={activeProductId} onProductChange={handleProductChange} />
+      )}
+      {current === 'bags_wholesale' && (
+        <BagsWholesaleTemplate data={data} initialProductId={activeProductId} onProductChange={handleProductChange} />
+      )}
       {!TEMPLATES.some(template => template.id === current) && (
         <div className="grid min-h-[60vh] place-items-center px-6 text-center text-sm text-neutral-600">
           未知模板：{current}

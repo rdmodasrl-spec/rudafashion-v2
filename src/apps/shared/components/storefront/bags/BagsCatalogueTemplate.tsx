@@ -4,12 +4,13 @@
  * 目录结构：左侧分类栏 + 顶部搜索/排序 + 密集网格 + 规格表。
  * 与编辑版/商城版的差异：以检索效率为先，商品以「规格条目」呈现，桌面常驻过滤栏。
  */
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Check, Search, SlidersHorizontal, X } from 'lucide-react';
 import type { StorefrontData, StorefrontProduct } from '../useStorefrontData';
 import { StorefrontImage, formatStock, priceText } from '../primitives';
+import { StorefrontGallery } from '../gallery/StorefrontGallery';
 
-type Props = { data: StorefrontData; onExit?: () => void };
+type Props = { data: StorefrontData; onExit?: () => void; initialProductId?: string | null; onProductChange?: (productId: string | null) => void };
 
 type SortKey = 'newest' | 'price-asc' | 'price-desc' | 'stock';
 
@@ -20,7 +21,7 @@ const SORT_LABEL: Record<SortKey, string> = {
   stock: '库存从多到少'
 };
 
-export const BagsCatalogueTemplate: React.FC<Props> = ({ data, onExit }) => {
+export const BagsCatalogueTemplate: React.FC<Props> = ({ data, onExit, initialProductId = null, onProductChange }) => {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
   const [material, setMaterial] = useState('all');
@@ -31,6 +32,12 @@ export const BagsCatalogueTemplate: React.FC<Props> = ({ data, onExit }) => {
   const [aboutOpen, setAboutOpen] = useState(false);
 
   const merchant = data.merchant;
+
+  useEffect(() => {
+    if (!initialProductId) { setActiveProduct(null); return; }
+    const target = data.products.find(product => product.id === initialProductId);
+    if (target) setActiveProduct(target);
+  }, [initialProductId, data.products]);
 
   const rows = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -166,17 +173,12 @@ export const BagsCatalogueTemplate: React.FC<Props> = ({ data, onExit }) => {
         <main className="min-w-0 flex-1">
           {activeProduct ? (
             <section>
-              <button type="button" onClick={() => setActiveProduct(null)} className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.16em] text-neutral-500 hover:text-neutral-950">
+              <button type="button" onClick={() => { setActiveProduct(null); onProductChange?.(null); }} className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.16em] text-neutral-500 hover:text-neutral-950">
                 <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.7} /> 返回目录
               </button>
               <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,0.5fr)_minmax(0,0.5fr)]">
                 <div>
-                  <StorefrontImage src={activeProduct.images[0]} alt={activeProduct.name} ratio="1 / 1" priority />
-                  <div className="mt-2 grid grid-cols-4 gap-2">
-                    {activeProduct.images.slice(1, 5).map((image, index) => (
-                      <StorefrontImage key={index} src={image} alt={`${activeProduct.name} ${index + 2}`} ratio="1 / 1" />
-                    ))}
-                  </div>
+                  <StorefrontGallery images={activeProduct.images} alt={activeProduct.name} ratio="1 / 1" priority />
                 </div>
                 <div>
                   <h1 className="text-2xl font-semibold leading-tight">{activeProduct.name}</h1>
@@ -246,7 +248,7 @@ export const BagsCatalogueTemplate: React.FC<Props> = ({ data, onExit }) => {
               <ul className="mt-5 grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-4">
                 {rows.map(product => (
                   <li key={product.id}>
-                    <button type="button" onClick={() => setActiveProduct(product)} className="group w-full text-left">
+                    <button type="button" onClick={() => { setActiveProduct(product); onProductChange?.(product.id); }} className="group w-full text-left">
                       <StorefrontImage src={product.images[0]} alt={product.name} ratio="1 / 1" className="border border-neutral-200 transition-colors group-hover:border-neutral-400" />
                       <span className="mt-2.5 block truncate text-sm font-medium">{product.name}</span>
                       <span className="mt-0.5 block text-xs text-neutral-500">{product.styleNo}</span>

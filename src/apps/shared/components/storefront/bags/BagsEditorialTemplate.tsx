@@ -4,13 +4,14 @@
  * 品牌官网结构：全幅摄影 + 不对称双栏 + 系列叙事 + 工艺材质 + 品牌介绍。
  * 与目录版/商城版的差异：无卡片边框、无侧边筛选、商品以「作品」呈现而非商品格。
  */
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, Menu, X } from 'lucide-react';
 import type { StorefrontData, StorefrontProduct } from '../useStorefrontData';
 import { StorefrontImage, formatMoney, formatStock, priceText } from '../primitives';
+import { StorefrontGallery } from '../gallery/StorefrontGallery';
 
 type View = 'home' | 'collection' | 'product' | 'maison';
-type Props = { data: StorefrontData; onExit?: () => void };
+type Props = { data: StorefrontData; onExit?: () => void; initialProductId?: string | null; onProductChange?: (productId: string | null) => void };
 
 const NAV: Array<{ key: View; label: string }> = [
   { key: 'home', label: '首页' },
@@ -18,7 +19,7 @@ const NAV: Array<{ key: View; label: string }> = [
   { key: 'maison', label: '品牌' }
 ];
 
-export const BagsEditorialTemplate: React.FC<Props> = ({ data, onExit }) => {
+export const BagsEditorialTemplate: React.FC<Props> = ({ data, onExit, initialProductId = null, onProductChange }) => {
   const [view, setView] = useState<View>('home');
   const [activeProduct, setActiveProduct] = useState<StorefrontProduct | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -29,8 +30,31 @@ export const BagsEditorialTemplate: React.FC<Props> = ({ data, onExit }) => {
   const hero = featured[0];
   const secondary = featured[1];
 
-  const go = (next: View) => { setView(next); setActiveProduct(null); setMenuOpen(false); window.scrollTo({ top: 0, behavior: 'smooth' }); };
-  const openProduct = (product: StorefrontProduct) => { setActiveProduct(product); setView('product'); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  const go = (next: View) => {
+    setView(next);
+    setActiveProduct(null);
+    setMenuOpen(false);
+    onProductChange?.(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  const openProduct = (product: StorefrontProduct) => {
+    setActiveProduct(product);
+    setView('product');
+    onProductChange?.(product.id);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // 深链：URL 带 product=<id> 时直接打开详情（刷新、分享、前进后退都成立）
+  useEffect(() => {
+    if (!initialProductId) {
+      // 浏览器后退回到列表：URL 已无 product 参数，详情应关闭
+      setActiveProduct(null);
+      setView(current => (current === 'product' ? 'collection' : current));
+      return;
+    }
+    const target = data.products.find(product => product.id === initialProductId);
+    if (target) { setActiveProduct(target); setView('product'); }
+  }, [initialProductId, data.products]);
 
   if (!merchant) {
     return <div className="grid min-h-[60vh] place-items-center text-sm text-neutral-500">该商家暂未开通网站。</div>;
@@ -191,10 +215,8 @@ export const BagsEditorialTemplate: React.FC<Props> = ({ data, onExit }) => {
               <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.7} /> 返回系列
             </button>
             <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,0.58fr)_minmax(0,0.42fr)]">
-              <div className="space-y-3">
-                {(activeProduct.images.length ? activeProduct.images : [undefined]).slice(0, 4).map((image, index) => (
-                  <StorefrontImage key={index} src={image} alt={`${activeProduct.name} ${index + 1}`} ratio="4 / 5" priority={index === 0} />
-                ))}
+              <div>
+                <StorefrontGallery images={activeProduct.images} alt={activeProduct.name} ratio="4 / 5" priority />
               </div>
               <div className="lg:sticky lg:top-28 lg:self-start">
                 <p className="text-[11px] uppercase tracking-[0.28em] text-neutral-500">{activeProduct.category}</p>

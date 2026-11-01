@@ -79,8 +79,10 @@ import { normalizeMerchantWebsiteUrl } from './src/shared/merchantWebsiteUrl';
 import {
   getMerchantStorefrontTemplate,
   isMerchantStorefrontTemplate,
+  isStorefrontTemplateAllowedForIndustry,
   withMerchantStorefrontTemplate
 } from './src/shared/merchantStorefrontTemplate';
+import { getStorefrontTemplateOptionsForIndustry } from './src/shared/storefrontTemplates/registry';
 import {
   isValidMerchantProductPricing,
   normalizeMerchantProductVariantSettings
@@ -23090,10 +23092,14 @@ async function startServer() {
         ? undefined
         : await prisma.merchant.findUnique({
           where: { id: merchantId },
-          select: { settings: true }
+          select: { settings: true, industryTemplate: true }
         });
       if (body.storefrontTemplate !== undefined && !currentSettings) {
         return res.status(404).json({ success: false, error: 'MERCHANT_NOT_FOUND' });
+      }
+      if (body.storefrontTemplate !== undefined
+        && !isStorefrontTemplateAllowedForIndustry(body.storefrontTemplate, currentSettings?.industryTemplate)) {
+        return res.status(400).json({ success: false, error: 'STOREFRONT_TEMPLATE_INDUSTRY_MISMATCH' });
       }
       const updatedSettings = currentSettings
         ? withMerchantStorefrontTemplate(currentSettings.settings, body.storefrontTemplate)
@@ -23258,6 +23264,7 @@ async function startServer() {
     settings.websiteUrl = normalizeMerchantWebsiteUrl(settings.websiteUrl);
     settings.mapLatitude = settings.mapLatitude === null || settings.mapLatitude === undefined ? '' : String(settings.mapLatitude);
     settings.mapLongitude = settings.mapLongitude === null || settings.mapLongitude === undefined ? '' : String(settings.mapLongitude);
+    const storefrontTemplate = merchant ? getMerchantStorefrontTemplate(merchant.settings) : null;
     const profile = merchant ? {
       name: merchant.name,
       companyLegalName: merchant.companyLegalName,
@@ -23268,7 +23275,12 @@ async function startServer() {
       contactPerson: merchant.contactPerson,
       contactPhone: merchant.contactPhone,
       contactEmail: merchant.contactEmail,
-      storefrontTemplate: getMerchantStorefrontTemplate(merchant.settings)
+      industryTemplate: merchant.industryTemplate,
+      storefrontTemplate,
+      storefrontTemplateOptions: getStorefrontTemplateOptionsForIndustry(
+        merchant.industryTemplate,
+        storefrontTemplate
+      ).map(({ id, name, positioning }) => ({ id, name, positioning }))
     } : null;
     res.json({
       success: true,

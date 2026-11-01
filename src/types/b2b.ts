@@ -1,4 +1,5 @@
 import type { MerchantStorefrontTemplate } from '../shared/merchantStorefrontTemplate';
+import type { MerchantIndustryTemplateId } from '../constants/merchantIndustryTemplates';
 
 export type ProductVisibility = 'public' | 'wholesale' | 'private';
 export type ProductLifecycleStatus = 'published' | 'pending_review' | 'draft' | 'rejected' | 'archived';
@@ -131,6 +132,7 @@ export interface Merchant {
   vatNumber?: string;
   businessType?: string;
   industry?: string;
+  industryTemplate?: MerchantIndustryTemplateId | null;
   code: string;
   storeLookupCode?: string;
   country: string;

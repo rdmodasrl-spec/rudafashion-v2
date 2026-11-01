@@ -105,11 +105,12 @@
     <view wx:if="{{showStorefrontEditor}}" class="storefront-editor">
       <view class="storefront-template-picker">
         <picker range="{{storefrontDraft.templates}}" range-key="label" value="{{storefrontDraft.templateIndex}}" bindchange="onStorefrontTemplateChange">
-          <view class="input picker-input">网站模板：{{storefrontDraft.selectedTemplate.label}}　›</view>
+          <view class="input picker-input">网站模板：{{storefrontDraft.selectedTemplate.label || '当前模板待兼容'}}　›</view>
         </picker>
         <view class="template-actions">
           <text class="item-meta">{{storefrontDraft.selectedTemplate.description}}</text>
-          <button class="secondary-button template-apply-button" bindtap="applyStorefrontTemplate">一键应用到商家网站</button>
+          <text wx:if="{{storefrontDraft.templateUnsupported}}" class="item-meta">当前模板暂不在行业选项中；为避免覆盖，重新应用已禁用。页面资料仍可保存。</text>
+          <button class="secondary-button template-apply-button" bindtap="applyStorefrontTemplate" disabled="{{storefrontDraft.templateUnsupported}}">一键应用到商家网站</button>
         </view>
       </view>
       <text class="form-section-title">店铺页面</text>

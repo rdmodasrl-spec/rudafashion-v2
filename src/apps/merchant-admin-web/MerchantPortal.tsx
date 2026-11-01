@@ -93,7 +93,8 @@ import {
 import { MerchantAiEmployees } from '../merchant-admin-common/components/merchant/MerchantAiEmployees';
 import { MerchantAiTools } from '../merchant-admin-common/components/merchant/MerchantAiTools';
 import { MerchantTeamManagement } from '../merchant-admin-common/components/merchant/MerchantTeamManagement';
-import { MERCHANT_STOREFRONT_TEMPLATES } from '../../shared/merchantStorefrontTemplate';
+import { MERCHANT_STOREFRONT_TEMPLATES, type MerchantStorefrontTemplate } from '../../shared/merchantStorefrontTemplate';
+import { getStorefrontTemplatesForIndustry } from '../../shared/storefrontTemplates/registry';
 import { MerchantAiReports } from '../merchant-admin-common/components/merchant/MerchantAiReports';
 import { MerchantAiOrderDrafts } from '../merchant-admin-common/components/merchant/MerchantAiOrderDrafts';
 import { MerchantBusinessCard } from '../merchant-admin-common/components/merchant/MerchantBusinessCard';
@@ -945,6 +946,7 @@ export const MerchantPortal: React.FC<{
   const currentMerchantId = authMerchantId;
   const isDemoMerchant = Boolean(currentMerchantId?.startsWith('demo-industry-'));
   const currentMerchant = currentMerchantId ? merchants.find(m => m.id === currentMerchantId) : undefined;
+  const storefrontTemplateOptions = getStorefrontTemplatesForIndustry(currentMerchant?.industryTemplate);
   const updateMerchantProduct = async (productId: string, updates: Partial<Product>) => {
     await updateProduct(productId, updates);
     setServerProducts(previous => previous?.map(product =>
@@ -1037,7 +1039,7 @@ export const MerchantPortal: React.FC<{
       return () => { active = false; };
   }, [assistantSettingsOpen, currentMerchantId]);
   const [storefrontForm, setStorefrontForm] = useState({
-    storefrontTemplate: 'fashion_monochrome' as typeof MERCHANT_STOREFRONT_TEMPLATES[number]['id'],
+    storefrontTemplate: 'fashion_monochrome' as MerchantStorefrontTemplate,
     logo: '', banner: '', showroomImage: '', showroomPanoramicImages: [] as string[],
     storefrontVideo: '',
     storefrontSeoTitle: '', storefrontSeoDescription: '',
@@ -1045,6 +1047,9 @@ export const MerchantPortal: React.FC<{
     tagline: '', tagline_zh: '', tagline_it: '', description: '', description_zh: '', description_it: '',
     specialties: [] as string[]
   });
+  const selectedLegacyStorefrontTemplate = MERCHANT_STOREFRONT_TEMPLATES.find(
+    template => template.id === storefrontForm.storefrontTemplate
+  );
   const [storefrontVideoFile, setStorefrontVideoFile] = useState<File | null>(null);
   const [storefrontVideoPreview, setStorefrontVideoPreview] = useState('');
   const [storefrontBusy, setStorefrontBusy] = useState(false);
@@ -8031,41 +8036,40 @@ export const MerchantPortal: React.FC<{
           <section className="space-y-3">
             <div>
               <h3 className="text-sm font-bold text-neutral-900">选择网店模板</h3>
-              <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-neutral-500"><span>仅更换网店外观</span><span>商品订单不变</span></div>
+              <div className="mt-1 flex flex-wrap gap-2 text-xs text-neutral-600"><span>按当前行业提供三套结构</span><span>商品与订单不变</span></div>
             </div>
             <div className="grid gap-3 md:grid-cols-3">
-              {MERCHANT_STOREFRONT_TEMPLATES.map(template => {
+              {storefrontTemplateOptions.map(template => {
                 const selected = storefrontForm.storefrontTemplate === template.id;
                 return (
                   <button
                     key={template.id}
                     type="button"
                     aria-pressed={selected}
-                    onClick={() => setStorefrontForm(previous => ({ ...previous, storefrontTemplate: template.id }))}
-                    className={`overflow-hidden rounded-xl border text-left transition ${selected ? 'border-neutral-950 ring-2 ring-neutral-950/10' : 'border-neutral-200 hover:border-neutral-400'}`}
+                    onClick={() => setStorefrontForm(previous => ({ ...previous, storefrontTemplate: template.id as MerchantStorefrontTemplate }))}
+                    className={`min-h-40 overflow-hidden rounded-[var(--radius-ruda-card)] border text-left transition-colors ${selected ? 'border-neutral-900 ring-1 ring-neutral-900/10' : 'border-neutral-200 hover:border-neutral-400'}`}
                   >
-                    <div className="h-24 p-2" style={{ backgroundColor: template.colors[0] }}>
-                      <div className="flex h-full flex-col overflow-hidden rounded border" style={{ borderColor: `${template.colors[1]}55`, backgroundColor: template.colors[0] }}>
-                        <div className="flex h-5 items-center justify-between px-2" style={{ backgroundColor: template.colors[1] }}>
-                          <span className="h-1 w-10 rounded-full bg-white/80" />
-                          <span className="h-1 w-5 rounded-full bg-white/50" />
-                        </div>
-                        <div className="flex flex-1 items-end gap-1 p-2">
-                          {[0, 1, 2].map(index => <span key={index} className="h-full flex-1 rounded-sm" style={{ backgroundColor: index === 1 ? template.colors[2] : `${template.colors[1]}30` }} />)}
-                        </div>
-                      </div>
+                    <div className="flex h-24 items-end gap-2 border-b border-neutral-200 bg-neutral-50 p-3">
+                      <span className="h-12 w-1/3 border border-neutral-300 bg-white" />
+                      <span className="h-16 flex-1 border border-neutral-300 bg-white" />
+                      <span className="h-10 w-1/4 border border-neutral-300 bg-neutral-100" />
                     </div>
-                    <div className="flex items-start justify-between gap-2 p-3">
-                      <div>
-                        <span className="block text-xs font-bold text-neutral-900">{template.name}</span>
-                        <span className="mt-1 block text-[10px] leading-4 text-neutral-500">{template.description}</span>
+                    <div className="space-y-2 p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-sm font-semibold text-neutral-900">{template.name}</span>
+                        <span className={`shrink-0 text-xs font-medium ${selected ? 'text-neutral-900' : 'text-neutral-500'}`}>{selected ? '已选择' : '选择'}</span>
                       </div>
-                      <span className={`mt-0.5 shrink-0 rounded-full px-2 py-1 text-[9px] font-semibold ${selected ? 'bg-neutral-950 text-white' : 'bg-neutral-100 text-neutral-500'}`}>{selected ? '已选择' : '选择'}</span>
+                      <p className="text-xs leading-5 text-neutral-600">{template.positioning}</p>
                     </div>
                   </button>
                 );
               })}
             </div>
+            {selectedLegacyStorefrontTemplate ? (
+              <p className="text-xs leading-5 text-neutral-600">
+                当前店铺仍使用兼容模板「{selectedLegacyStorefrontTemplate.name}」。选择本行业新模板并保存后才会切换；旧模板设置不会自动改写。
+              </p>
+            ) : null}
           </section>
 
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-3 text-xs">

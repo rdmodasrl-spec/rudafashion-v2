@@ -79,6 +79,7 @@ import { MerchantMessageCenter } from '../merchant-admin-common/components/merch
 import { useMerchantNotifications } from '../merchant-admin-common/components/merchant/merchantNotifications';
 import { MerchantStoreView } from '../shared/components/frontend/MerchantStoreView';
 import { MERCHANT_STOREFRONT_TEMPLATES, type MerchantStorefrontTemplate } from '../../shared/merchantStorefrontTemplate';
+import { getStorefrontTemplatesForIndustry } from '../../shared/storefrontTemplates/registry';
 import { ApiError, apiGet, apiPost, apiPut, apiRequest } from '../../api/client';
 import { DEFAULT_MERCHANT_LOGO, merchantMediaUrl } from '../../utils/merchantMedia';
 import { parseCsvRecords } from '../../utils/csv';
@@ -603,6 +604,10 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
 
   const currentMerchantId = selectedMerchantId || 'mch-prato';
   const currentMerchant = merchants.find(m => m.id === currentMerchantId) || merchants[0];
+  const storefrontTemplateOptions = getStorefrontTemplatesForIndustry(currentMerchant?.industryTemplate);
+  const selectedLegacyStorefrontTemplate = MERCHANT_STOREFRONT_TEMPLATES.find(
+    template => template.id === storefrontTemplate
+  );
 
   // 「已售出」入口使用真实成交明细汇总；每次进入商品页重新读取，避免展示过期数字。
   const loadProductSalesSummary = async () => {
@@ -3875,26 +3880,32 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
                 </div>
                 <div className="space-y-2 border-t border-neutral-100 pt-3">
                   <div>
-                    <p className="text-[11px] font-bold text-neutral-800">{mobileText('网店展示模板', 'Tema del negozio')}</p>
-                    <div className="mt-1 flex flex-wrap gap-2 text-[10px] leading-4 text-neutral-500"><span>{mobileText('应用后立即生效', 'Applicazione immediata')}</span><span>{mobileText('不改商品订单', 'Prodotti e ordini invariati')}</span></div>
+                    <p className="text-sm font-semibold text-neutral-900">{mobileText('网店展示模板', 'Tema del negozio')}</p>
+                    <div className="mt-1 flex flex-wrap gap-2 text-xs leading-5 text-neutral-600"><span>{mobileText('按当前行业提供三套结构', 'Tre strutture per il settore')}</span><span>{mobileText('不改商品订单', 'Prodotti e ordini invariati')}</span></div>
                   </div>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                    {MERCHANT_STOREFRONT_TEMPLATES.map(template => {
+                    {storefrontTemplateOptions.map(template => {
                       const selected = storefrontTemplate === template.id;
                       return (
-                        <button key={template.id} type="button" aria-pressed={selected} onClick={() => setStorefrontTemplate(template.id)} className={`flex items-center gap-2 rounded-xl border p-2 text-left ${selected ? 'border-neutral-900 bg-neutral-50 ring-1 ring-neutral-900/10' : 'border-neutral-200 bg-white'}`}>
-                          <span className="flex h-9 w-12 shrink-0 overflow-hidden rounded border border-black/5">
-                            {template.colors.map(color => <span key={color} className="h-full flex-1" style={{ backgroundColor: color }} />)}
+                        <button key={template.id} type="button" aria-pressed={selected} onClick={() => setStorefrontTemplate(template.id as MerchantStorefrontTemplate)} className={`min-h-16 rounded-[var(--radius-ruda-card)] border p-3 text-left ${selected ? 'border-neutral-900 bg-neutral-50 ring-1 ring-neutral-900/10' : 'border-neutral-200 bg-white'}`}>
+                          <span className="flex items-start justify-between gap-2">
+                            <span className="text-sm font-semibold text-neutral-900">{template.name}</span>
+                            <span className="text-xs text-neutral-600">{selected ? mobileText('当前选择', 'Selezionato') : mobileText('点击选择', 'Seleziona')}</span>
                           </span>
-                          <span className="min-w-0">
-                            <span className="block text-[10px] font-bold text-neutral-800">{template.name}</span>
-                            <span className="mt-0.5 block text-[9px] leading-3 text-neutral-500">{selected ? mobileText('当前选择', 'Selezionato') : mobileText('点击选择', 'Seleziona')}</span>
-                          </span>
+                          <span className="mt-1 block text-xs leading-5 text-neutral-600">{template.positioning}</span>
                         </button>
                       );
                     })}
                   </div>
-                  <button type="button" onClick={() => void applyStorefrontTemplate()} disabled={storefrontTemplateBusy || !currentMerchant} className="h-10 w-full rounded-2xl bg-neutral-900 text-[11px] font-bold text-white disabled:opacity-50">
+                  {selectedLegacyStorefrontTemplate ? (
+                    <p className="text-xs leading-5 text-neutral-600">
+                      {mobileText(
+                        `当前店铺仍使用兼容模板「${selectedLegacyStorefrontTemplate.name}」。选择本行业新模板并保存后才会切换；旧模板设置不会自动改写。`,
+                        `Il negozio usa ancora il tema compatibile "${selectedLegacyStorefrontTemplate.name}".`
+                      )}
+                    </p>
+                  ) : null}
+                  <button type="button" onClick={() => void applyStorefrontTemplate()} disabled={storefrontTemplateBusy || !currentMerchant} className="h-10 w-full rounded-[var(--radius-ruda-control)] bg-neutral-900 text-sm font-semibold text-white disabled:opacity-50">
                     {storefrontTemplateBusy ? mobileText('正在应用…', 'Applicazione...') : mobileText('一键应用到公开网店', 'Applica al negozio')}
                   </button>
                 </div>

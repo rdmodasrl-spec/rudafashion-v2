@@ -3299,6 +3299,7 @@ const UI_COPY_SOURCE_PAIRS: ReadonlyArray<{ zh: string; it: string }> = [
   { zh: "仅预填新商品", it: "Solo nuovi prodotti" },
   { zh: "已有商品不变", it: "Esistenti invariati" },
   { zh: "网店展示模板", it: "Tema del negozio" },
+  { zh: "按当前行业提供三套结构", it: "Tre strutture per il settore" },
   { zh: "应用后立即生效", it: "Applicazione immediata" },
   { zh: "不改商品订单", it: "Prodotti e ordini invariati" },
   { zh: "当前选择", it: "Selezionato" },

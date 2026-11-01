@@ -4,12 +4,10 @@
  * 只在 URL 带 `?storefrontPreview=<templateId>` 时接管渲染，不替换任何商家现有网站，
  * 也不写库。用于三套模板的真实浏览器验收与截图取证。
  */
-import React, { useEffect, useMemo, useState } from 'react';
-import { BAGS_STOREFRONT_TEMPLATES } from '../../../../shared/storefrontTemplates/registry';
+import React, { Suspense, useEffect, useMemo, useState } from 'react';
+import { STOREFRONT_INDUSTRY_GROUPS, findStorefrontIndustryGroup } from '../../../../shared/storefrontTemplates/registry';
 import { mapProductForStorefront, useStorefrontData, type StorefrontProduct } from './useStorefrontData';
-import { BagsEditorialTemplate } from './bags/BagsEditorialTemplate';
-import { BagsCatalogueTemplate } from './bags/BagsCatalogueTemplate';
-import { BagsWholesaleTemplate } from './bags/BagsWholesaleTemplate';
+import { STOREFRONT_TEMPLATE_COMPONENTS } from './templateComponents';
 
 export function readPreviewTemplateFromLocation(): string | null {
   if (typeof window === 'undefined') return null;
@@ -20,8 +18,6 @@ export function readPreviewMerchantFromLocation(): string | null {
   if (typeof window === 'undefined') return null;
   return new URLSearchParams(window.location.search).get('merchant');
 }
-
-const TEMPLATES = BAGS_STOREFRONT_TEMPLATES;
 
 export const StorefrontPreview: React.FC<{ templateId: string; merchantId: string | null; demoFill?: boolean }> = ({ templateId, merchantId, demoFill = false }) => {
   const base = useStorefrontData(merchantId);
@@ -129,38 +125,53 @@ export const StorefrontPreview: React.FC<{ templateId: string; merchantId: strin
   return (
     <div data-preview-template={current}>
       <div className="sticky top-0 z-[60] flex flex-nowrap items-center gap-2 overflow-x-auto border-b border-neutral-800 bg-neutral-950 px-3 py-2 text-neutral-200">
-        <span className="mr-1 hidden shrink-0 text-[12px] uppercase tracking-[0.18em] text-neutral-500 sm:inline">模板预览 · 隔离环境，未影响线上店铺</span>
-        {TEMPLATES.map(template => (
-          <button
-            key={template.id}
-            type="button"
-            onClick={() => switchTemplate(template.id)}
-            aria-pressed={current === template.id}
-            className={`shrink-0 border px-2.5 py-1 text-[12px] transition-colors ${current === template.id ? 'border-white bg-white text-neutral-950' : 'border-neutral-700 hover:border-neutral-400'}`}
-          >
-            {template.name}
-          </button>
-        ))}
-        <span className="ml-auto shrink-0 whitespace-nowrap text-[12px] text-neutral-500">
+        <span className="mr-1 hidden shrink-0 text-[12px] uppercase tracking-[0.18em] text-neutral-300 sm:inline">模板预览 · 隔离环境，未影响线上店铺</span>
+        <select
+          value={current}
+          onChange={event => switchTemplate(event.target.value)}
+          aria-label="选择模板"
+          className="shrink-0 border border-neutral-700 bg-neutral-900 px-2 py-1 text-[12px] text-neutral-200"
+        >
+          {STOREFRONT_INDUSTRY_GROUPS.map(group => (
+            <optgroup key={group.industry} label={group.label}>
+              {group.templates.map(template => (
+                <option key={template.id} value={template.id}>{template.name}</option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+        <span className="shrink-0 whitespace-nowrap text-[12px] text-neutral-300">
+          {findStorefrontIndustryGroup(current)?.label || '未知行业'} · {current}
+        </span>
+        <span className="ml-auto shrink-0 whitespace-nowrap text-[12px] text-neutral-300">
           {data.merchant ? `${data.merchant.name} · ${data.products.length} 款` : '未找到商家'}
           {demoFill && demoProducts.length > 0 ? ' · 含版式评审演示数据' : ''}
         </span>
       </div>
 
-      {current === 'bags_editorial' && (
-        <BagsEditorialTemplate data={data} initialProductId={activeProductId} onProductChange={handleProductChange} />
-      )}
-      {current === 'bags_catalogue' && (
-        <BagsCatalogueTemplate data={data} initialProductId={activeProductId} onProductChange={handleProductChange} />
-      )}
-      {current === 'bags_wholesale' && (
-        <BagsWholesaleTemplate data={data} initialProductId={activeProductId} onProductChange={handleProductChange} />
-      )}
-      {!TEMPLATES.some(template => template.id === current) && (
-        <div className="grid min-h-[60vh] place-items-center px-6 text-center text-sm text-neutral-600">
-          未知模板：{current}
+      {data.isLoading ? (
+        <div role="status" className="grid min-h-[50vh] place-items-center px-5 text-sm text-neutral-600">
+          正在加载真实店铺数据…
         </div>
-      )}
+      ) : data.loadError ? (
+        <div role="alert" className="mx-auto my-12 max-w-xl border border-neutral-300 bg-white px-5 py-6 text-sm text-neutral-800">
+          {data.loadError}
+        </div>
+      ) : (() => {
+        const Component = STOREFRONT_TEMPLATE_COMPONENTS[current as keyof typeof STOREFRONT_TEMPLATE_COMPONENTS];
+        if (!Component) {
+          return (
+            <div className="grid min-h-[60vh] place-items-center px-6 text-center text-sm text-neutral-600">
+              未知模板：{current}
+            </div>
+          );
+        }
+        return (
+          <Suspense fallback={<div role="status" className="grid min-h-[50vh] place-items-center text-sm text-neutral-600">正在加载模板…</div>}>
+            <Component data={data} initialProductId={activeProductId} onProductChange={handleProductChange} />
+          </Suspense>
+        );
+      })()}
     </div>
   );
 };

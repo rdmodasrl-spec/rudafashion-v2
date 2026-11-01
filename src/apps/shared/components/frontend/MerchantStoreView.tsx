@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { 
   ShieldCheck, 
   Lock, 
@@ -27,10 +27,40 @@ import { ShareButton } from '../common/ShareButton';
 import { DEFAULT_MERCHANT_BANNER, merchantMediaUrl } from '../../../../utils/merchantMedia';
 import { getMerchantStoreUrl } from '../../../../utils/share';
 import { Product } from '../../../../types/b2b';
+import { isStructuralStorefrontTemplate } from '../../../../shared/storefrontTemplates/registry';
 import { getProductCategoryLabel } from '../../../../constants/productCategories';
 import './MerchantStoreView.css';
 
-export const MerchantStoreView: React.FC<{ embeddedInMerchantApp?: boolean; merchantId?: string }> = ({ embeddedInMerchantApp = false, merchantId }) => {
+type MerchantStoreViewProps = { embeddedInMerchantApp?: boolean; merchantId?: string };
+
+const LazyStorefrontTemplatePage = lazy(() =>
+  import('../storefront/StorefrontTemplatePage').then(module => ({ default: module.StorefrontTemplatePage }))
+);
+
+export const MerchantStoreView: React.FC<MerchantStoreViewProps> = props => {
+  const context = useB2B();
+  const activeMerchant = context.merchants.find(
+    merchant => merchant.id === (props.merchantId || context.selectedMerchantId)
+  ) || context.merchants[0];
+  const templateId = activeMerchant?.storefrontTemplate;
+
+  if (activeMerchant && isStructuralStorefrontTemplate(templateId)) {
+    return (
+      <Suspense fallback={<div className="grid min-h-[50vh] place-items-center text-sm text-neutral-600">正在加载店铺…</div>}>
+        <LazyStorefrontTemplatePage
+          key={`${activeMerchant.id}:${templateId}`}
+          templateId={templateId}
+          merchantId={activeMerchant.id}
+          embeddedInMerchantApp={props.embeddedInMerchantApp}
+        />
+      </Suspense>
+    );
+  }
+
+  return <LegacyMerchantStoreView {...props} />;
+};
+
+const LegacyMerchantStoreView: React.FC<MerchantStoreViewProps> = ({ embeddedInMerchantApp = false, merchantId }) => {
   const { 
     merchants, 
     selectedMerchantId, 

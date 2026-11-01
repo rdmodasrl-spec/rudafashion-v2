@@ -7,7 +7,17 @@ const miniRoot = new URL('../merchant-miniprogram/', import.meta.url);
 const workspaceSource = readFileSync(new URL('pages/workspace/index.js', miniRoot), 'utf8');
 const workspaceMarkup = readFileSync(new URL('pages/workspace/index.wxml', miniRoot), 'utf8');
 
-function createWorkspacePage() {
+type MockMerchantProfile = {
+  name: string;
+  storefrontTemplate?: string;
+  industryTemplate?: string;
+  storefrontTemplateOptions?: Array<{ id: string; name: string; positioning: string }>;
+};
+
+function createWorkspacePage(merchantProfile: MockMerchantProfile = {
+  name: 'Test merchant',
+  storefrontTemplate: 'luxury_black_gold'
+}) {
   let definition: Record<string, any> | undefined;
   const requests: Array<{ path: string; options: Record<string, unknown> }> = [];
   const toasts: Array<Record<string, unknown>> = [];
@@ -18,7 +28,7 @@ function createWorkspacePage() {
         request: async (path: string, options: Record<string, unknown> = {}) => {
           requests.push({ path, options });
           if (path === '/api/merchant/settings') {
-            return { settings: {}, merchant: { name: 'Test merchant', storefrontTemplate: 'luxury_black_gold' } };
+            return { settings: {}, merchant: merchantProfile };
           }
           if (path === '/api/merchant/store-categories') return { categories: [] };
           return {};
@@ -38,8 +48,13 @@ function createWorkspacePage() {
       storefrontDraft: {
         template: 'luxury_black_gold',
         templateIndex: 0,
-        selectedTemplate: null,
-        templates: [],
+        selectedTemplate: { id: 'fashion_monochrome', label: '时尚版 · 黑白', description: '', unsupported: false },
+        templates: [
+          { id: 'fashion_monochrome', label: '时尚版 · 黑白', description: '', unsupported: false },
+          { id: 'luxury_black_gold', label: '豪华版 · 黑金', description: '', unsupported: false },
+          { id: 'ecommerce_standard', label: '标准版 · 电商', description: '', unsupported: false }
+        ],
+        templateUnsupported: false,
         shippingPolicy: '',
         returnsPolicy: '',
         seoTitle: '',
@@ -79,7 +94,64 @@ test('mini program reads the saved storefront theme before presenting template c
   assert.equal(page.data.storefrontDraft.templateIndex, 1);
 });
 
+test('mini program uses server-provided industry templates without replacing the saved choice', async () => {
+  const options = [
+    { id: 'bags_editorial', name: '意大利编辑版', positioning: '品牌官网与系列画册' },
+    { id: 'bags_catalogue', name: '产品目录版', positioning: '商品分类与筛选' },
+    { id: 'bags_wholesale', name: '批发电商版', positioning: '规格矩阵与批发订货' }
+  ];
+  const page = createWorkspacePage({
+    name: 'Test merchant',
+    industryTemplate: 'bags_wholesale',
+    storefrontTemplate: 'bags_editorial',
+    storefrontTemplateOptions: options
+  });
+  await page.loadModuleData({ response: { merchant: { storefrontTemplate: 'bags_editorial' } } });
+
+  assert.equal(page.data.storefrontDraft.template, 'bags_editorial');
+  assert.equal(page.data.storefrontDraft.selectedTemplate.label, '意大利编辑版');
+  assert.deepEqual(
+    page.data.storefrontDraft.templates.map((template: { id: string }) => template.id),
+    ['bags_editorial', 'bags_catalogue', 'bags_wholesale']
+  );
+  assert.equal(page.data.storefrontDraft.templateUnsupported, false);
+});
+
+test('mini program preserves an unrecognized saved template instead of silently switching it', async () => {
+  const page = createWorkspacePage({
+    name: 'Test merchant',
+    industryTemplate: 'bags_wholesale',
+    storefrontTemplate: 'future_template_id',
+    storefrontTemplateOptions: [
+      { id: 'bags_editorial', name: '意大利编辑版', positioning: '品牌官网与系列画册' }
+    ]
+  });
+  await page.loadModuleData({ response: { merchant: { storefrontTemplate: 'future_template_id' } } });
+
+  assert.equal(page.data.storefrontDraft.template, 'future_template_id');
+  assert.equal(page.data.storefrontDraft.templateUnsupported, true);
+  assert.equal(page.data.storefrontDraft.selectedTemplate.unsupported, true);
+});
+
+test('mini program content saves do not overwrite an unrecognized saved template', async () => {
+  const page = createWorkspacePage({
+    name: 'Test merchant',
+    industryTemplate: 'bags_wholesale',
+    storefrontTemplate: 'future_template_id',
+    storefrontTemplateOptions: [
+      { id: 'bags_editorial', name: '意大利编辑版', positioning: '品牌官网与系列画册' }
+    ]
+  });
+  await page.loadModuleData({ response: { merchant: { storefrontTemplate: 'future_template_id' } } });
+  await page.saveStorefront();
+
+  const save = page.requests.find(call => call.path === '/api/merchant/storefront');
+  assert.ok(save);
+  assert.equal((save.options.data as Record<string, unknown>).storefrontTemplate, undefined);
+});
+
 test('mini program storefront form exposes all templates and the one-click apply action', () => {
   assert.match(workspaceMarkup, /range="\{\{storefrontDraft\.templates\}\}"/);
   assert.match(workspaceMarkup, /一键应用到商家网站/);
+  assert.match(workspaceMarkup, /disabled="\{\{storefrontDraft\.templateUnsupported\}\}"/);
 });

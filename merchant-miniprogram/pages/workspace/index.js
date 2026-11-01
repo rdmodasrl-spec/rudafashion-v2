@@ -9,6 +9,20 @@ const storefrontTemplates = [
   { id: 'ecommerce_standard', label: '标准版 · 电商', description: '清晰商品目录，方便选款和下单。', colors: ['#f3f5f7', '#2563eb', '#ffffff'] }
 ];
 
+function getStorefrontTemplateOptions(merchant) {
+  const serverOptions = Array.isArray(merchant && merchant.storefrontTemplateOptions)
+    ? merchant.storefrontTemplateOptions.filter(template =>
+      template && typeof template.id === 'string' && typeof template.name === 'string')
+    : [];
+  if (!serverOptions.length) return storefrontTemplates;
+  return serverOptions.map(template => ({
+    id: template.id,
+    label: template.name,
+    description: typeof template.positioning === 'string' ? template.positioning : '',
+    colors: []
+  }));
+}
+
 const titles = {
   counterparties: '往来单位',
   customers: '客户管理',
@@ -141,6 +155,7 @@ Page({
       templateIndex: 0,
       selectedTemplate: storefrontTemplates[0],
       templates: storefrontTemplates,
+      templateUnsupported: false,
       shippingPolicy: '',
       returnsPolicy: '',
       seoTitle: '',
@@ -421,9 +436,20 @@ Page({
       const settings = storeResults[0];
       const categories = storeResults[1];
       const merchant = settings.merchant || auth.response.merchant || {};
-      const storefrontTemplate = storefrontTemplates.some(template => template.id === merchant.storefrontTemplate)
+      const templateOptions = getStorefrontTemplateOptions(merchant);
+      const storefrontTemplate = typeof merchant.storefrontTemplate === 'string'
         ? merchant.storefrontTemplate
         : 'fashion_monochrome';
+      const templateUnsupported = !templateOptions.some(template => template.id === storefrontTemplate);
+      const visibleTemplateOptions = templateUnsupported
+        ? [{
+          id: storefrontTemplate,
+          label: '当前模板（仅保留）',
+          description: '此模板暂不在当前版本的行业选项中。为避免覆盖，暂不可重新应用。',
+          colors: [],
+          unsupported: true
+        }].concat(templateOptions)
+        : templateOptions;
       this.setData({
         items: [record(merchant.name || merchant.companyLegalName || '店铺资料', [merchant.contactPerson, merchant.contactPhone, merchant.contactEmail].filter(Boolean).join(' · '), merchant)]
           .concat(fromList(categories.categories, item => item.name, item => `店铺分类 · ${item.slug || ''}`)),
@@ -434,9 +460,10 @@ Page({
         }, settings.settings || {}),
         storefrontDraft: {
           template: storefrontTemplate,
-          templateIndex: storefrontTemplates.findIndex(template => template.id === storefrontTemplate),
-          selectedTemplate: storefrontTemplates.find(template => template.id === storefrontTemplate),
-          templates: storefrontTemplates,
+          templateIndex: visibleTemplateOptions.findIndex(template => template.id === storefrontTemplate),
+          selectedTemplate: visibleTemplateOptions.find(template => template.id === storefrontTemplate),
+          templates: visibleTemplateOptions,
+          templateUnsupported,
           shippingPolicy: merchant.storefrontShippingPolicy || '',
           returnsPolicy: merchant.storefrontReturnsPolicy || '',
           seoTitle: merchant.storefrontSeoTitle || '',
@@ -1605,19 +1632,21 @@ Page({
 
   onStorefrontTemplateChange(event) {
     const templateIndex = Number(event.detail.value);
-    const template = storefrontTemplates[templateIndex];
+    const template = this.data.storefrontDraft.templates[templateIndex];
     if (!template) return;
     this.setData({
       storefrontDraft: Object.assign({}, this.data.storefrontDraft, {
         template: template.id,
         templateIndex,
-        selectedTemplate: template
+        selectedTemplate: template,
+        templateUnsupported: template.unsupported === true
       })
     });
   },
 
   async applyStorefrontTemplate() {
-    if (!storefrontTemplates.some(template => template.id === this.data.storefrontDraft.template)) {
+    if (this.data.storefrontDraft.templateUnsupported
+      || !this.data.storefrontDraft.templates.some(template => template.id === this.data.storefrontDraft.template)) {
       wx.showToast({ title: '请选择有效的店铺模板', icon: 'none' });
       return;
     }
@@ -1636,17 +1665,18 @@ Page({
   async saveStorefront() {
     const draft = this.data.storefrontDraft;
     try {
+      const payload = {
+        storefrontShippingPolicy: draft.shippingPolicy,
+        storefrontReturnsPolicy: draft.returnsPolicy,
+        storefrontSeoTitle: draft.seoTitle,
+        storefrontSeoDescription: draft.seoDescription,
+        tagline: draft.tagline,
+        description: draft.description
+      };
+      if (!draft.templateUnsupported) payload.storefrontTemplate = draft.template;
       await request('/api/merchant/storefront', {
         method: 'PUT',
-        data: {
-          storefrontTemplate: draft.template,
-          storefrontShippingPolicy: draft.shippingPolicy,
-          storefrontReturnsPolicy: draft.returnsPolicy,
-          storefrontSeoTitle: draft.seoTitle,
-          storefrontSeoDescription: draft.seoDescription,
-          tagline: draft.tagline,
-          description: draft.description
-        }
+        data: payload
       });
       wx.showToast({ title: '店铺页面内容已保存', icon: 'success' });
       this.setData({ showStorefrontEditor: false });

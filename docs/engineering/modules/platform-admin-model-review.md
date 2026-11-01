@@ -211,11 +211,16 @@ export const ADMIN_SUPER_PERMISSION = '*';
 | 业务管理 → 模型审核 | ✅ 渲染、状态筛选、空状态与计数正确，无 console 错误 | ✅ 渲染，移动端导航包含「模型审核」 |
 | 平台管理 → 权限管理 | ✅ 3 个管理员、按分组勾选、超级管理员说明、敏感标记 | ✅ 渲染正常 |
 
-截图：`/tmp/p2-admin-shots/admin-model-review-1440.png`、`admin-model-review-390.png`、
-`admin-permission-1440.png`、`admin-permission-390.png`。
+截图（随仓库提交）：[model-review-pending-1440.png](../evidence/p2-admin-model-review/model-review-pending-1440.png)、
+[model-review-pending-390.png](../evidence/p2-admin-model-review/model-review-pending-390.png)、
+[permission-manager-1440.png](../evidence/p2-admin-model-review/permission-manager-1440.png)、
+[permission-manager-390.png](../evidence/p2-admin-model-review/permission-manager-390.png)。
+取证时间 2026-11-01，截图内容为真实生产页面（待审核 2 · 已通过 0 · 已驳回 2）。
 
 ### 9.6 仍未完成
 
-- 生产没有产生「真实待审核（pending）模型」：现有 4 条都是脚本直写；pending 场景只在隔离库验证。
+- 生产 4 条演示模型已按授权回滚：2 条改为 `pending`（脚本 `3d-legacy-model-review.mjs --apply`，
+  原 media 备份在 `/tmp/p2-legacy-model-rollback-*.json`），2 条保留验收时的 `rejected` 决定（含驳回原因与凭证）。
+  但这 4 条的商品都不是真实商家上传产物，真实商家 pending 流程仍需商家端上传闭环。
 - 权限默认放行语义（§7）未改。
 - 权限分配只在隔离库做了写入验证；生产 3 个账号仍为超级管理员，未做降权（会改变真实运营权限，需产品确认）。

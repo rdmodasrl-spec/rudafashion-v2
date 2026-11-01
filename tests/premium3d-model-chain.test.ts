@@ -76,20 +76,29 @@ test('服务端在保存商品媒体时对模型做全量 GLB 结构校验', () 
   const validator = read('src/server/glbValidation.ts');
   assert.match(validator, /export function validateGlbStructure/);
   assert.match(validator, /buffer\.toString\('ascii', 0, 4\) !== GLB_MAGIC/);
-  assert.match(validator, /if \(version !== 2\)/);
+  assert.match(validator, /buffer\.readUInt32LE\(4\) !== 2/);
   assert.match(validator, /declaredLength !== expectedSize/);
   assert.match(validator, /GLB_JSON_CHUNK_OUT_OF_RANGE/);
   assert.match(validator, /GLB_BIN_CHUNK_OUT_OF_RANGE/);
   assert.match(validator, /GLB_EXTERNAL_BUFFER_REFERENCE/);
   assert.match(validator, /GLB_EXTERNAL_IMAGE_REFERENCE/);
   assert.match(validator, /GLB_NO_MESH/);
+  assert.match(validator, /GLB_JSON_CHUNK_NOT_FIRST/);
+  assert.match(validator, /GLB_CHUNK_UNALIGNED/);
+  assert.match(validator, /GLB_BIN_CHUNK_MISSING/);
+  assert.match(validator, /GLB_PRIMITIVE_ATTRIBUTE_ACCESSOR_INVALID/);
+  assert.match(validator, /GLB_NODE_MESH_INVALID/);
 });
 
 test('商品媒体里 model 条目只能指向自家对象存储的 .glb，且保存时强制 pending', () => {
   assert.match(server, /storefront\/models\//);
   assert.match(server, /item\.contentType !== 'model\/gltf-binary'/);
-  assert.match(server, /modelReviewStatus = item\.type === 'model'/);
-  assert.match(server, /item\.reviewStatus === 'approved' \? 'approved' as const : 'pending' as const/);
+  // 商家请求体的 reviewStatus 不得决定审核结果：创建走 resolveModelReview(item, [])（永远 pending），
+  // 更新走 resolveModelReview(item, current.media)（只认数据库里的已审核记录）
+  assert.match(server, /function resolveModelReview\(/);
+  assert.match(server, /const createdModelReview = item\.type === 'model' \? resolveModelReview\(item, \[\]\) : null;/);
+  assert.match(server, /const resolved = resolveModelReview\(item, current\.media\);/);
+  assert.doesNotMatch(server, /item\.reviewStatus === 'approved' \? 'approved' as const : 'pending' as const/);
 });
 
 test('3D 场景主体区分 photo 与 model，不得把图片板声明为模型', () => {

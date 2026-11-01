@@ -2156,6 +2156,39 @@ function serializeProductRow(row: any): Product {
 }
 
 /**
+ * 模型审核状态的唯一裁决点（服务端权威）。
+ *
+ * 商家请求体里的 reviewStatus 一律不可信：它只是回显，不是授权。
+ * 只有同时满足以下条件的旧审核结果才被保留：
+ *   1) 数据库里原本存在同一条模型媒体（type=model）；
+ *   2) id、storageKey、url 三者与本次提交完全一致（即没有替换文件）；
+ *   3) 原记录状态为 approved。
+ * 任何一项不满足（新上传、替换文件、id 对不上）都重新回到 pending，必须重新审核。
+ */
+function resolveModelReview(
+  incoming: { id?: unknown; url?: unknown; storageKey?: unknown },
+  existingMedia: unknown
+): { reviewStatus: 'pending' | 'approved'; modelReview?: Record<string, unknown> } {
+  const list = Array.isArray(existingMedia) ? existingMedia : [];
+  const existing = list.find((item: any) => (
+    item
+    && item.type === 'model'
+    && typeof item.id === 'string'
+    && item.id === incoming.id
+    && item.url === incoming.url
+    && (item.storageKey || null) === (incoming.storageKey || null)
+  )) as any;
+  if (!existing || existing.reviewStatus !== 'approved') return { reviewStatus: 'pending' };
+  // 审核元信息同样来自数据库，避免商家把 reviewedBy 改成自己
+  return {
+    reviewStatus: 'approved',
+    ...(existing.modelReview && typeof existing.modelReview === 'object'
+      ? { modelReview: existing.modelReview as Record<string, unknown> }
+      : {})
+  };
+}
+
+/**
  * 未审核的 3D 模型绝不进入公开响应。
  *
  * 只在前端过滤是不够的：pending 模型的 URL 会随响应送到浏览器。
@@ -31441,22 +31474,22 @@ async function startServer() {
           return res.status(400).json({ success: false, error: 'PRODUCT_MEDIA_OBJECT_INVALID' });
         }
       }
-      // 模型一律先落 pending，只有审核动作能把它变成 approved，杜绝上传即公开
-      const modelReviewStatus = item.type === 'model'
-        ? (item.reviewStatus === 'approved' ? 'approved' as const : 'pending' as const)
-        : undefined;
+      // 新建商品没有任何历史记录，模型一律 pending；请求体里的 reviewStatus 完全不参与判定
+      const createdModelReview = item.type === 'model' ? resolveModelReview(item, []) : null;
       media.push({
         id: typeof item.id === 'string' && item.id.length <= 100 ? item.id : `media-${index}`,
         type: item.type,
-        ...(modelReviewStatus ? { reviewStatus: modelReviewStatus } : {}),
+        ...(createdModelReview || {}),
         url: item.url,
         ...(typeof item.storageKey === 'string' ? { storageKey: item.storageKey } : {}),
         ...(storedMetadata || {}),
         role: item.type === 'image' ? (item.role || (index === 0 ? 'main' : 'detail')) : undefined,
         color: typeof item.color === 'string' ? item.color.trim().slice(0, 80) : undefined,
-        ...(item.source === 'ai-try-on' ? {
+        // ai-try-on 图片的审核状态由其自身流程决定；模型状态只由 resolveModelReview 裁决，
+        // 这里不能再用请求体的 reviewStatus 覆盖
+        ...(item.source === 'ai-try-on' && item.type !== 'model' ? {
           source: 'ai-try-on' as const,
-          reviewStatus: item.reviewStatus === 'approved' ? 'approved' as const : 'pending' as const
+          reviewStatus: 'pending' as const
         } : item.source === 'merchant-upload' ? { source: 'merchant-upload' as const } : {}),
         alt: typeof item.alt === 'string' ? item.alt.trim().slice(0, 200) : undefined
       });
@@ -31918,7 +31951,16 @@ async function startServer() {
         delete storedItem.contentType;
         delete storedItem.sizeBytes;
       }
-      verifiedNextMedia.push({ ...storedItem, ...(storedMetadata || {}) });
+      // 审核状态由数据库裁决：只有「同一条已审核模型且文件未变」才保留 approved，
+      // 其余（新模型 / 替换文件 / id 对不上）一律回到 pending，请求体的 reviewStatus 被丢弃
+      if (item.type === 'model') {
+        const resolved = resolveModelReview(item, current.media);
+        delete storedItem.reviewStatus;
+        delete storedItem.modelReview;
+        verifiedNextMedia.push({ ...storedItem, ...(storedMetadata || {}), ...resolved });
+      } else {
+        verifiedNextMedia.push({ ...storedItem, ...(storedMetadata || {}) });
+      }
     }
     const nextImages = verifiedNextMedia.filter((item: any) => item.type === 'image').map((item: any) => item.url);
     if (!nextImages.length) return res.status(400).json({ success: false, error: 'PRODUCT_COVER_IMAGE_REQUIRED' });
@@ -47212,6 +47254,55 @@ async function startServer() {
 
     logAudit(adminName, 'admin', 'PRODUCT_PLATFORM_REVIEW', 'Product', productId, '-', `Status: ${updated.lifecycleStatus}, Home featured: ${updated.featuredOnHome}, Sale featured: ${updated.featuredOnSale}`);
     res.json({ success: true, product: serializeProductRow(updated) });
+  });
+
+  /**
+   * 平台审核商家上传的 3D 商品模型。
+   *
+   * 审核是商家接口之外的唯一批准入口：
+   * - 走 requireAdminAuth（独立 admin 密钥，商家 JWT 无法通过）；
+   * - 复用既有 products.review 权限，不新建权限体系；
+   * - 必须留存审核人、时间、商品 ID、媒体 ID、结果与驳回原因。
+   */
+  app.put('/api/admin/products/:id/media/:mediaId/model-review', requireAdminAuth, requireAdminPermission('products.review'), async (req, res) => {
+    const productId = req.params.id;
+    const mediaId = req.params.mediaId;
+    const decision = req.body?.decision === 'approved' ? 'approved' : req.body?.decision === 'rejected' ? 'rejected' : null;
+    if (!decision) {
+      return res.status(400).json({ success: false, error: 'MODEL_REVIEW_DECISION_INVALID' });
+    }
+    const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim().slice(0, 500) : '';
+    if (decision === 'rejected' && !reason) {
+      return res.status(400).json({ success: false, error: 'MODEL_REVIEW_REASON_REQUIRED' });
+    }
+    const reviewer = (req as AuthRequest).admin?.username || '';
+    try {
+      const product = await prisma.product.findUnique({ where: { id: productId }, select: { id: true, media: true } });
+      if (!product) return res.status(404).json({ success: false, error: 'PRODUCT_NOT_FOUND' });
+      const media = parseStoredJson<Array<Record<string, any>>>(product.media, []);
+      const index = media.findIndex(item => item && item.type === 'model' && item.id === mediaId);
+      if (index < 0) return res.status(404).json({ success: false, error: 'MODEL_MEDIA_NOT_FOUND' });
+
+      const reviewedAt = new Date().toISOString();
+      media[index] = {
+        ...media[index],
+        reviewStatus: decision,
+        modelReview: { reviewedBy: reviewer, reviewedAt, decision, reason }
+      };
+      await prisma.product.update({ where: { id: productId }, data: { media: JSON.stringify(media) } });
+      logAudit(
+        reviewer || 'admin',
+        'admin',
+        'PRODUCT_MODEL_REVIEW',
+        'Product',
+        productId,
+        JSON.stringify({ mediaId, reviewStatus: media[index].reviewStatus }),
+        `decision=${decision}${reason ? ` reason=${reason}` : ''}`
+      );
+      res.json({ success: true, productId, mediaId, reviewStatus: decision, reviewedBy: reviewer, reviewedAt });
+    } catch (error) {
+      sendInternalError(res, error, 'admin-product-model-review');
+    }
   });
 
   // GET /api/admin/customers (全平台买手客户列表)

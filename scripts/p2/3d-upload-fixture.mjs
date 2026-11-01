@@ -45,7 +45,9 @@ const merchantBase = {
   isVerified: true,
   storefrontEnabled: true,
   industry: 'LEATHER_GOODS',
-  industryTemplate: 'bags_wholesale'
+  industryTemplate: 'bags_wholesale',
+  // 商品编辑锁默认关闭；隔离夹具需要它开启才能测更新/替换路径
+  settings: JSON.stringify({ productEditingEnabled: true })
 };
 
 await prisma.product.deleteMany({ where: { merchantId: DEMO_MERCHANT } });
@@ -53,6 +55,27 @@ await prisma.authAccount.deleteMany({ where: { merchantId: DEMO_MERCHANT } });
 await prisma.merchant.deleteMany({ where: { id: DEMO_MERCHANT } });
 
 await prisma.merchant.create({ data: { id: DEMO_MERCHANT, ...merchantBase } });
+
+// 管理员账号：带 products.review 权限（用于真实审核接口测试）
+await prisma.authAccount.deleteMany({ where: { username: { in: ['qa-reviewer', 'qa-no-perm'] } } });
+await prisma.authAccount.createMany({
+  data: [
+    {
+      id: randomUUID(),
+      role: 'admin',
+      username: 'qa-reviewer',
+      passwordHash: 'qa-reviewer-hash',
+      permissions: JSON.stringify(['products.review'])
+    },
+    {
+      id: randomUUID(),
+      role: 'admin',
+      username: 'qa-no-perm',
+      passwordHash: 'qa-no-perm-hash',
+      permissions: JSON.stringify(['settings.ai_support'])
+    }
+  ]
+});
 
 // demo login 要求该商家恰好有一个 merchant 账号
 await prisma.authAccount.create({
@@ -68,7 +91,7 @@ await prisma.authAccount.create({
 // 一个带图片媒体的商品（用于验证上传/删除模型不会破坏图片）
 await prisma.product.create({
   data: {
-    id: 'qa-3d-upload-product',
+    id: `qa-3d-upload-${Date.now()}`,
     styleNo: 'QA-3D-001',
     name: 'QA 上传验收包',
     category: 'bags',
@@ -78,7 +101,7 @@ await prisma.product.create({
     images: JSON.stringify(['https://modaui.com/demo-products/category-bags.jpg']),
     media: JSON.stringify([
       {
-        id: 'qa-3d-upload-product-main',
+        id: `qa-3d-upload-main-${Date.now()}`,
         type: 'image',
         url: 'https://modaui.com/demo-products/category-bags.jpg',
         role: 'main',
@@ -106,7 +129,8 @@ await prisma.product.create({
 
 const merchant = await prisma.merchant.findUnique({ where: { id: DEMO_MERCHANT }, select: { id: true, code: true } });
 const accounts = await prisma.authAccount.count({ where: { merchantId: DEMO_MERCHANT } });
-const product = await prisma.product.findUnique({ where: { id: 'qa-3d-upload-product' }, select: { id: true, media: true } });
-console.log('merchant', merchant, 'accounts', accounts);
+const product = await prisma.product.findFirst({ where: { merchantId: DEMO_MERCHANT }, select: { id: true, media: true } });
+const admins = await prisma.authAccount.findMany({ where: { role: 'admin', username: { in: ['qa-reviewer', 'qa-no-perm'] } }, select: { username: true, permissions: true } });
+console.log('merchant', merchant, 'accounts', accounts, 'admins', JSON.stringify(admins));
 console.log('product media', product?.media);
 await prisma.$disconnect();

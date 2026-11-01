@@ -316,7 +316,113 @@ item.type === 'model' && Boolean(item.url) && item.reviewStatus === 'approved'
 | **B 未验证** | 上传模型在买家详情页最终渲染（媒体路由未部署 `models`） |
 | **C 未验证** | 手机 Web 同流程（依赖上面两项先打通） |
 
-## 12. 需要部署才能关闭的缺口
+## 12. 第三轮：彻底关闭商家自审核漏洞
+
+### 12.1 漏洞与修法
+
+上一轮 `item.reviewStatus === 'approved' ? 'approved' : 'pending'` 仍是**请求体驱动的判定**：
+商家在 POST/PUT 里带上 `reviewStatus: 'approved'` 就会被写库。这是真实的提权路径。
+
+改为单一裁决点 `resolveModelReview(incoming, existingMedia)`（`server.ts`）：
+
+| 场景 | existingMedia | 结果 |
+| --- | --- | --- |
+| 新建商品 | `[]` | 恒 `pending` |
+| 更新，模型 id/storageKey/url 与库内一致且原为 approved | 当前 media | 保留 `approved` + 沿用库内 `modelReview` |
+| 更新，id/storageKey/url 任一不符（替换文件） | 当前 media | `pending` |
+| 复制到新商品（客户端重放已审核媒体） | `[]` | `pending` |
+
+请求体里的 `reviewStatus` / `modelReview` 在保存前被 `delete` 掉，不参与写入。
+
+### 12.2 管理员审核入口（复用既有权限体系）
+
+`PUT /api/admin/products/:id/media/:mediaId/model-review`
+
+- 守卫：`requireAdminAuth`（独立 `JWT_ADMIN_SECRET`，商家 JWT 无法通过）+ `requireAdminPermission('products.review')`
+  —— 复用既有平台审核权限，不新建权限体系。
+- 入参：`{ decision: 'approved' | 'rejected', reason? }`；`rejected` 必须给原因（否则 400 `MODEL_REVIEW_REASON_REQUIRED`）。
+- 落库：`reviewStatus` + `modelReview: { reviewedBy, reviewedAt, decision, reason }`。
+- 审计：`logAudit(..., 'PRODUCT_MODEL_REVIEW', 'Product', productId, ...)`。
+
+### 12.3 GLB 校验加强（容器层 + 结构层）
+
+`src/server/glbValidation.ts` 现在分两层：
+
+**容器层**：magic / 版本 2 / 三段长度一致（声明=对象=实读）/ JSON 必须第一个 chunk /
+chunk 4 字节对齐 / 只允许一个 BIN 且在最后 / 拒绝未对齐 chunk、重复 chunk、未知 chunk、尾随垃圾字节。
+
+**结构层**：buffer（外部路径拒绝、byteLength 合法）、bufferView（buffer 索引有效、范围落在 buffer 内）、
+accessor（componentType/type 合法、bufferView 有效、`byteOffset + 元素字节 × count ≤ view.byteLength`）、
+mesh primitive（attributes 必须非空且 accessor 索引有效、indices/material 索引有效）、
+node（mesh / children 索引有效）、image（data URI 或 bufferView，拒绝外部路径、拒绝无来源）、
+scene（scene 索引、scene.nodes 索引有效）。
+
+**允许内嵌 `data:` URI**（base64 在文件内部，不产生网络请求），只拒绝外部路径引用。
+「只数 mesh 数量」不再足以通过：`meshes: [{}]`、`primitives: []` 都会被拒。
+
+### 12.4 真实 HTTP 攻击测试（隔离库 + 隔离实例）
+
+脚本 `scripts/p2/3d-review-attacks.mjs`，全部走真实请求：
+
+| # | 攻击/场景 | 期望 | 实测 |
+| --- | --- | --- | --- |
+| 1 | 创建商品提交 `reviewStatus=approved` | 落库 pending | **PASS** 201 / pending |
+| 2 | 更新商品提交 `reviewStatus=approved` | 仍 pending | **PASS** 200 / pending |
+| 3 | 商家 cookie 打审核接口 | 401/403 | **PASS** 401 `ADMIN_AUTH_REQUIRED` |
+| 3b | 用商家密钥签「admin」token 打审核接口 | 401/403 | **PASS** 401 |
+| 4 | 无 `products.review` 权限管理员批准 | 403 | **PASS** 403 `ADMIN_PERMISSION_REQUIRED` |
+| 5 | 有权限管理员批准 | approved + 记录审核人/时间 | **PASS** by=qa-reviewer |
+| 6 | 商家改名不换模型 | 保留 approved | **PASS** approved |
+| 7 | 商家替换模型文件（声明 approved） | 重新 pending | **PASS** pending |
+| 8 | 复制已审核媒体到新商品 | pending | **PASS** 201 / pending |
+| 9 | pending 进商品列表 API | 无 model、无 .glb | **PASS** |
+| 10 | pending 进商品详情 API | 无 model、无 .glb | **PASS** |
+| 11 | 管理员驳回不给原因 | 400 | **PASS** |
+| 12 | 管理员批准后进公开详情 | approved + 图片仍在 | **PASS** |
+
+**13 通过 / 0 失败。** 审计日志实测 3 条 `PRODUCT_MODEL_REVIEW`，
+模型上 `modelReview = {"reviewedBy":"qa-reviewer","reviewedAt":"...","decision":"approved","reason":""}`。
+
+隔离夹具同时补了 `settings.productEditingEnabled = true` —— 否则更新路径被 `PRODUCT_EDITING_LOCKED (423)` 挡住，
+这也是上一轮「商家点击级上传未通过」的真实原因之一。
+
+> 说明：仓库中**不存在商品复制接口**（已全库检索 `duplicate/copy/clone`）。
+> 上表第 8 项用「把已审核商品的媒体原样 POST 到新商品」模拟复制语义，这是同一攻击面。
+
+### 12.5 生产数据只读核对（本轮未写入）
+
+| 商品 ID | 模型媒体 ID | 审核状态 | 模型 URL | 图片是否保留 |
+| --- | --- | --- | --- | --- |
+| demo-industry-department-chain-retail-3 | ...-model-1 | approved | /models/ruda-sample-handbag.glb | image 1 条 + images 字段 1 条 |
+| demo-industry-bags-wholesale-1 | ...-model-1 | approved | 同上 | 保留 |
+| demo-industry-bags-wholesale-2 | ...-model-1 | approved | 同上 | 保留 |
+| demo-industry-bags-wholesale-3 | ...-model-1 | approved | 同上 | 保留 |
+
+全库带 model 的商品共 4 个，全部属于 `demo-industry-*`，**无真实商家受影响**。
+这 4 条 approved 是脚本直写产生的，**不是审核流程结果**（无 `modelReview` 元信息）。
+
+**精确回滚方案（未执行，等授权）**
+
+```sql
+-- 预览影响：应命中 4 行
+SELECT id, jsonb_array_length(media::jsonb) AS media_count FROM "Product"
+WHERE id IN ('demo-industry-department-chain-retail-3',
+             'demo-industry-bags-wholesale-1',
+             'demo-industry-bags-wholesale-2',
+             'demo-industry-bags-wholesale-3');
+```
+
+回滚做法（对每个商品，用 Prisma 脚本按 id 过滤，只动那一条 model 条目）：
+
+1. 读出 `media` JSON 数组；
+2. 把 `type === 'model'` 的条目改为 `reviewStatus: 'pending'`（或整条删除）；
+3. **保留** 所有 `type === 'image'` 条目，不回写 `images` 字段；
+4. 写回。
+
+影响范围：仅这 4 个演示商品的三维展示会从「买家可见」变为「待审核不可见」，
+图片与商品数据不变；回滚可逆（改回 approved 即恢复）。
+
+## 13. 需要部署才能关闭的缺口
 
 1. 部署本轮 `server.ts`（含 `models` 媒体路由 + 公开响应剔除未审核模型 + GLB 校验）后，
    重跑 §11.4 的 8→10 步，才能把「上传模型买家可见并可旋转」标为已验证。

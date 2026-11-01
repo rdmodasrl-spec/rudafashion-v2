@@ -422,11 +422,150 @@ WHERE id IN ('demo-industry-department-chain-retail-3',
 影响范围：仅这 4 个演示商品的三维展示会从「买家可见」变为「待审核不可见」，
 图片与商品数据不变；回滚可逆（改回 approved 即恢复）。
 
+## 14. 第四轮：审核凭证可信化
+
+仅靠 `reviewStatus === 'approved'` 无法区分「真的被管理员审核过」和「脚本直接写成 approved」。
+第三轮的 4 条生产记录就是后者：状态是 approved，但没有任何审核过程证据。
+本轮把 approved 从「状态」升级为「状态 + 凭证」，并让凭证成为可公开判定的唯一依据。
+
+### 14.1 判定规则（单一来源）
+
+`src/shared/modelReviewCredential.ts`（本轮从 `src/server/` 移到 `src/shared/`，
+服务端 `stripUnapprovedModels` 与前端 `resolveProductModel` 共用同一份规则，不允许各写一套）：
+
+```ts
+modelReview: {
+  reviewerId: string;        // AuthAccount.id（uuid），唯一可信来源，参与授权判断
+  reviewerUsername?: string; // 仅用于展示，不参与判断
+  reviewedAt: string;        // ISO 时间，解析失败或晚于当前时间（+5min 时钟偏差）即无效
+  decision: 'approved' | 'rejected';
+  reason?: string;           // 驳回原因
+}
+```
+
+模型公开必须同时成立：
+
+1. `type === 'model'`
+2. `reviewStatus === 'approved'`
+3. `isValidModelReviewCredential(modelReview)`：
+   `decision === 'approved'` + `reviewerId` 匹配 uuid 形态 + `reviewedAt` 为有效且非未来时间
+
+**缺凭证一律按未审核处理。** 因此生产那 4 条脚本直写的 approved 在公开接口里自动不可见
+（`stripUnapprovedModels` 在服务端数据装配层剔除，前端 `resolveProductModel` 再拦一层纵深防御）。
+
+改动位置：
+
+| 位置 | 改动 |
+| --- | --- |
+| `resolveModelReview()` | 库内旧模型若 `!isValidModelReviewCredential(existing.modelReview)` → 返回 `pending` 并丢弃旧凭证 |
+| `serializePublicProductRow()` | 用带凭证校验的 `stripUnapprovedModels` |
+| `stripUnapprovedModels()` | 移到 `src/shared/modelReviewCredential.ts`，判定加凭证 |
+| `useStorefrontData.ts` `resolveProductModel()` | 前端也要求 `isValidModelReviewCredential(item.modelReview)` |
+
+### 14.2 审核人改为真实管理员 ID
+
+`AuthRequest.admin.accountId` 为新增字段，来源链：
+
+1. 管理员登录时把 `accountId` 写进 admin JWT（`adminAccountId ? { accountId } : {}`）。
+2. `authenticateAdminSession` **不信任 token 里的 accountId**：每次按 username 查库
+   (`select: { id, updatedAt, require2fa }`)，用数据库返回的 `id` 覆盖 `req.admin.accountId`。
+   换管理员用户名不影响历史凭证；伪造 token 也拿不到别人的 ID。
+3. 审核接口 `reviewerId = admin?.accountId`；缺失直接 403 `MODEL_REVIEW_ADMIN_IDENTITY_REQUIRED`
+   （本地回退账号没有库内身份，同样被拒）。
+4. 请求体的 `reviewerId` / `reviewerUsername` / `reviewedAt` / `decision` 一律不参与身份判断，
+   凭证四要素全部由服务端生成。
+
+### 14.3 审核写入与审计同事务
+
+`prisma.$transaction` 内：更新商品 media + `logAuditAndWait(..., 'PRODUCT_MODEL_REVIEW', 'Product', productId, ..., tx)`。
+`logAudit` 是 fire-and-forget（失败只打日志），不适合审核这种必须留痕的操作，所以这里用 `logAuditAndWait` 并传入 `tx`。
+商品状态与审计记录要么都成功，要么都不生效。
+
+### 14.4 平台管理员权限的**真实**状况（重要）
+
+只读核查结论：
+
+| 检查项 | 结果 |
+| --- | --- |
+| `products.review` 在代码中被使用 | 是（审核接口 + modagpt operator 多路由） |
+| 是否存在权限注册表（`PERMISSION_GROUPS` 之类） | **不存在**，全库检索无匹配 |
+| 是否有管理员账号管理页 / 角色-权限分配页 | **不存在** |
+| 生产 3 个 admin 账号的 `permissions` | 全部为 `[]` |
+| `hasAdminPermission` 是否有 role 隐含超管 | 没有，只认 `permissions.includes('*') 或 includes(permission)` |
+| 现有商品审核入口 | 有 `PUT /api/admin/products/:id/review`（改 lifecycleStatus / featured），无模型审核 UI |
+
+**结论：生产环境现在没有任何管理员账号能通过 `products.review` 校验。**
+模型审核接口在隔离环境（夹具直接写入 `permissions: ['products.review']`）可通过，
+但生产上模型永远无法被批准 —— 因为权限只能直接写 `AuthAccount.permissions` JSON，没有任何界面。
+本轮按用户要求**不新建权限系统、不改生产权限**，仅如实记录该阻塞。
+
+### 14.5 真实 HTTP 攻击测试（隔离库 `ruda_p2_3d` + 隔离实例 4105）
+
+脚本 `scripts/p2/3d-credential-attacks.mjs`（10 条，全部真实请求 + 真实数据库状态断言）：
+
+| # | 场景 | 期望 | 实测 |
+| --- | --- | --- | --- |
+| 1 | 库内 approved 但无 `modelReview` | 买家不可见 | **PASS** 详情只剩 image |
+| 2 | `modelReview` 缺 `reviewerId` | 不可见 | **PASS** |
+| 3 | `modelReview.decision = rejected` | 不可见 | **PASS** |
+| 4 | `reviewerId` 用用户名冒充（非 uuid） | 不可见 | **PASS** |
+| 5 | 商家创建商品时提交完整伪造凭证 | 落库 pending 且无凭证 | **PASS** 201 / pending / undefined |
+| 6 | 管理员正式批准 | 凭证完整且买家可见 | **PASS** reviewerId=08e0f966… decision=approved reason 保留 |
+| 7 | 已审核模型只改商品名称 | 合法凭证保留 approved | **PASS** |
+| 8 | 替换模型文件（请求体带旧凭证） | pending 且无凭证 | **PASS** |
+| 9 | 审核失败（mediaId 不存在） | 商品未变 + 审计未新增 | **PASS** 404 / mediaUnchanged=true / auditDelta=0 |
+| 10 | 库内旧模型无凭证，商家改其它字段 | 被降级 pending | **PASS** |
+
+**10 通过 / 0 失败。**
+
+### 14.6 生产旧演示模型：只读复核与回滚准备（本轮仍未写库）
+
+脚本 `scripts/p2/3d-legacy-model-review.mjs`（默认只读；`--apply` 需 `P2_LEGACY_MODEL_ROLLBACK=yes`）。
+
+2026-11 复核结果：
+
+| 商品 ID | 模型媒体 ID | reviewStatus | modelReview | 凭证有效 | 模型 URL | 图片 |
+| --- | --- | --- | --- | --- | --- | --- |
+| demo-industry-department-chain-retail-3 | …-model-1 | approved | 无 | 否 | /models/ruda-sample-handbag.glb | image 1 条 + images 1 条，完整 |
+| demo-industry-bags-wholesale-1 | …-model-1 | approved | 无 | 否 | 同上 | 完整 |
+| demo-industry-bags-wholesale-2 | …-model-1 | approved | 无 | 否 | 同上 | 完整 |
+| demo-industry-bags-wholesale-3 | …-model-1 | approved | 无 | 否 | 同上 | 完整 |
+
+全库带 `type:model` 的商品共 **4 个**，全部是 `demo-industry-*`，无真实商家数据。
+
+补充说明：这 4 条的 `url` 是 **应用内置静态资源** `/models/ruda-sample-handbag.glb`（RUDA 自有版权样品），
+不是商家私有对象存储媒体。因此「未授权商品模型不能通过公开 URL 泄漏」这条约束针对的是
+商家上传到 R2 的模型；内置样品本身不含任何商家/商品敏感信息。
+
+**回滚方案（等授权后执行）**
+
+```bash
+# 1) 只读核对
+DATABASE_URL=... node scripts/p2/3d-legacy-model-review.mjs
+
+# 2) 经授权后回滚为 pending（会把原 media 备份到 /tmp）
+DATABASE_URL=... P2_LEGACY_MODEL_ROLLBACK=yes node scripts/p2/3d-legacy-model-review.mjs --apply
+```
+
+脚本只把目标商品里 `type === 'model' && reviewStatus === 'approved' && 凭证无效` 的那一条改成 `pending`，
+不删除媒体条目、不改 `images` 字段、不碰图片/视频。
+影响范围：这 4 个演示商品的三维展示从「待隐藏（已由凭证规则自动隐藏）」变成「数据库状态也如实为 pending」；
+买家可见性不变，商品图片与其余字段不变。可逆（改回 approved 即恢复，但恢复后仍因缺凭证不可见）。
+
+### 14.7 本轮验证
+
+- `npx tsc --noEmit`：通过。
+- `npm run test:unit`：**1269 通过 / 0 失败**（新增 `tests/model-review-credential.test.ts` 13 条；
+  `tests/premium3d-model-chain.test.ts` 补了前端凭证守卫与真实凭证放行用例）。
+- 隔离库真实 HTTP 凭证攻击：10/10 通过。
+
 ## 13. 需要部署才能关闭的缺口
 
 1. 部署本轮 `server.ts`（含 `models` 媒体路由 + 公开响应剔除未审核模型 + GLB 校验）后，
    重跑 §11.4 的 8→10 步，才能把「上传模型买家可见并可旋转」标为已验证。
 2. 商家后台 `商品编辑锁` 需按真实商家设置放开，才能做点击级上传验收。
+3. **管理员模型审核 UI 不存在**，且生产 admin 账号无 `products.review` 权限（§14.4），
+   即使部署了接口，也没有任何真实管理员能完成审核。
 
 ## 13. 未完成 / 待验证
 
@@ -439,7 +578,7 @@ WHERE id IN ('demo-industry-department-chain-retail-3',
 - 真机（iPhone / Android 实体设备）未测试，只做 Chromium + 视口模拟。
 - 3D 场景未接 `prefers-reduced-transparency`、未做 GPU 显存实测（`renderer.info` 未上报）。
 
-## 12. P2 阶段 B 仍未闭环的三项（不在本轮范围）
+## 15. P2 阶段 B 仍未闭环的三项（不在本轮范围）
 
 1. **RFQ 商家报价 / 买家接受 / 转订单**：`/api/merchant/rfq/:id/quote`、`/api/buyer/rfq/:id/accept` 仍未实现。
 2. **箱包专业字段**：尺寸、五金、容量、肩带仍无独立字段，只能用 `fabric/origin/composition` 近似。

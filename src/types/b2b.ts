@@ -44,6 +44,17 @@ export interface ProductMedia {
   color?: string;
   source?: 'merchant-upload' | 'ai-try-on';
   reviewStatus?: 'pending' | 'approved';
+  /**
+   * 仅 type === 'model'：管理员审核凭证。缺凭证时即使 reviewStatus 为 approved
+   * 也按未审核处理，判定规则见 src/shared/modelReviewCredential.ts。
+   */
+  modelReview?: {
+    reviewerId: string;
+    reviewerUsername?: string;
+    reviewedAt: string;
+    decision: 'approved' | 'rejected';
+    reason?: string;
+  };
   poster?: string;
   alt?: string;
   /** 仅 type === 'model'：模型真实尺寸（米），用于按正确比例渲染 */

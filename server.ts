@@ -8,6 +8,7 @@ import { Readable } from 'node:stream';
 import { lstat, mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat, unlink, writeFile, chmod } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { validateGlbStructure } from './src/server/glbValidation';
+import { isValidModelReviewCredential, stripUnapprovedModels } from './src/shared/modelReviewCredential';
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
@@ -2178,13 +2179,16 @@ function resolveModelReview(
     && item.url === incoming.url
     && (item.storageKey || null) === (incoming.storageKey || null)
   )) as any;
-  if (!existing || existing.reviewStatus !== 'approved') return { reviewStatus: 'pending' };
-  // 审核元信息同样来自数据库，避免商家把 reviewedBy 改成自己
+  // 三个条件缺一不可：同一条记录、状态 approved、**审核凭证合法**。
+  // 旧数据（脚本直写的 approved，没有 modelReview）在这里被判为未审核，
+  // 商家即使只改商品名称，也会被降级为 pending，必须重新走管理员审核。
+  if (!existing || existing.reviewStatus !== 'approved' || !isValidModelReviewCredential(existing.modelReview)) {
+    return { reviewStatus: 'pending' };
+  }
+  // 凭证同样来自数据库，避免商家把 reviewerId/reviewedAt 改成自己想要的值
   return {
     reviewStatus: 'approved',
-    ...(existing.modelReview && typeof existing.modelReview === 'object'
-      ? { modelReview: existing.modelReview as Record<string, unknown> }
-      : {})
+    modelReview: existing.modelReview as Record<string, unknown>
   };
 }
 
@@ -2195,11 +2199,6 @@ function resolveModelReview(
  * 这里在服务端把非 approved 的 model 媒体剔除，买家拿不到链接；
  * 图片/视频等既有媒体不受影响。
  */
-function stripUnapprovedModels(media: unknown): unknown {
-  if (!Array.isArray(media)) return media;
-  return media.filter((item: any) => !(item && item.type === 'model' && item.reviewStatus !== 'approved'));
-}
-
 function serializePublicProductRow(row: any): Product {
   // 公开路径先按白名单挑选字段，再做成本/存储键清理；顺序不可颠倒。
   const product = sanitizePublicProduct(pickPublicProductFields(serializeProductRow(row))) as Product & { media?: unknown };
@@ -4642,7 +4641,13 @@ interface AuthRequest extends express.Request {
     /** 员工绑定的门店；为空表示不限制门店。由 requireMerchantTenant 按会话员工读取。 */
     employeeStoreId?: string | null;
   };
-  admin?: { username: string; name: string; permissions?: string[] };
+  admin?: {
+    username: string;
+    name: string;
+    permissions?: string[];
+    /** AuthAccount.id（数据库真实主键）；审核等不可否认操作必须用它，不能用 username 代替 */
+    accountId?: string;
+  };
   company?: { id: string; companyId: string; email: string; role: 'company' };
 }
 
@@ -5217,7 +5222,7 @@ async function authenticateAdminSession(req: AuthRequest, res: express.Response)
   }
   const account = await prisma.authAccount.findFirst({
     where: { role: 'admin', username: payload.username },
-    select: { updatedAt: true, require2fa: true }
+    select: { id: true, updatedAt: true, require2fa: true }
   });
   if (account && !isAdminSessionCurrent(payload.credentialVersion, payload.iat, account.updatedAt)) {
     sendApiError(res, new BusinessError('ADMIN_AUTH_REQUIRED', 'Admin session is no longer current', { statusCode: 401 }));
@@ -5231,7 +5236,8 @@ async function authenticateAdminSession(req: AuthRequest, res: express.Response)
     sendApiError(res, new BusinessError('ADMIN_MFA_REQUIRED', 'Admin MFA verification is required', { statusCode: 403 }));
     return false;
   }
-  req.admin = payload;
+  // accountId 一律取数据库主键，忽略 token 里的同名字段（token 可被复制，不能作为身份证据）
+  req.admin = { ...payload, ...(account ? { accountId: account.id } : { accountId: undefined }) };
   return true;
 }
 
@@ -11719,6 +11725,8 @@ async function startServer() {
           username,
           name: '超级管理员 Super Admin',
           role: 'admin',
+          // 只有持久化账号才有真实 ID；无 DB 账号的本地回退不允许执行不可否认操作
+          ...(adminAccountId ? { accountId: adminAccountId } : {}),
           permissions: adminPermissions.length ? adminPermissions : ['*'],
           credentialVersion: 'updatedAt' in admin ? admin.updatedAt.getTime() : null,
           mfaVerified: requiresTotp
@@ -47259,15 +47267,20 @@ async function startServer() {
   /**
    * 平台审核商家上传的 3D 商品模型。
    *
-   * 审核是商家接口之外的唯一批准入口：
-   * - 走 requireAdminAuth（独立 admin 密钥，商家 JWT 无法通过）；
-   * - 复用既有 products.review 权限，不新建权限体系；
-   * - 必须留存审核人、时间、商品 ID、媒体 ID、结果与驳回原因。
+   * 这是唯一能写入审核凭证的入口：
+   * - requireAdminAuth（独立 admin 密钥，商家 JWT 无法通过）
+   * - requireAdminPermission('products.review')
+   * - reviewerId 取自**数据库管理员账号主键**，不用 username 冒充
+   * - 商品媒体更新与审计记录在同一事务内提交，不会出现「已批准但没审计」
    */
   app.put('/api/admin/products/:id/media/:mediaId/model-review', requireAdminAuth, requireAdminPermission('products.review'), async (req, res) => {
     const productId = req.params.id;
     const mediaId = req.params.mediaId;
-    const decision = req.body?.decision === 'approved' ? 'approved' : req.body?.decision === 'rejected' ? 'rejected' : null;
+    const decision = req.body?.decision === 'approved'
+      ? 'approved'
+      : req.body?.decision === 'rejected'
+        ? 'rejected'
+        : null;
     if (!decision) {
       return res.status(400).json({ success: false, error: 'MODEL_REVIEW_DECISION_INVALID' });
     }
@@ -47275,31 +47288,65 @@ async function startServer() {
     if (decision === 'rejected' && !reason) {
       return res.status(400).json({ success: false, error: 'MODEL_REVIEW_REASON_REQUIRED' });
     }
-    const reviewer = (req as AuthRequest).admin?.username || '';
-    try {
-      const product = await prisma.product.findUnique({ where: { id: productId }, select: { id: true, media: true } });
-      if (!product) return res.status(404).json({ success: false, error: 'PRODUCT_NOT_FOUND' });
-      const media = parseStoredJson<Array<Record<string, any>>>(product.media, []);
-      const index = media.findIndex(item => item && item.type === 'model' && item.id === mediaId);
-      if (index < 0) return res.status(404).json({ success: false, error: 'MODEL_MEDIA_NOT_FOUND' });
 
-      const reviewedAt = new Date().toISOString();
-      media[index] = {
-        ...media[index],
-        reviewStatus: decision,
-        modelReview: { reviewedBy: reviewer, reviewedAt, decision, reason }
-      };
-      await prisma.product.update({ where: { id: productId }, data: { media: JSON.stringify(media) } });
-      logAudit(
-        reviewer || 'admin',
-        'admin',
-        'PRODUCT_MODEL_REVIEW',
-        'Product',
+    const admin = (req as AuthRequest).admin;
+    const reviewerId = admin?.accountId;
+    // 没有数据库账号身份就不能产生审核凭证（本地回退账号也走这条拒绝）
+    if (!reviewerId) {
+      return sendApiError(res, new BusinessError(
+        'MODEL_REVIEW_ADMIN_IDENTITY_REQUIRED',
+        'Model review requires a persisted admin account',
+        { statusCode: 403 }
+      ));
+    }
+    const reviewerUsername = admin?.username || '';
+
+    const reviewedAt = new Date().toISOString();
+    const credential = {
+      reviewerId,
+      reviewerUsername,
+      reviewedAt,
+      decision,
+      ...(reason ? { reason } : {})
+    } as const;
+
+    try {
+      const result = await prisma.$transaction(async tx => {
+        const product = await tx.product.findUnique({ where: { id: productId }, select: { id: true, media: true } });
+        if (!product) return { status: 404 as const, error: 'PRODUCT_NOT_FOUND' };
+        const media = parseStoredJson<Array<Record<string, any>>>(product.media, []);
+        const index = media.findIndex(item => item && item.type === 'model' && item.id === mediaId);
+        if (index < 0) return { status: 404 as const, error: 'MODEL_MEDIA_NOT_FOUND' };
+
+        const before = media[index];
+        media[index] = { ...before, reviewStatus: decision, modelReview: credential };
+        await tx.product.update({ where: { id: productId }, data: { media: JSON.stringify(media) } });
+        // 同一事务写审计：商品更新失败则审计回滚，审计失败则商品回滚
+        await logAuditAndWait(
+          reviewerUsername || 'admin',
+          'admin',
+          'PRODUCT_MODEL_REVIEW',
+          'Product',
+          productId,
+          JSON.stringify({ mediaId, reviewStatus: before.reviewStatus ?? null, modelReview: before.modelReview ?? null }),
+          JSON.stringify({ mediaId, decision, reason, reviewerId }),
+          tx
+        );
+        return { status: 200 as const };
+      });
+
+      if (result.status === 404) {
+        return res.status(404).json({ success: false, error: result.error });
+      }
+      res.json({
+        success: true,
         productId,
-        JSON.stringify({ mediaId, reviewStatus: media[index].reviewStatus }),
-        `decision=${decision}${reason ? ` reason=${reason}` : ''}`
-      );
-      res.json({ success: true, productId, mediaId, reviewStatus: decision, reviewedBy: reviewer, reviewedAt });
+        mediaId,
+        reviewStatus: decision,
+        reviewerId,
+        reviewerUsername,
+        reviewedAt
+      });
     } catch (error) {
       sendInternalError(res, error, 'admin-product-model-review');
     }

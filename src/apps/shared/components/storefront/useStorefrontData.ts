@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useB2B } from '../../../../context/B2BContext';
 import { apiGet } from '../../../../api/client';
 import { normalizeMediaUrl } from '../premium3d/capability';
+import { isValidModelReviewCredential } from '../../../../shared/modelReviewCredential';
 import type { Merchant, Product } from '../../../../types/b2b';
 
 export type StorefrontVisibilityContext = {
@@ -109,10 +110,12 @@ export function mapProductForStorefront(product: Product, unitPrice: number, tie
 }
 
 /**
- * 真实 3D 模型：只认 media 里 type === 'model' 且**显式** reviewStatus === 'approved' 的条目。
+ * 真实 3D 模型：只认 media 里 type === 'model'、显式 reviewStatus === 'approved'
+ * 且带**合法管理员审核凭证**的条目。
  *
- * 必须是严格相等：缺少 reviewStatus（老数据、脚本直写、被篡改的响应）一律视为未审核，
- * 不允许「没有状态就当通过」，否则等于给审核开了后门。
+ * 判定统一走 src/shared/modelReviewCredential.ts，与服务端 stripUnapprovedModels 同源：
+ * 缺状态、缺凭证、凭证缺真实管理员 ID 或 decision 不是 approved，一律视为未审核。
+ * 前端这层是纵深防御，真正的门禁在服务端数据装配层。
  * 没有合格模型就返回 null —— 模板回落真实商品图，不生成假模型。
  */
 export function resolveProductModel(product: Product): StorefrontProduct['model'] {
@@ -120,6 +123,7 @@ export function resolveProductModel(product: Product): StorefrontProduct['model'
     item.type === 'model'
     && Boolean(item.url)
     && item.reviewStatus === 'approved'
+    && isValidModelReviewCredential(item.modelReview)
   );
   const picked = usable[0];
   if (!picked) return null;

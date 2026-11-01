@@ -2,7 +2,7 @@
  * 真实 3D 商品模型链路守卫。
  *
  * 这里检查的是「安全边界」而不是观感：
- * 1) 只有显式 approved 的真实模型才算 3D，缺失状态/待审/驳回一律不展示；
+ * 1) 只有显式 approved 且带合法管理员审核凭证的真实模型才算 3D，缺失状态/待审/驳回/无凭证一律不展示；
  * 2) 上传只接受自包含 GLB，服务端必须校验 GLB 结构，不能相信 MIME；
  * 3) 上传后的模型一律 pending，审核通过前不得进入买家响应。
  */
@@ -16,33 +16,65 @@ const viewer = read('src/apps/shared/components/premium3d/ruda3d/Ruda3DProductVi
 const uploader = read('src/apps/merchant-admin-common/components/merchant/Model3DUploader.tsx');
 const server = read('server.ts');
 
-test('只有显式 reviewStatus === approved 的模型才展示（禁止缺省即通过）', () => {
+test('前端只认显式 reviewStatus === approved + 合法审核凭证，不把缺失状态当通过', () => {
   assert.match(storefront, /item\.reviewStatus === 'approved'/);
   assert.doesNotMatch(
     storefront,
     /reviewStatus \|\| 'approved'/,
     '不得把缺失的审核状态当成已通过'
   );
+  assert.match(
+    storefront,
+    /isValidModelReviewCredential\(item\.modelReview\)/,
+    '前端必须同时校验管理员审核凭证'
+  );
   assert.match(storefront, /if \(!picked\) return null;/);
 });
 
-test('缺少状态 / pending / rejected 都不能进入买家 3D 查看器', async () => {
-  // 直接调用真实实现，用最小 fake product 覆盖四种审核状态
+test('缺少状态 / pending / rejected / 缺凭证 都不能进入买家 3D 查看器', async () => {
+  // 直接调用真实实现，用最小 fake product 覆盖各种审核状态与凭证情况
   const module = await import('../src/apps/shared/components/storefront/useStorefrontData.ts');
   const base: Record<string, unknown> = {
     id: 'p1', styleNo: 'S1', name: '包', merchantId: 'm1', images: ['/a.jpg']
   };
-  const withStatus = (reviewStatus?: string) => ({
+  const credential = {
+    reviewerId: '08e0f966-3005-4030-838a-8fada495ae05',
+    reviewerUsername: 'qa-reviewer',
+    reviewedAt: new Date(Date.now() - 60_000).toISOString(),
+    decision: 'approved'
+  };
+  const withMedia = (extra: Record<string, unknown>) => ({
     ...base,
-    media: [{ id: 'm', type: 'model', url: '/models/x.glb', ...(reviewStatus ? { reviewStatus } : {}) }]
+    media: [{ id: 'm', type: 'model', url: '/models/x.glb', ...extra }]
   }) as never;
 
-  assert.equal(module.resolveProductModel(withStatus(undefined)), null, '缺少审核状态必须拒绝');
-  assert.equal(module.resolveProductModel(withStatus('pending')), null, 'pending 必须拒绝');
-  assert.equal(module.resolveProductModel(withStatus('rejected')), null, 'rejected 必须拒绝');
-  const approved = module.resolveProductModel(withStatus('approved'));
-  assert.ok(approved, 'approved 才允许展示');
-  assert.equal(approved?.url, '/models/x.glb');
+  assert.equal(module.resolveProductModel(withMedia({})), null, '缺少审核状态必须拒绝');
+  assert.equal(module.resolveProductModel(withMedia({ reviewStatus: 'pending' })), null, 'pending 必须拒绝');
+  assert.equal(module.resolveProductModel(withMedia({ reviewStatus: 'rejected' })), null, 'rejected 必须拒绝');
+  assert.equal(
+    module.resolveProductModel(withMedia({ reviewStatus: 'approved' })),
+    null,
+    'approved 但没有管理员审核凭证（脚本直写/旧数据）必须拒绝'
+  );
+  assert.equal(
+    module.resolveProductModel(withMedia({
+      reviewStatus: 'approved',
+      modelReview: { ...credential, reviewerId: 'qa-reviewer' }
+    })),
+    null,
+    'reviewerId 用用户名冒充必须拒绝'
+  );
+  assert.equal(
+    module.resolveProductModel(withMedia({
+      reviewStatus: 'approved',
+      modelReview: { ...credential, decision: 'rejected' }
+    })),
+    null,
+    'decision 不是 approved 必须拒绝'
+  );
+  const visible = module.resolveProductModel(withMedia({ reviewStatus: 'approved', modelReview: credential }));
+  assert.ok(visible, 'approved 且有合法凭证才允许展示');
+  assert.equal(visible?.url, '/models/x.glb');
 });
 
 test('多角度图片必须够 3 张才启用 360 环视，否则回落真实商品图', () => {
@@ -98,6 +130,8 @@ test('商品媒体里 model 条目只能指向自家对象存储的 .glb，且�
   assert.match(server, /function resolveModelReview\(/);
   assert.match(server, /const createdModelReview = item\.type === 'model' \? resolveModelReview\(item, \[\]\) : null;/);
   assert.match(server, /const resolved = resolveModelReview\(item, current\.media\);/);
+  // 保留旧审核状态还必须凭证合法；凭证不合法时降级 pending
+  assert.match(server, /isValidModelReviewCredential\(existing\.modelReview\)/);
   assert.doesNotMatch(server, /item\.reviewStatus === 'approved' \? 'approved' as const : 'pending' as const/);
 });
 
@@ -106,4 +140,26 @@ test('3D 场景主体区分 photo 与 model，不得把图片板声明为模型'
   assert.match(sceneKit, /kind: 'photo'/);
   assert.match(sceneKit, /kind: 'model'/);
   assert.match(sceneKit, /export async function buildModelSubject/);
+});
+
+test('审核接口用数据库管理员 ID 作 reviewerId，且无 DB 身份时拒绝', () => {
+  assert.match(server, /const reviewerId = admin\?\.accountId;/);
+  assert.match(server, /MODEL_REVIEW_ADMIN_IDENTITY_REQUIRED/);
+  // accountId 来自数据库查询结果，而不是 token 里的同名字段
+  assert.match(server, /select: \{ id: true, updatedAt: true, require2fa: true \}/);
+  assert.match(server, /req\.admin = \{ \.\.\.payload, \.\.\.\(account \? \{ accountId: account\.id \}/);
+});
+
+test('审核写入与审计在同一事务内，且凭证字段齐备', () => {
+  assert.match(server, /const result = await prisma\.\$transaction\(async tx => \{/);
+  assert.match(server, /await logAuditAndWait\([\s\S]{0,400}?tx\n        \);/);
+  const endpoint = server.slice(server.indexOf('media/:mediaId/model-review'), server.indexOf('// GET /api/admin/customers'));
+  for (const field of ['reviewerId', 'reviewerUsername', 'reviewedAt', 'decision', 'reason']) {
+    assert.match(endpoint, new RegExp(field), `审核凭证必须记录 ${field}`);
+  }
+});
+
+test('公开响应改用带凭证校验的 stripUnapprovedModels', () => {
+  assert.match(server, /import \{ isValidModelReviewCredential, stripUnapprovedModels \} from '\.\/src\/shared\/modelReviewCredential';/);
+  assert.match(server, /media: stripUnapprovedModels\(product\.media\)/);
 });

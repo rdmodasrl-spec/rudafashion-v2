@@ -29,12 +29,12 @@ export function buildLightingRig(
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE_NS.PCFSoftShadowMap;
   renderer.toneMapping = THREE_NS.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  renderer.toneMappingExposure = 0.92;
   renderer.outputColorSpace = THREE_NS.SRGBColorSpace;
 
-  scene.add(new THREE_NS.AmbientLight(0xffffff, 0.35 * intensity));
+  scene.add(new THREE_NS.AmbientLight(0xffffff, 0.22 * intensity));
   // 半球光模拟影棚顶部 + 地面反射，让皮革暗部不死黑
-  const hemi = new THREE_NS.HemisphereLight(0xffffff, 0xd9d2c7, 0.55 * intensity);
+  const hemi = new THREE_NS.HemisphereLight(0xffffff, 0xd9d2c7, 0.38 * intensity);
   scene.add(hemi);
 
   const key = new THREE_NS.DirectionalLight(0xfff6ea, 2.1 * intensity);

@@ -79,10 +79,11 @@ export const Ruda3DProductViewer: React.FC<Ruda3DProductViewerProps> = ({
 
     const env = buildStudioEnvironment(THREE);
     scene.environment = env;
-    const rig = buildLightingRig(THREE, scene, renderer, 'showcase');
+    const rig = buildLightingRig(THREE, scene, renderer, 'studio');
     const floor = buildStudioFloor(THREE);
     scene.add(floor);
 
+    const { enhanceGltfMaterials } = await import('./sceneKit');
     const loader = new GLTFLoader();
     const gltf = await loader.loadAsync(model.url);
     const root = gltf.scene;
@@ -91,18 +92,18 @@ export const Ruda3DProductViewer: React.FC<Ruda3DProductViewerProps> = ({
       if (asMesh.isMesh) {
         asMesh.castShadow = true;
         asMesh.receiveShadow = true;
-        asMesh.material = Array.isArray(asMesh.material)
-          ? asMesh.material.map(material => material)
-          : asMesh.material;
       }
     });
+    const releaseEnhancedMaterials = enhanceGltfMaterials(THREE, root);
 
-    // 按真实尺寸归一化：scaleMeters 有值时按米换算到场景单位，保证不同商品比例可信
+    // 取景归一化：模型一律放大到填满画框（相机固定），保证任何真实模型都看得清。
+    // scaleMeters 记录商品真实尺寸，供多商品同场景对比比例时使用，不参与单件取景，
+    // 否则 0.3 m 的真实手袋会被缩成一个小点。
     const bounds = new THREE.Box3().setFromObject(root);
     const size = new THREE.Vector3();
     bounds.getSize(size);
     const maxDimension = Math.max(size.x, size.y, size.z) || 1;
-    const targetSize = model.scaleMeters ? Math.min(3.2, model.scaleMeters * 1.6) : 2.4;
+    const targetSize = 2.35;
     const scale = targetSize / maxDimension;
     root.scale.setScalar(scale);
     bounds.setFromObject(root);
@@ -174,6 +175,7 @@ export const Ruda3DProductViewer: React.FC<Ruda3DProductViewerProps> = ({
         host?.removeEventListener('wheel', onWheel);
         window.removeEventListener('pointerup', onUp);
         rig.dispose();
+        releaseEnhancedMaterials();
         scene.remove(root, floor);
         root.traverse(child => {
           const asMesh = child as import('three').Mesh;

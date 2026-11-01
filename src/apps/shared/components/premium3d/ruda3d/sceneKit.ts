@@ -7,7 +7,7 @@
  *   这是真三维场景，但界面不会声称它是 3D 模型。
  */
 import type * as THREE from 'three';
-import { createHardwareMaterial, createLeatherMaterial } from './leatherMaterial';
+import { createHardwareMaterial, createLeatherMaterial, createLeatherNormalTexture } from './leatherMaterial';
 import { textureUrlCandidates } from '../capability';
 
 export type SubjectKind = 'model' | 'photo';
@@ -176,4 +176,48 @@ export function buildLeatherProps(THREE_NS: typeof import('three')): { group: TH
       (capLeft.material as THREE.Material).dispose();
     }
   };
+}
+
+/**
+ * 给商家上传的 GLB 做运行时材质增强。
+ *
+ * 商家模型常常只有基础颜色、没有烘焙贴图；这里按材质命名补充皮革颗粒法线、
+ * 收敛环境反射强度，避免「塑料感 / 被环境光洗白」。只改渲染参数，不改模型几何或颜色定义。
+ */
+export function enhanceGltfMaterials(
+  THREE_NS: typeof import('three'),
+  root: import('three').Object3D
+): () => void {
+  const leather = createLeatherNormalTexture(THREE_NS, { repeat: 5 });
+  let leatherUsed = false;
+  root.traverse(child => {
+    const mesh = child as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    materials.forEach(material => {
+      const physical = material as import('three').MeshPhysicalMaterial;
+      const name = physical.name || '';
+      if (/hardware|metal|brass|steel|zipper|buckle|ring|stud/i.test(name)) {
+        physical.envMapIntensity = 1.25;
+        physical.roughness = Math.min(physical.roughness ?? 0.25, 0.28);
+        physical.needsUpdate = true;
+        return;
+      }
+      if (/thread|stitch/i.test(name)) {
+        physical.roughness = 0.95;
+        physical.envMapIntensity = 0.3;
+        physical.needsUpdate = true;
+        return;
+      }
+      // 其余按皮革处理（GLB 里皮革材质占绝大多数）
+      physical.envMapIntensity = 0.55;
+      physical.normalMap = leather.texture;
+      physical.normalScale = new THREE_NS.Vector2(0.22, 0.22);
+      physical.roughness = Math.max(physical.roughness ?? 0.6, 0.62);
+      physical.sheen = 0.12;
+      physical.needsUpdate = true;
+      leatherUsed = true;
+    });
+  });
+  return () => { if (leatherUsed) leather.dispose(); };
 }

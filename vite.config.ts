@@ -63,7 +63,11 @@ export default defineConfig(() => {
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      // 构建产物目录不参与监听：dist 下累积多个 release 会耗尽 inotify watch，
+      // 导致 dev server 直接 ENOSPC 退出；产物本来就不需要热更新。
+      watch: process.env.DISABLE_HMR === 'true'
+        ? null
+        : { ignored: ['**/dist/**', '**/node_modules/**', '**/.git/**'] },
     },
     build: {
       emptyOutDir: false,

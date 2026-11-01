@@ -22800,6 +22800,7 @@ async function startServer() {
     }
   );
 
+  const MODEL_MEDIA_TYPES = new Set(['model/gltf-binary', 'model/gltf+json']);
   app.post('/api/merchant/media/presign', requireMerchantTenant, requireEmployeePermission('product.publish', 'employees.manage', 'store_manager'), async (req: AuthRequest, res) => {
     const storageClient = getMediaObjectStorageClient();
     const storageBucket = getMediaObjectStorageBucket();
@@ -22807,16 +22808,33 @@ async function startServer() {
       return res.status(503).json({ success: false, error: 'OBJECT_STORAGE_NOT_CONFIGURED' });
     }
     const contentType = String(req.body?.contentType || '').toLowerCase();
-    const mediaType = contentType.startsWith('image/') ? 'images' : contentType.startsWith('video/') ? 'videos' : '';
+    // 3D 商品模型与图片/视频共用同一套预签名上传与对象存储，不另建媒体库。
+    // 只接受 glTF-Binary（含 glTF 变体），并单独限制体积，避免上传任意二进制。
+    const isModel = MODEL_MEDIA_TYPES.has(contentType);
+    const mediaType = isModel
+      ? 'models'
+      : contentType.startsWith('image/')
+        ? 'images'
+        : contentType.startsWith('video/')
+          ? 'videos'
+          : '';
     const fileSize = Number(req.body?.fileSize);
-    if (!mediaType || !['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/webm', 'video/quicktime'].includes(contentType)) {
+    if (!mediaType || ![...MODEL_MEDIA_TYPES, 'image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/webm', 'video/quicktime'].includes(contentType)) {
       return res.status(400).json({ success: false, error: 'MEDIA_TYPE_NOT_ALLOWED' });
     }
-    const maxFileSize = mediaType === 'images' ? 12 * 1024 * 1024 : 100 * 1024 * 1024;
+    const maxFileSize = mediaType === 'models'
+      ? 25 * 1024 * 1024
+      : mediaType === 'images'
+        ? 12 * 1024 * 1024
+        : 100 * 1024 * 1024;
     if (!Number.isSafeInteger(fileSize) || fileSize <= 0 || fileSize > maxFileSize) {
       return res.status(413).json({ success: false, error: 'MEDIA_FILE_SIZE_INVALID' });
     }
-    const extension = contentType === 'video/quicktime' ? 'mov' : contentType.split('/')[1];
+    const extension = isModel
+      ? 'glb'
+      : contentType === 'video/quicktime'
+        ? 'mov'
+        : contentType.split('/')[1];
     const r2 = resolveR2Environment().active;
     const key = `merchants/${req.merchant!.merchantId}/storefront/${mediaType}/${r2 ? 'r2/' : 'v2/'}${crypto.randomUUID()}.${extension}`;
     try {

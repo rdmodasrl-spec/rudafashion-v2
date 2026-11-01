@@ -64,6 +64,7 @@ import { LanguagePicker } from '../shared/components/common/LanguagePicker';
 import { ProductImage } from '../shared/components/common/ProductImage';
 import { OrderChatPanel } from '../shared/components/common/OrderChatPanel';
 import { SmartMediaUploader } from '../merchant-admin-common/components/merchant/SmartMediaUploader';
+import { Model3DUploader } from '../merchant-admin-common/components/merchant/Model3DUploader';
 import { MerchantMobileOrderWorkspace } from './MerchantMobileOrderWorkspace';
 import { MerchantMobileProductCreateForm } from './MerchantMobileProductCreateForm';
 import type { ContentKind } from '../merchant-admin-common/components/merchant/MerchantContentWorkspace';
@@ -4385,6 +4386,11 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
               compact
               onBusyChange={setProductMediaBusy}
               onChange={media => setProductDraft(previous => previous ? { ...previous, media, images: media.filter(item => item.type === 'image').map(item => item.url) } : previous)}
+            />
+            <Model3DUploader
+              value={(productDraft.media || []) as NonNullable<Product['media']>}
+              disabled={productMediaBusy}
+              onChange={media => setProductDraft(previous => previous ? { ...previous, media } : previous)}
             />
             <div className="flex gap-2 pt-1">
               <button type="submit" disabled={productDraftBusy || productMediaBusy} className="flex-1 rounded-xl bg-neutral-900 py-3 text-xs font-black text-white disabled:opacity-50">{productMediaBusy ? '媒体上传中...' : productDraftBusy ? '保存中...' : '保存全部修改'}</button>

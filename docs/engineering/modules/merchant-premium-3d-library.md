@@ -148,10 +148,93 @@
    补齐后 `/demo-products/model-07.jpg` 返回 `image/jpeg`。
 3. `normalizeMediaUrl()`：把与本应用等价的域名绝对地址改为相对路径，修复隔离预览环境图片跨源失败。
 
-## 10. 未完成 / 待验证
+## 10. 真实 3D 商品模型链路（第二轮）
+
+### 10.1 真实 GLB 样品模型（RUDA 自有版权）
+
+`scripts/generate-sample-bag-glb.mjs` 用 three.js 几何体程序化建模并导出
+`public/models/ruda-sample-handbag.glb`：
+
+| 项 | 值 |
+| --- | --- |
+| 结构 | 包身（带倒角实体）+ 翻盖 + 内衬 + 提手 + 提手加固 + 肩带 + 黄铜锁扣 + D 环 ×2 + 拉链轨道 + 拉链头 + 车缝线 ×2 + 底部脚钉 ×4 |
+| mesh 数 / 三角面 | 19 / 5 524 |
+| 体积 | 379 052 B（gzip 约 70 KB） |
+| 真实尺寸 | 包围盒 0.363 × 0.324 × 0.150 m，`modelScaleMeters = 0.30` |
+| 版权 | **RUDA 自建模型，无第三方品牌/素材**，可商用；不使用任何付费模型库资源 |
+
+这是**工程样品**，不是某个真实商品的三维扫描；商家真实商品模型必须由商家上传。
+
+### 10.2 数据链路（已打通并实测）
+
+```
+商家上传 GLB（Model3DUploader）
+  → POST /api/merchant/media/presign（复用既有 R2 预签名，mediaType=models，≤25 MB，扩展名 glb）
+  → 对象存储
+  → ProductMedia{type:'model', reviewStatus:'pending'}
+  → 审核通过
+  → GET /api/products（服务端授权过滤后返回 media）
+  → useStorefrontData.resolveProductModel()（只认 approved）
+  → Ruda3DProductViewer（GLTFLoader + 影棚灯光 + 运行时材质增强）
+  → 买家浏览
+```
+
+实测：`/api/products` 返回 `media` 中同时含 `image` 与 `model`（url `/models/ruda-sample-handbag.glb`），
+浏览器 `GLB 200`，画布渲染出真实包体。
+
+### 10.3 运行时材质增强
+
+商家模型常无烘焙贴图。`enhanceGltfMaterials()` 按材质命名补充：
+
+- 皮革类 → 程序化皮革颗粒法线（repeat 5，normalScale 0.22）、`envMapIntensity 0.55`
+- 五金类 → `metalness 1`、`envMapIntensity 1.25`、低粗糙度
+- 缝线类 → 高粗糙度、低反射
+
+只改渲染参数，不改商家模型几何与颜色定义。
+
+### 10.4 商家上传入口（三端联动）
+
+| 端 | 位置 | 状态 |
+| --- | --- | --- |
+| 商家后台 Web | `MerchantProductCreateForm` 媒体步骤 | 已接入 `Model3DUploader` |
+| 商家后台手机 Web | `MerchantMobileProductCreateForm` + `MerchantMobileApp` 商品编辑 | 已接入 |
+| 小程序 | 无 3D 展示能力 | 不适用（未接入） |
+
+上传器能力：GLB/glTF 校验、≤25 MB、进度条、替换、删除、审核状态显示（待审核时提示「审核通过后买家可见」）。
+
+### 10.5 安全复核
+
+- 匿名 `GET /api/products` 只返回 8 个公开商品，其中仅公开商品的 model URL 出现；**批发商品的模型 URL 未泄漏**。
+- 匿名 `GET /api/products/demo-industry-bags-wholesale-1` → **404**；匿名搜索同样查不到。
+- `images.ruda.fashion` 的 CORS 头只加在**公开商品媒体**路由（`/merchants/:id/storefront/:mediaType/:version/:filename`），
+  该路由本来只服务已发布商品的公开媒体，**没有扩大私有媒体访问范围**。
+- 已知限制：R2 公开 URL 本身是「知道链接即可访问」，与既有商品图片一致；本期未改变这一模型，
+  仅在 API 层保证未授权用户拿不到 URL。若需更强保护，需要媒体签名 URL 方案（另有独立任务）。
+
+### 10.6 本轮实测
+
+| 项 | 结果 |
+| --- | --- |
+| 1440 桌面 | 真实几何体渲染，GLB 200；录屏 `video/glb-model-rotate-1440.webm` |
+| 768 平板 | 截图 `glb-final-768.png` |
+| 390 手机 | 截图 `glb-final-390.png`，录屏 `video/glb-model-touch-390.webm`（隔离预览环境） |
+| 旋转验证 | 4 个角度截图 `glb-rotate-{0,90,180,270}.png`，证明包体几何随拖动改变形状/可见面 |
+| 生产 | `https://modaui.com/en/?storefrontPreview=bags_catalogue&merchant=demo-industry-department-chain-retail&product=demo-industry-department-chain-retail-3`（桌面已验证 `canvas=1`、`GLB 200`） |
+| 生产手机 | **未通过**：移动端 Web 路由未接管 `storefrontPreview` 参数，落到普通首页（见 §11） |
+
+## 11. 未完成 / 待验证
 
 - 21 套模板只完成 3 套（箱包），其余行业待后续批次。
-- 真实 GLB 商品模型：数据层已支持，**目前没有任何商家上传过模型**，因此真模型路径仅代码就绪，**未做真机验证**。
+- **生产移动端路由缺口**：`frontend-mobile` 应用未接管 `?storefrontPreview=`，手机端生产预览落到普通首页；
+  390 端 3D 证据来自隔离预览环境，生产手机端 3D 待该路由补齐后复验。
+- **多角度照片上传 UI 未做**：`resolveAngleFrames` 已支持，但商家还不能一键上传 360° 序列。
+- 商家上传的模型**没有服务端几何校验**（不检查是否为合法 GLB、不含恶意内容），目前只校验 contentType 与体积。
+- 商家后台上传入口已在前端代码接入，但 `merchant-admin-web` / `merchant-admin-mobile` **尚未构建发布**，线上商家暂时看不到上传按钮。
 - 真机（iPhone / Android 实体设备）未测试，只做 Chromium + 视口模拟。
-- 商家后台「上传 GLB / 多角度照片」的 UI 未做（只扩展了数据结构）。
 - 3D 场景未接 `prefers-reduced-transparency`、未做 GPU 显存实测（`renderer.info` 未上报）。
+
+## 12. P2 阶段 B 仍未闭环的三项（不在本轮范围）
+
+1. **RFQ 商家报价 / 买家接受 / 转订单**：`/api/merchant/rfq/:id/quote`、`/api/buyer/rfq/:id/accept` 仍未实现。
+2. **箱包专业字段**：尺寸、五金、容量、肩带仍无独立字段，只能用 `fabric/origin/composition` 近似。
+3. **生产迁移与询价验证证据**：`RfqRequest` 迁移已在隔离库验证，生产库已建表但无端到端生产询价证据。

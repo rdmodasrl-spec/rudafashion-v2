@@ -14,6 +14,7 @@ import { ProductEditorStepBar } from '../merchant-admin-common/components/mercha
 import { ProductFormSection } from '../merchant-admin-common/components/merchant/ProductFormSection';
 import { ProductZonePicker } from '../merchant-admin-common/components/merchant/ProductZonePicker';
 import { SmartMediaUploader } from '../merchant-admin-common/components/merchant/SmartMediaUploader';
+import { Model3DUploader } from '../merchant-admin-common/components/merchant/Model3DUploader';
 import { PRODUCT_CHOICES } from '../merchant-admin-common/components/merchant/MerchantProductCreateForm';
 
 interface MerchantMobileProductCreateFormProps {
@@ -170,6 +171,12 @@ export const MerchantMobileProductCreateForm: React.FC<MerchantMobileProductCrea
                 onChange={media => update({ media })}
               />
             </div>
+            <Model3DUploader
+              value={value.media}
+              isIt={isItalian}
+              disabled={mediaBusy}
+              onChange={media => update({ media })}
+            />
             <MerchantProductTryOn media={value.media} maxItems={32} onAddMedia={media => update({ media: [...value.media, media] })} />
             {formError && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{formError}</div>}
           </div>

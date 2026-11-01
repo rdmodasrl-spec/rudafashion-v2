@@ -6,6 +6,7 @@ import { getProductCategoryLabel } from '../../../../constants/productCategories
 import { getProductZone, getProductZoneUpdates } from '../../../../utils/productZone';
 import { ProductCategoryPicker } from './ProductCategoryPicker';
 import { SmartMediaUploader } from './SmartMediaUploader';
+import { Model3DUploader } from './Model3DUploader';
 import { MerchantProductTryOn } from './MerchantProductTryOn';
 import { ProductChoicePicker } from './ProductChoicePicker';
 import { ProductEditorStepBar } from './ProductEditorStepBar';
@@ -235,6 +236,12 @@ export const MerchantProductCreateForm: React.FC<MerchantProductCreateFormProps>
                   onChange={media => update({ media })}
                 />
               </div>
+              <Model3DUploader
+                value={value.media}
+                isIt={isItalian}
+                disabled={mediaBusy}
+                onChange={media => update({ media })}
+              />
               <MerchantProductTryOn media={value.media} maxItems={32} onAddMedia={media => update({ media: [...value.media, media] })} />
             </div>
           ) : (

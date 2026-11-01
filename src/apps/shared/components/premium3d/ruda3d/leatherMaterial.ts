@@ -39,6 +39,22 @@ function grainCanvas(size: number, seed = 1): HTMLCanvasElement {
   return canvas;
 }
 
+/**
+ * 皮革颗粒法线贴图（单独导出）：用于给商家上传的 GLB 材质做运行时增强，
+ * 让模型在缺乏烘焙贴图时也有可信的皮革微观质感。
+ */
+export function createLeatherNormalTexture(
+  THREE_NS: typeof import('three'),
+  options: { size?: number; repeat?: number } = {}
+): { texture: import('three').Texture; dispose: () => void } {
+  const size = options.size ?? 512;
+  const texture = new THREE_NS.CanvasTexture(grainCanvas(size));
+  texture.wrapS = THREE_NS.RepeatWrapping;
+  texture.wrapT = THREE_NS.RepeatWrapping;
+  texture.repeat.set(options.repeat ?? 6, options.repeat ?? 6);
+  return { texture, dispose: () => texture.dispose() };
+}
+
 export function createLeatherMaterial(
   THREE_NS: typeof import('three'),
   options: { color?: string; roughness?: number; size?: number } = {}

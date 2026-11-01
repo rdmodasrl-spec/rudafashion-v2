@@ -7,6 +7,7 @@ import crypto from 'node:crypto';
 import { Readable } from 'node:stream';
 import { lstat, mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat, unlink, writeFile, chmod } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
+import { validateGlbStructure } from './src/server/glbValidation';
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
@@ -694,9 +695,9 @@ async function verifyMerchantMediaObject(
   merchantId: string,
   key: string,
   url: string,
-  mediaType: 'image' | 'video'
+  mediaType: 'image' | 'video' | 'model'
 ): Promise<{ contentType: string; sizeBytes: number } | null> {
-  const prefix = `merchants/${merchantId}/storefront/${mediaType === 'image' ? 'images' : 'videos'}/`;
+  const prefix = `merchants/${merchantId}/storefront/${mediaType === 'image' ? 'images' : mediaType === 'video' ? 'videos' : 'models'}/`;
   if (!key.startsWith(prefix) || key.includes('..') || url !== getMediaObjectPublicUrl(key)) return null;
   const storageClient = getMediaObjectStorageClient();
   const storageBucket = getMediaObjectStorageBucket();
@@ -712,9 +713,33 @@ async function verifyMerchantMediaObject(
   const sizeBytes = head.ContentLength;
   const allowedTypes = mediaType === 'image'
     ? ['image/jpeg', 'image/png', 'image/webp']
-    : ['video/mp4', 'video/webm', 'video/quicktime'];
-  const maxSize = mediaType === 'image' ? 12 * 1024 * 1024 : 100 * 1024 * 1024;
+    : mediaType === 'video'
+      ? ['video/mp4', 'video/webm', 'video/quicktime']
+      // 第一版只接受自包含的单文件 GLB；.gltf(JSON) 依赖外部资源，一律拒绝
+      : ['model/gltf-binary'];
+  const maxSize = mediaType === 'image' ? 12 * 1024 * 1024 : mediaType === 'video' ? 100 * 1024 * 1024 : 25 * 1024 * 1024;
   if (!allowedTypes.includes(contentType) || !Number.isSafeInteger(sizeBytes) || !sizeBytes || sizeBytes > maxSize) return null;
+  if (mediaType === 'model' && !key.toLowerCase().endsWith('.glb')) return null;
+
+  // 3D 模型必须整份取回做结构校验（长度一致性、chunk 边界、外部引用都依赖全量数据）。
+  // 上限 25 MB，只在保存商品媒体时执行一次，不进入任何读路径。
+  if (mediaType === 'model') {
+    let modelObject;
+    try {
+      modelObject = await storageClient.send(new GetObjectCommand({ Bucket: storageBucket, Key: key }));
+    } catch (error) {
+      if ((error as { $metadata?: { httpStatusCode?: number } })?.$metadata?.httpStatusCode === 404) return null;
+      throw error;
+    }
+    if (!modelObject.Body) return null;
+    const buffer = Buffer.from(await modelObject.Body.transformToByteArray());
+    const verdict = validateGlbStructure(buffer, sizeBytes);
+    if (verdict.ok === false) {
+      console.warn('[merchant-product-media] GLB 校验失败:', key, verdict.reason);
+      return null;
+    }
+    return { contentType, sizeBytes };
+  }
 
   let object;
   try {
@@ -2130,9 +2155,25 @@ function serializeProductRow(row: any): Product {
   } as Product;
 }
 
+/**
+ * 未审核的 3D 模型绝不进入公开响应。
+ *
+ * 只在前端过滤是不够的：pending 模型的 URL 会随响应送到浏览器。
+ * 这里在服务端把非 approved 的 model 媒体剔除，买家拿不到链接；
+ * 图片/视频等既有媒体不受影响。
+ */
+function stripUnapprovedModels(media: unknown): unknown {
+  if (!Array.isArray(media)) return media;
+  return media.filter((item: any) => !(item && item.type === 'model' && item.reviewStatus !== 'approved'));
+}
+
 function serializePublicProductRow(row: any): Product {
   // 公开路径先按白名单挑选字段，再做成本/存储键清理；顺序不可颠倒。
-  return sanitizePublicProduct(pickPublicProductFields(serializeProductRow(row))) as Product;
+  const product = sanitizePublicProduct(pickPublicProductFields(serializeProductRow(row))) as Product & { media?: unknown };
+  if (product && typeof product === 'object' && 'media' in product) {
+    return { ...product, media: stripUnapprovedModels(product.media) } as Product;
+  }
+  return product;
 }
 
 // 消费者订单读取口径：复用 B2B Order 表（Order.consumerId 归属），只暴露零售所需字段。
@@ -22800,7 +22841,8 @@ async function startServer() {
     }
   );
 
-  const MODEL_MEDIA_TYPES = new Set(['model/gltf-binary', 'model/gltf+json']);
+  // 第一版只接受自包含的单文件 GLB；.gltf(JSON) 依赖外部资源，暂不支持
+  const MODEL_MEDIA_TYPES = new Set(['model/gltf-binary']);
   app.post('/api/merchant/media/presign', requireMerchantTenant, requireEmployeePermission('product.publish', 'employees.manage', 'store_manager'), async (req: AuthRequest, res) => {
     const storageClient = getMediaObjectStorageClient();
     const storageBucket = getMediaObjectStorageBucket();
@@ -22856,9 +22898,10 @@ async function startServer() {
     if (req.hostname !== 'images.ruda.fashion') return next();
     const { merchantId, mediaType, version, filename } = req.params;
     if (!/^[A-Za-z0-9_-]{1,120}$/.test(merchantId)
-      || !['images', 'videos'].includes(mediaType)
+      || !['images', 'videos', 'models'].includes(mediaType)
       || !['r2', 'v2'].includes(version)
-      || !/^[0-9a-f-]{36}\.(?:jpeg|png|webp|mp4|webm|mov)$/i.test(filename)) {
+      // 3D 模型是单文件 GLB，与图片/视频共用同一条媒体分发路径
+      || !/^[0-9a-f-]{36}\.(?:jpeg|png|webp|mp4|webm|mov|glb)$/i.test(filename)) {
       return res.status(404).end();
     }
 
@@ -22878,7 +22921,9 @@ async function startServer() {
       const contentType = object.ContentType?.toLowerCase() || '';
       const allowedTypes = mediaType === 'images'
         ? ['image/jpeg', 'image/png', 'image/webp']
-        : ['video/mp4', 'video/webm', 'video/quicktime'];
+        : mediaType === 'models'
+          ? ['model/gltf-binary']
+          : ['video/mp4', 'video/webm', 'video/quicktime'];
       if (!allowedTypes.includes(contentType)) return res.status(404).end();
 
       res.setHeader('Content-Type', contentType);
@@ -31341,7 +31386,7 @@ async function startServer() {
 
     const rawMedia = Array.isArray(body.media) ? body.media : [];
     if (rawMedia.length > 32 || rawMedia.some((item: any) =>
-      !item || !['image', 'video'].includes(item.type) ||
+      !item || !['image', 'video', 'model'].includes(item.type) ||
       typeof item.url !== 'string' || item.url.length > 2048 ||
       !/^https?:\/\//i.test(item.url) ||
       (item.role != null && !['main', 'detail', 'color'].includes(item.role)) ||
@@ -31353,7 +31398,17 @@ async function startServer() {
       ((item.contentType != null || item.sizeBytes != null) && typeof item.storageKey !== 'string') ||
       (item.source != null && item.source !== 'merchant-upload' && item.source !== 'ai-try-on') ||
       (item.reviewStatus != null && item.reviewStatus !== 'pending' && item.reviewStatus !== 'approved') ||
-      (item.type === 'video' && !/^https?:\/\//i.test(item.url)))) {
+      (item.type === 'video' && !/^https?:\/\//i.test(item.url)) ||
+      // 3D 模型：必须是上传到对象存储的 .glb（不接受外链、不接受 data URL），
+      // 且只能处于 pending 或 approved，其他状态视为非法
+      (item.type === 'model' && (
+        !/^https?:\/\//i.test(item.url)
+        || typeof item.storageKey !== 'string'
+        || !item.storageKey.startsWith(`merchants/${merchant.merchantId}/storefront/models/`)
+        || !item.storageKey.toLowerCase().endsWith('.glb')
+        || item.contentType !== 'model/gltf-binary'
+        || (item.reviewStatus != null && item.reviewStatus !== 'pending' && item.reviewStatus !== 'approved')
+      )))) {
       return res.status(400).json({ success: false, error: 'PRODUCT_MEDIA_INVALID' });
     }
     const media: Array<{
@@ -31386,9 +31441,14 @@ async function startServer() {
           return res.status(400).json({ success: false, error: 'PRODUCT_MEDIA_OBJECT_INVALID' });
         }
       }
+      // 模型一律先落 pending，只有审核动作能把它变成 approved，杜绝上传即公开
+      const modelReviewStatus = item.type === 'model'
+        ? (item.reviewStatus === 'approved' ? 'approved' as const : 'pending' as const)
+        : undefined;
       media.push({
         id: typeof item.id === 'string' && item.id.length <= 100 ? item.id : `media-${index}`,
         type: item.type,
+        ...(modelReviewStatus ? { reviewStatus: modelReviewStatus } : {}),
         url: item.url,
         ...(typeof item.storageKey === 'string' ? { storageKey: item.storageKey } : {}),
         ...(storedMetadata || {}),
@@ -31812,7 +31872,7 @@ async function startServer() {
     }
     const nextMedia = updates.media !== undefined ? updates.media : current.media || current.images.map((url: string, index: number) => ({ id: `image-${index}`, type: 'image', url }));
     const validMedia = Array.isArray(nextMedia) && nextMedia.length >= 1 && nextMedia.length <= 32 && nextMedia.every((item: any) =>
-      item && typeof item.id === 'string' && ['image', 'video'].includes(item.type) && typeof item.url === 'string' &&
+      item && typeof item.id === 'string' && ['image', 'video', 'model'].includes(item.type) && typeof item.url === 'string' &&
       item.url.length <= (item.type === 'video' ? 10_000_000 : 3_000_000) &&
       (item.storageKey == null || (typeof item.storageKey === 'string' &&
         item.storageKey.startsWith(`merchants/${merchantId}/storefront/`) && item.storageKey.length <= 500)) &&
@@ -31822,7 +31882,15 @@ async function startServer() {
       (item.source == null || item.source === 'merchant-upload' || item.source === 'ai-try-on') &&
       (item.reviewStatus == null || item.reviewStatus === 'pending' || item.reviewStatus === 'approved') &&
       (item.role == null || ['main', 'detail', 'color'].includes(item.role)) &&
-      (item.type === 'image' ? /^data:image\/(jpeg|png|webp);base64,/i.test(item.url) || /^https?:\/\//i.test(item.url) : /^data:video\/(mp4|webm);base64,/i.test(item.url) || /^https?:\/\//i.test(item.url))
+      (item.type === 'image'
+        ? /^data:image\/(jpeg|png|webp);base64,/i.test(item.url) || /^https?:\/\//i.test(item.url)
+        : item.type === 'video'
+          ? /^data:video\/(mp4|webm);base64,/i.test(item.url) || /^https?:\/\//i.test(item.url)
+          : /^https?:\/\//i.test(item.url)
+            && typeof item.storageKey === 'string'
+            && item.storageKey.startsWith(`merchants/${merchantId}/storefront/models/`)
+            && item.storageKey.toLowerCase().endsWith('.glb')
+            && item.contentType === 'model/gltf-binary')
     );
     if (!validMedia) {
       return res.status(400).json({ success: false, error: 'PRODUCT_IMAGES_INVALID' });

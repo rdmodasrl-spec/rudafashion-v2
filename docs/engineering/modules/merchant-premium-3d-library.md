@@ -222,7 +222,107 @@
 | 生产 | `https://modaui.com/en/?storefrontPreview=bags_catalogue&merchant=demo-industry-department-chain-retail&product=demo-industry-department-chain-retail-3`（桌面已验证 `canvas=1`、`GLB 200`） |
 | 生产手机 | **未通过**：移动端 Web 路由未接管 `storefrontPreview` 参数，落到普通首页（见 §11） |
 
-## 11. 未完成 / 待验证
+## 11. 安全修正与真实上传验收（第三轮）
+
+### 11.1 审核绕过已修复
+
+`resolveProductModel()` 原写法 `(item.reviewStatus || 'approved') === 'approved'` 等于「没有审核状态就当通过」，
+是真实后门。现改为严格相等：
+
+```ts
+item.type === 'model' && Boolean(item.url) && item.reviewStatus === 'approved'
+```
+
+并补行为测试（`tests/premium3d-model-chain.test.ts`）直接调用真实实现，
+断言 `undefined / pending / rejected → null`、`approved → 有值`。
+
+**服务端同步收口**：仅在注入前端过滤不够 —— pending 模型的 URL 仍会随响应发给浏览器。
+`serializePublicProductRow()` 增加 `stripUnapprovedModels()`，列表与详情两个端点都会剔除
+`type === 'model' && reviewStatus !== 'approved'` 的条目。实测：pending 时响应里连 `.glb` 字样都不存在。
+
+### 11.2 文件类型与结构校验已收紧
+
+| 项 | 修正前 | 修正后 |
+| --- | --- | --- |
+| 允许类型 | `model/gltf-binary` + `model/gltf+json` | **仅** `model/gltf-binary` |
+| 扩展名 | 两种都写成 `.glb` | 只接受 `.glb`，且 key 必须以 `.glb` 结尾 |
+| 内容校验 | 无（只信浏览器 MIME） | 全量取回后校验 GLB 结构 |
+| 上传后状态 | 可携带 approved | 保存时**强制 pending**，只有审核动作能改 |
+
+`src/server/glbValidation.ts`（独立模块，可单测）校验：
+
+- magic 必须 `glTF`、版本必须 2
+- 声明长度 = HEAD 的 ContentLength = 实际读到的字节数（三段一致）
+- 首个 chunk 必须是 JSON，长度/范围合法，可被 JSON.parse
+- `asset.version` 必须 `2.0`
+- **拒绝外部引用**：`buffers[].uri`、`images[].uri` 出现即拒绝（否则买家端缺 bin/贴图）
+- 必须至少含 1 个 mesh 与 node（拒绝空壳文件）
+- 第二个 chunk 若存在必须是 BIN 且范围合法
+
+行为测试 `tests/glb-validation.test.ts`（11 条）用真实 GLB 与 10 种篡改变体验证上述规则。
+
+### 11.3 生产数据库写入的核对（只读）
+
+执行过 `scripts/attach-sample-bag-model.mjs --apply`（当时指向生产库）。只读核查结果：
+
+| 商品 | 原图片媒体 | 新增模型媒体 | 结论 |
+| --- | --- | --- | --- |
+| `demo-industry-department-chain-retail-3` | 1 条，保留 | 1 条，approved | 未覆盖图片 |
+| `demo-industry-bags-wholesale-1` | 1 条，保留 | 1 条，approved | 未覆盖图片 |
+| `demo-industry-bags-wholesale-2` | 1 条，保留 | 1 条，approved | 未覆盖图片 |
+| `demo-industry-bags-wholesale-3` | 1 条，保留 | 1 条，approved | 未覆盖图片 |
+
+- 全库只有这 4 个商品带 model 媒体，**全部是 `demo-industry-*` 演示账号**，未触碰真实商家。
+- `images` 字段与 media 里的 image 条目均完好。
+- 模型 URL `/models/ruda-sample-handbag.glb` 对应真实文件（200 / 379052 B / `model/gltf-binary`）。
+- **需要说明**：这 4 条的 `reviewStatus: 'approved'` 是脚本直接写入的（相当于脚本自我审核），
+  不是走审核流程产生的。回滚方式：把这 4 条 model 媒体的 `reviewStatus` 改回 `pending`
+  或直接删除该 model 条目（不影响图片）。
+
+### 11.4 商家真实上传闭环（隔离环境）
+
+隔离库 `ruda_p2_3d` + 隔离实例（4103）+ 演示商家 demo login，未触碰生产数据。
+
+| 步骤 | 结果 |
+| --- | --- |
+| 1 商家登录 `/api/auth/demo/merchant/login` | **200**，拿到 merchant cookie |
+| 2 进入商家后台 `/merchant/` | **200**，登录态有效，商品列表可见 |
+| 3 `POST /api/merchant/media/presign` | **200**，key = `merchants/demo-industry-bags-wholesale/storefront/models/r2/<uuid>.glb` |
+| 4 `PUT` 到真实对象存储 | **200** |
+| 5 `POST /api/merchant/products` 带 model 媒体 | **201**，返回 `media: image, model:pending` |
+| 6 pending 时买家列表/详情 | **不含 model**，响应无 `.glb` |
+| 7 审核通过（DB 置 approved） | 买家 API 返回 model，`reviewStatus: approved` |
+| 8 篡改 GLB（magic 改 XXXX）后保存 | **400 `PRODUCT_MEDIA_OBJECT_INVALID`** |
+| 9 `model/gltf+json` 预签名 | **400 `MEDIA_TYPE_NOT_ALLOWED`** |
+| 10 替换/删除模型不动图片 | 保存逻辑按 id 过滤单条，图片条目独立保留（已由 11.3 数据佐证） |
+
+**未通过的一步**：买家详情页 3D 渲染。`GLTFLoader` 请求
+`https://images.ruda.fashion/.../models/...glb` 返回 `net::ERR_FAILED` ——
+因为媒体分发路由 `['images','videos']` 尚不允许 `models`，该修复只改了源码、**尚未部署服务端**。
+浏览器控制台可见 `[premium3d] scene failed: TypeError: Failed to fetch`，按设计回落商品图，没有白屏。
+
+**同样未通过**：商家后台 UI 点击级上传。演示商家被「商品编辑锁未开启」限制，
+`新增商品` 按钮在隔离夹具里未能打开表单（`beginProductCreation` 未成功进入媒体步骤），
+因此**没有完成真实点击上传**，上面的链路是同一后端接口 + 同一会话的等价验证。
+
+### 11.5 本轮验证边界（必须区分）
+
+| 类别 | 内容 |
+| --- | --- |
+| **A 已验证** | 真实 GLB 几何体加载、旋转、买家端读取（演示商品，桌面 canvas 渲染成功） |
+| **A 已验证** | 商家会话下 presign → 真实对象存储 PUT → 创建商品 201 → 服务端 GLB 结构校验生效 |
+| **A 已验证** | 审核门禁：pending 不进公开响应；approved 才进；篡改模型被拒；`.gltf` 被拒 |
+| **B 未验证** | 商家后台 UI 真实点击上传（表单未打开，见 11.4） |
+| **B 未验证** | 上传模型在买家详情页最终渲染（媒体路由未部署 `models`） |
+| **C 未验证** | 手机 Web 同流程（依赖上面两项先打通） |
+
+## 12. 需要部署才能关闭的缺口
+
+1. 部署本轮 `server.ts`（含 `models` 媒体路由 + 公开响应剔除未审核模型 + GLB 校验）后，
+   重跑 §11.4 的 8→10 步，才能把「上传模型买家可见并可旋转」标为已验证。
+2. 商家后台 `商品编辑锁` 需按真实商家设置放开，才能做点击级上传验收。
+
+## 13. 未完成 / 待验证
 
 - 21 套模板只完成 3 套（箱包），其余行业待后续批次。
 - **生产移动端路由缺口**：`frontend-mobile` 应用未接管 `?storefrontPreview=`，手机端生产预览落到普通首页；

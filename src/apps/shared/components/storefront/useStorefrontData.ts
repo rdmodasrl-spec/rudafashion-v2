@@ -109,12 +109,18 @@ export function mapProductForStorefront(product: Product, unitPrice: number, tie
 }
 
 /**
- * 真实 3D 模型：只认 media 里 type === 'model' 且通过审核的条目。
- * 没有就返回 null —— 模板必须回落到真实商品图，不允许生成假模型。
+ * 真实 3D 模型：只认 media 里 type === 'model' 且**显式** reviewStatus === 'approved' 的条目。
+ *
+ * 必须是严格相等：缺少 reviewStatus（老数据、脚本直写、被篡改的响应）一律视为未审核，
+ * 不允许「没有状态就当通过」，否则等于给审核开了后门。
+ * 没有合格模型就返回 null —— 模板回落真实商品图，不生成假模型。
  */
 export function resolveProductModel(product: Product): StorefrontProduct['model'] {
-  const media = (product.media || []).filter(item => item.type === 'model' && item.url);
-  const usable = media.filter(item => (item.reviewStatus || 'approved') === 'approved');
+  const usable = (product.media || []).filter(item =>
+    item.type === 'model'
+    && Boolean(item.url)
+    && item.reviewStatus === 'approved'
+  );
   const picked = usable[0];
   if (!picked) return null;
   return {

@@ -1,8 +1,8 @@
 /**
- * 商家商品 3D 模型上传（GLB / glTF）。
+ * 商家商品 3D 模型上传（自包含 GLB）。
  *
  * 复用现有 `uploadMerchantMedia`（同一套 R2 预签名 + 对象存储），不另建媒体库。
- * 约束：只接受 model/gltf-binary 与 model/gltf+json；≤25 MB；
+ * 约束：只接受自包含单文件 GLB（model/gltf-binary）；≤25 MB；
  * 上传后写入 ProductMedia(type='model')，与商品一起保存；支持替换、删除与审核状态展示。
  */
 import React, { useRef, useState } from 'react';
@@ -11,9 +11,13 @@ import type { ProductMedia } from '../../../../types/b2b';
 import { uploadMerchantMedia } from '../../../../api/merchantMedia';
 
 const MAX_MODEL_BYTES = 25 * 1024 * 1024;
-const ACCEPTED = ['.glb', '.gltf'];
-/** 前端只做体验层校验，服务端 presign 是真正的安全边界 */
-const ALLOWED_TYPES = ['model/gltf-binary', 'model/gltf+json'];
+/**
+ * 第一版只接受自包含的单文件 GLB。
+ * .gltf(JSON) 会依赖外部 .bin / 纹理文件，买家端容易缺资源，因此明确拒绝。
+ */
+const ACCEPTED = ['.glb'];
+/** 前端只做体验层校验；服务端 presign 与保存时的 GLB 结构校验才是安全边界 */
+const ALLOWED_TYPES = ['model/gltf-binary'];
 
 type Props = {
   value: ProductMedia[];
@@ -24,7 +28,7 @@ type Props = {
 
 const resolveContentType = (file: File): string => {
   if (file.type && ALLOWED_TYPES.includes(file.type)) return file.type;
-  return file.name.toLowerCase().endsWith('.gltf') ? 'model/gltf+json' : 'model/gltf-binary';
+  return 'model/gltf-binary';
 };
 
 export const Model3DUploader: React.FC<Props> = ({ value, onChange, isIt = false, disabled = false }) => {
@@ -42,7 +46,7 @@ export const Model3DUploader: React.FC<Props> = ({ value, onChange, isIt = false
     if (!file) return;
     setError(null);
     if (!ACCEPTED.some(ext => file.name.toLowerCase().endsWith(ext))) {
-      setError(t('只支持 .glb / .gltf 文件', 'Only .glb / .gltf files are supported'));
+      setError(t('只支持单文件 .glb（.gltf 依赖外部资源，暂不支持）', 'Only self-contained .glb files are supported (.gltf is not)') );
       return;
     }
     if (file.size > MAX_MODEL_BYTES) {
@@ -83,7 +87,7 @@ export const Model3DUploader: React.FC<Props> = ({ value, onChange, isIt = false
             {t('3D 商品模型', '3D product model')}
           </p>
           <p className="mt-1 text-xs text-neutral-500">
-            {t('GLB / glTF，≤25 MB。买家可在商品详情里 360° 旋转查看。', 'GLB / glTF up to 25 MB. Buyers can rotate it in 3D on the product page.')}
+            {t('单文件 GLB，≤25 MB。上传后需审核通过，买家才能在商品详情里 360° 旋转查看。', 'Self-contained GLB up to 25 MB. Visible to buyers only after approval.')}
           </p>
         </div>
         {models.length === 0 && (
@@ -137,7 +141,7 @@ export const Model3DUploader: React.FC<Props> = ({ value, onChange, isIt = false
       <input
         ref={inputRef}
         type="file"
-        accept=".glb,.gltf,model/gltf-binary,model/gltf+json"
+        accept=".glb,model/gltf-binary"
         className="hidden"
         onChange={event => void onFiles(event.target.files)}
       />

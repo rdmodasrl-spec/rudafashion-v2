@@ -8,7 +8,8 @@ import { Readable } from 'node:stream';
 import { lstat, mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat, unlink, writeFile, chmod } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { validateGlbStructure } from './src/server/glbValidation';
-import { isValidModelReviewCredential, stripUnapprovedModels } from './src/shared/modelReviewCredential';
+import { isValidModelReviewCredential, isModelPubliclyVisible, stripUnapprovedModels } from './src/shared/modelReviewCredential';
+import { ADMIN_SUPER_PERMISSION, isKnownAdminPermission } from './src/shared/adminPermissions';
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
@@ -47349,6 +47350,183 @@ async function startServer() {
       });
     } catch (error) {
       sendInternalError(res, error, 'admin-product-model-review');
+    }
+  });
+
+  /**
+   * 平台模型审核清单。
+   *
+   * 只读聚合 `Product.media` 里 `type === 'model'` 的条目，供平台运营在后台逐个预览与审批。
+   * 这是审核页面的数据来源，真正的写入仍然只走上面的 model-review 接口，不新增第二个批准入口。
+   * 契约见 docs/engineering/modules/platform-admin-model-review.md §4.1。
+   */
+  app.get('/api/admin/model-reviews', requireAdminAuth, requireAdminPermission('products.review'), async (req, res) => {
+    const rawStatus = String(req.query.status || 'pending').toLowerCase();
+    const statusFilter = ['pending', 'approved', 'rejected', 'all'].includes(rawStatus) ? rawStatus : 'pending';
+    const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
+    try {
+      const rows = await prisma.product.findMany({
+        where: { media: { contains: '"type":"model"' } },
+        orderBy: { updatedAt: 'desc' },
+        take: 2000,
+        select: { id: true, name: true, styleNo: true, merchantId: true, media: true, updatedAt: true }
+      });
+      const merchantIds = Array.from(new Set(rows.map(row => row.merchantId).filter(Boolean))) as string[];
+      const merchants = merchantIds.length
+        ? await prisma.merchant.findMany({
+          where: { id: { in: merchantIds } },
+          select: { id: true, name: true, companyLegalName: true }
+        })
+        : [];
+      const merchantNames = new Map(merchants.map(merchant => [merchant.id, merchant.name || merchant.companyLegalName || merchant.id]));
+
+      const counts = { pending: 0, approved: 0, rejected: 0 };
+      const items: Array<Record<string, unknown>> = [];
+      for (const row of rows) {
+        const media = parseStoredJson<Array<Record<string, any>>>(row.media, []);
+        for (const entry of media) {
+          if (!entry || entry.type !== 'model') continue;
+          // 缺省一律按待审核计，与 stripUnapprovedModels 的判定口径保持一致
+          const reviewStatus = entry.reviewStatus === 'approved' ? 'approved' : entry.reviewStatus === 'rejected' ? 'rejected' : 'pending';
+          counts[reviewStatus] += 1;
+          if (statusFilter !== 'all' && reviewStatus !== statusFilter) continue;
+          items.push({
+            productId: row.id,
+            productName: row.name,
+            styleNo: row.styleNo,
+            merchantId: row.merchantId,
+            merchantName: merchantNames.get(row.merchantId) || row.merchantId,
+            mediaId: entry.id,
+            modelUrl: entry.url,
+            sizeBytes: entry.sizeBytes ?? null,
+            reviewStatus,
+            credentialValid: isModelPubliclyVisible({ ...entry, reviewStatus }),
+            updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : row.updatedAt,
+            review: entry.modelReview ?? null
+          });
+        }
+      }
+      items.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({ success: true, items: items.slice(0, limit), counts });
+    } catch (error) {
+      sendInternalError(res, error, 'admin-model-reviews');
+    }
+  });
+
+  // GET /api/admin/accounts（管理员账号与权限清单）
+  app.get('/api/admin/accounts', requireAdminAuth, requireAnyAdminPermission(['accounts.manage']), async (_req, res) => {
+    try {
+      const accounts = await prisma.authAccount.findMany({
+        where: { role: 'admin' },
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true, username: true, email: true, permissions: true,
+          require2fa: true, lastLoginAt: true, createdAt: true, updatedAt: true
+        }
+      });
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({
+        success: true,
+        accounts: accounts.map(account => {
+          const permissions = parseStoredJson<string[]>(account.permissions, []);
+          return {
+            id: account.id,
+            username: account.username,
+            email: account.email,
+            permissions,
+            isSuper: permissions.length === 0 || permissions.includes(ADMIN_SUPER_PERMISSION),
+            require2fa: account.require2fa,
+            lastLoginAt: account.lastLoginAt,
+            createdAt: account.createdAt,
+            updatedAt: account.updatedAt
+          };
+        })
+      });
+    } catch (error) {
+      sendInternalError(res, error, 'admin-accounts');
+    }
+  });
+
+  /**
+   * PUT /api/admin/accounts/:id/permissions（分配管理员权限）
+   *
+   * 只写 `AuthAccount.permissions`，权限键必须来自共享目录 src/shared/adminPermissions.ts。
+   * 禁止把自己降权到无法再管理权限，避免平台后台被锁死。
+   */
+  app.put('/api/admin/accounts/:id/permissions', requireAdminAuth, requireAnyAdminPermission(['accounts.manage']), async (req, res) => {
+    const accountId = req.params.id;
+    const requested: unknown = req.body?.permissions;
+    if (!Array.isArray(requested)) {
+      return res.status(400).json({ success: false, error: 'ADMIN_PERMISSION_LIST_REQUIRED' });
+    }
+    const permissions: string[] = [];
+    for (const entry of requested) {
+      if (typeof entry !== 'string') {
+        return res.status(400).json({ success: false, error: 'ADMIN_PERMISSION_UNKNOWN' });
+      }
+      const key = entry.trim();
+      // '*' 只能由「空权限 = 超级管理员」这一既有语义产生，不允许通过接口直接下发
+      if (key === ADMIN_SUPER_PERMISSION || !isKnownAdminPermission(key)) {
+        return res.status(400).json({ success: false, error: 'ADMIN_PERMISSION_UNKNOWN', details: { permission: key } });
+      }
+      if (!permissions.includes(key)) permissions.push(key);
+    }
+    if (permissions.length > 100) {
+      return res.status(400).json({ success: false, error: 'ADMIN_PERMISSION_LIST_TOO_LONG' });
+    }
+    try {
+      const target = await prisma.authAccount.findFirst({
+        where: { id: accountId, role: 'admin' },
+        select: { id: true, username: true, permissions: true }
+      });
+      if (!target) return res.status(404).json({ success: false, error: 'ADMIN_ACCOUNT_NOT_FOUND' });
+
+      const operator = (req as AuthRequest).admin;
+      const isSelf = operator?.accountId === target.id;
+      const keepsManagement = permissions.includes('accounts.manage');
+      if (isSelf && !keepsManagement) {
+        return res.status(409).json({ success: false, error: 'ADMIN_PERMISSION_SELF_LOCKOUT' });
+      }
+
+      const before = parseStoredJson<string[]>(target.permissions, []);
+      const operatorName = operator?.username || 'admin';
+      const updated = await prisma.$transaction(async tx => {
+        const row = await tx.authAccount.update({
+          where: { id: target.id },
+          data: { permissions: JSON.stringify(permissions) },
+          select: { id: true, username: true, email: true, permissions: true, require2fa: true, lastLoginAt: true, createdAt: true, updatedAt: true }
+        });
+        await logAuditAndWait(
+          operatorName,
+          'admin',
+          'ADMIN_PERMISSION_UPDATE',
+          'AuthAccount',
+          target.id,
+          JSON.stringify(before),
+          JSON.stringify(permissions),
+          tx
+        );
+        return row;
+      });
+      res.json({
+        success: true,
+        account: {
+          id: updated.id,
+          username: updated.username,
+          email: updated.email,
+          permissions,
+          isSuper: permissions.length === 0,
+          require2fa: updated.require2fa,
+          lastLoginAt: updated.lastLoginAt,
+          createdAt: updated.createdAt,
+          updatedAt: updated.updatedAt
+        },
+        // updatedAt 变化会让该账号既有会话失效，权限随下次登录的新 token 生效
+        requiresRelogin: true
+      });
+    } catch (error) {
+      sendInternalError(res, error, 'admin-account-permissions');
     }
   });
 

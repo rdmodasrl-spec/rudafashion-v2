@@ -160,6 +160,7 @@ test('审核写入与审计在同一事务内，且凭证字段齐备', () => {
 });
 
 test('公开响应改用带凭证校验的 stripUnapprovedModels', () => {
-  assert.match(server, /import \{ isValidModelReviewCredential, stripUnapprovedModels \} from '\.\/src\/shared\/modelReviewCredential';/);
+  assert.match(server, /from '\.\/src\/shared\/modelReviewCredential';/);
+  assert.match(server, /import \{[^}]*isValidModelReviewCredential[^}]*\} from '\.\/src\/shared\/modelReviewCredential';/);
   assert.match(server, /media: stripUnapprovedModels\(product\.media\)/);
 });

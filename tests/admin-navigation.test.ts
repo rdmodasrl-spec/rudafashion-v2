@@ -38,7 +38,7 @@ test('growth, AI configuration, billing, and appointments have one reachable rou
     'growth_workbench', 'growth_acquisition', 'growth_content', 'growth_analytics', 'fashion_content',
     'merchant_support', 'support_requests', 'ai_support', 'merchant_support_settings',
     'settings', 'feature_flags', 'ai_center', 'modagpt_operator', 'ai_provider_settings', 'modagpt_billing', 'risk_monitor', 'app_store_mgmt', 'notifications',
-    'database_center', 'audit_logs'
+    'database_center', 'audit_logs', 'model_review', 'permission_manager'
   ];
   const visibleTabs = ADMIN_NAV_GROUPS.flatMap(group => group.items.map(item => item.key));
 

@@ -26,6 +26,8 @@ import { AdminFashionContentHub } from '../platform-admin-common/components/admi
 import { apiGet, apiPost, ApiError } from '../../api/client';
 import { AdminDatabaseCenter } from '../platform-admin-common/components/admin/AdminDatabaseCenter';
 import { AdminRiskMonitor } from '../platform-admin-common/components/admin/AdminRiskMonitor';
+import { AdminModelReview } from '../platform-admin-common/components/admin/AdminModelReview';
+import { AdminPermissionManager } from '../platform-admin-common/components/admin/AdminPermissionManager';
 import { AdminNotificationEvents } from '../platform-admin-common/components/admin/AdminNotificationEvents';
 import { AdminMerchantSupport } from '../platform-admin-common/components/admin/AdminMerchantSupport';
 import { AdminAiControlCenter } from '../platform-admin-common/components/admin/AdminAiControlCenter';
@@ -48,7 +50,8 @@ type MobileAdminTab =
   | 'merchant_support_settings' | 'overview' | 'showrooms' | 'growth' | 'ai_center' | 'modagpt_operator' | 'partners'
   | 'marketing_attribution' | 'promotions' | 'bi_dashboard' | 'merchant_support' | 'support_requests'
   | 'growth_workbench' | 'growth_acquisition' | 'growth_content' | 'growth_analytics'
-  | 'ai_provider_settings' | 'modagpt_billing' | 'app_store_mgmt' | 'feature_flags';
+  | 'ai_provider_settings' | 'modagpt_billing' | 'app_store_mgmt' | 'feature_flags'
+  | 'model_review' | 'permission_manager';
 
 function getMobileTab(tab: AdminTab): MobileAdminTab | null {
   const tabs: Partial<Record<AdminTab, MobileAdminTab>> = {
@@ -89,7 +92,9 @@ function getMobileTab(tab: AdminTab): MobileAdminTab | null {
     ai_provider_settings: 'ai_provider_settings',
     modagpt_billing: 'modagpt_billing',
     app_store_mgmt: 'app_store_mgmt',
-    feature_flags: 'feature_flags'
+    feature_flags: 'feature_flags',
+    model_review: 'model_review',
+    permission_manager: 'permission_manager'
   };
   return tabs[tab] ?? null;
 }
@@ -471,6 +476,8 @@ export const PlatformAdminMobile: React.FC<PlatformAdminMobileProps> = ({ initia
         {activeTab === 'feature_flags' && <AdminFeatureFlags />}
         {activeTab === 'app_store_mgmt' && <AdminAppStoreMgmt />}
         {activeTab === 'risk_monitor' && <AdminRiskMonitor />}
+        {activeTab === 'model_review' && <AdminModelReview />}
+        {activeTab === 'permission_manager' && <AdminPermissionManager />}
         {(activeTab === 'finance' || activeTab === 'audit_logs') && (
           <div className="flex items-center justify-between rounded-lg border border-neutral-200 bg-white px-3 py-2 text-xs">
             <span className="font-semibold text-neutral-700">

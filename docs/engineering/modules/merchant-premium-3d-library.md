@@ -481,23 +481,30 @@ modelReview: {
 `logAudit` 是 fire-and-forget（失败只打日志），不适合审核这种必须留痕的操作，所以这里用 `logAuditAndWait` 并传入 `tx`。
 商品状态与审计记录要么都成功，要么都不生效。
 
-### 14.4 平台管理员权限的**真实**状况（重要）
+### 14.4 平台管理员权限的**真实**状况（第五轮已纠正）
 
-只读核查结论：
+第四轮曾据「生产 3 个 admin 账号 `permissions` 全为 `[]`」判定「生产没有任何管理员能审核模型」。
+**这个结论是错的**，第五轮复核发现登录路由的既有语义：
+
+```ts
+permissions: adminPermissions.length ? adminPermissions : ['*']
+```
+
+即 **`permissions` 为空数组 = 隐式超级管理员**。生产 3 个账号都是 `[]`，因此它们实际拥有全部权限，
+包括 `products.review`。当时的判断只看了数据库字段，没有追到签发 token 的那一行。
+
+复核结果：
 
 | 检查项 | 结果 |
 | --- | --- |
-| `products.review` 在代码中被使用 | 是（审核接口 + modagpt operator 多路由） |
-| 是否存在权限注册表（`PERMISSION_GROUPS` 之类） | **不存在**，全库检索无匹配 |
-| 是否有管理员账号管理页 / 角色-权限分配页 | **不存在** |
-| 生产 3 个 admin 账号的 `permissions` | 全部为 `[]` |
-| `hasAdminPermission` 是否有 role 隐含超管 | 没有，只认 `permissions.includes('*') 或 includes(permission)` |
-| 现有商品审核入口 | 有 `PUT /api/admin/products/:id/review`（改 lifecycleStatus / featured），无模型审核 UI |
+| 空权限的语义 | `[]` → 签入 `['*']`，等同超级管理员（默认放行，fail-open） |
+| 权限注册表 | 第四轮确认不存在；**第五轮已新建** `src/shared/adminPermissions.ts`（24 个权限键、6 个分组） |
+| 管理员权限分配界面 | 第四轮确认不存在；**第五轮已新建** 平台管理 → 权限管理（`AdminPermissionManager`） |
+| 模型审核界面 | 第四轮确认不存在；**第五轮已新建** 业务管理 → 模型审核（`AdminModelReview`） |
+| 权限生效方式 | 权限随登录签入 token；修改 `permissions` 会 bump `updatedAt`，使该账号旧会话失效，需重新登录 |
 
-**结论：生产环境现在没有任何管理员账号能通过 `products.review` 校验。**
-模型审核接口在隔离环境（夹具直接写入 `permissions: ['products.review']`）可通过，
-但生产上模型永远无法被批准 —— 因为权限只能直接写 `AuthAccount.permissions` JSON，没有任何界面。
-本轮按用户要求**不新建权限系统、不改生产权限**，仅如实记录该阻塞。
+残留风险（未改，需单独评审）：`[] → ['*']` 是默认放行。改成默认拒绝必须同时给现有管理员显式授权，
+否则会瞬间锁死平台后台。第五轮只做「可观测 + 可分配」，不动语义。
 
 ### 14.5 真实 HTTP 攻击测试（隔离库 `ruda_p2_3d` + 隔离实例 4105）
 
@@ -559,15 +566,32 @@ DATABASE_URL=... P2_LEGACY_MODEL_ROLLBACK=yes node scripts/p2/3d-legacy-model-re
   `tests/premium3d-model-chain.test.ts` 补了前端凭证守卫与真实凭证放行用例）。
 - 隔离库真实 HTTP 凭证攻击：10/10 通过。
 
-## 13. 需要部署才能关闭的缺口
+## 14.9 曾列为「需要部署才能关闭」的缺口（现状）
 
-1. 部署本轮 `server.ts`（含 `models` 媒体路由 + 公开响应剔除未审核模型 + GLB 校验）后，
-   重跑 §11.4 的 8→10 步，才能把「上传模型买家可见并可旋转」标为已验证。
-2. 商家后台 `商品编辑锁` 需按真实商家设置放开，才能做点击级上传验收。
-3. **管理员模型审核 UI 不存在**，且生产 admin 账号无 `products.review` 权限（§14.4），
-   即使部署了接口，也没有任何真实管理员能完成审核。
+| 第四轮遗留缺口 | 第五轮现状 |
+| --- | --- |
+| 部署本轮 `server.ts` | **已部署**（见 §15） |
+| 商家后台 `商品编辑锁` 需放开才能做点击级上传验收 | **仍未闭环**（需真实商家账号 + 放开锁） |
+| ~~管理员模型审核 UI 不存在~~ | **已补**：业务管理 → 模型审核（`AdminModelReview`） |
+| ~~生产 admin 无 `products.review`~~ | **结论有误**，见 §14.4 更正：空权限即超级管理员，一直有权限 |
 
-## 13. 未完成 / 待验证
+## 15. 第五轮：部署 + 平台审核闭环（已完成）
+
+1. **合并并部署**：生产目录此前分叉（1 个 ModaUI 提交 + 116 个未提交改动，且只到 P2 第 2 轮）。
+   先做快照提交，再合并 v2/main，冲突按「P2 自有文件取 v2、ModaUI 模型与新特性保留」处理；
+   `tsc`、`test:unit`、`build`、pm2 重启、冒烟（`SMOKE_BASE_URL=https://modaui.com`）全部通过。
+2. **旧 4 条生产模型已被公开接口自动隐藏**：
+   `GET /api/products/demo-industry-department-chain-retail-3` 由 `media: [model, ...]` 变为仅 `image`，响应内无 `.glb`。
+3. **管理员审核闭环（生产实测）**：
+   批准 → 买家详情立刻返回模型与完整凭证
+   `{ reviewerId: <admin DB id>, reviewerUsername: 'admin', reviewedAt, decision: 'approved', reason }`；
+   随后驳回 → 买家详情重新无模型。审计写入 `PRODUCT_MODEL_REVIEW` 两条，`reviewerId` 为数据库主键。
+4. **权限分配路径（隔离库实测 6/6）**：`scripts/p2/3d-admin-permission-path.mjs`
+   授予 → 200 + 审计；被授权者重新登录后可读清单；收回后 403；自我锁死 409；未登记键 400；通配符 400。
+5. **遗留**：商家后台点击级上传（需放开 `productEditingEnabled` 与真实商家账号）、手机 Web 同流程、真机验证、
+   平台后台权限默认放行语义（§14.4 残留风险）。
+
+## 16. 未完成 / 待验证
 
 - 21 套模板只完成 3 套（箱包），其余行业待后续批次。
 - **生产移动端路由缺口**：`frontend-mobile` 应用未接管 `?storefrontPreview=`，手机端生产预览落到普通首页；
@@ -578,7 +602,7 @@ DATABASE_URL=... P2_LEGACY_MODEL_ROLLBACK=yes node scripts/p2/3d-legacy-model-re
 - 真机（iPhone / Android 实体设备）未测试，只做 Chromium + 视口模拟。
 - 3D 场景未接 `prefers-reduced-transparency`、未做 GPU 显存实测（`renderer.info` 未上报）。
 
-## 15. P2 阶段 B 仍未闭环的三项（不在本轮范围）
+## 17. P2 阶段 B 仍未闭环的三项（不在本轮范围）
 
 1. **RFQ 商家报价 / 买家接受 / 转订单**：`/api/merchant/rfq/:id/quote`、`/api/buyer/rfq/:id/accept` 仍未实现。
 2. **箱包专业字段**：尺寸、五金、容量、肩带仍无独立字段，只能用 `fabric/origin/composition` 近似。

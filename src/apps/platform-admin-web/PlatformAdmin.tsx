@@ -55,6 +55,8 @@ import { AdminAiControlCenter } from '../platform-admin-common/components/admin/
 import { AdminModaGptOperator } from '../platform-admin-common/components/admin/AdminModaGptOperator';
 import { AdminDatabaseCenter } from '../platform-admin-common/components/admin/AdminDatabaseCenter';
 import { AdminRiskMonitor } from '../platform-admin-common/components/admin/AdminRiskMonitor';
+import { AdminModelReview } from '../platform-admin-common/components/admin/AdminModelReview';
+import { AdminPermissionManager } from '../platform-admin-common/components/admin/AdminPermissionManager';
 import { AdminInventoryCenter } from '../platform-admin-common/components/admin/AdminInventoryCenter';
 import { AdminNotificationEvents } from '../platform-admin-common/components/admin/AdminNotificationEvents';
 import { AdminModaGptBilling } from '../platform-admin-common/components/admin/AdminModaGptBilling';
@@ -1143,6 +1145,8 @@ export const PlatformAdmin: React.FC<{ initialTab?: AdminTab }> = ({ initialTab 
       {adminTab === 'feature_flags' && <AdminFeatureFlags />}
       {adminTab === 'database_center' && <AdminDatabaseCenter />}
       {adminTab === 'risk_monitor' && <AdminRiskMonitor />}
+      {adminTab === 'model_review' && <AdminModelReview />}
+      {adminTab === 'permission_manager' && <AdminPermissionManager />}
       {adminTab === 'app_store_mgmt' && <AdminAppStoreMgmt />}
 
       {adminTab === 'settings' && (

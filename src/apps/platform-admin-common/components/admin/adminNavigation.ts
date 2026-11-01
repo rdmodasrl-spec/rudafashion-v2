@@ -5,7 +5,8 @@ export type AdminTab =
   | 'growth' | 'marketing_attribution' | 'partners' | 'support_requests' | 'merchant_support' | 'merchant_support_settings'
   | 'fashion_content' | 'gallery' | 'fashion_community' | 'website_collector' | 'promotions' | 'bi_dashboard' | 'risk_monitor'
   | 'growth_workbench' | 'growth_acquisition' | 'growth_content' | 'growth_analytics'
-  | 'database_center' | 'app_store_mgmt' | 'email_mgmt' | 'feature_flags';
+  | 'database_center' | 'app_store_mgmt' | 'email_mgmt' | 'feature_flags'
+  | 'model_review' | 'permission_manager';
 
 export type AdminArea = 'business' | 'growth' | 'service' | 'platform';
 
@@ -37,6 +38,7 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
       { key: 'account_identities', label: '账号审核' },
       { key: 'customers', label: '客户管理' },
       { key: 'products', label: '商品管理' },
+      { key: 'model_review', label: '模型审核' },
       { key: 'vault_requests', label: '专属授权' },
       { key: 'orders', label: '订单管理' },
       { key: 'inventory', label: '库存管理' },
@@ -81,7 +83,8 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
       { key: 'app_store_mgmt', label: '生态应用' },
       { key: 'notifications', label: '消息通知' },
       { key: 'database_center', label: '数据备份' },
-      { key: 'audit_logs', label: '操作记录' }
+      { key: 'audit_logs', label: '操作记录' },
+      { key: 'permission_manager', label: '权限管理' }
     ]
   }
 ];

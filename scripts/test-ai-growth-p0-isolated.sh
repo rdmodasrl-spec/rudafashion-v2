@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Isolated PostgreSQL runner for growth/P0, billing, ModaGPT, industry AI and trading suites.
+# Isolated PostgreSQL runner for growth/P0, billing, ModaGPT, industry AI, trading and Leather suites.
 # Every child process runs under `env -i` so an ambient DATABASE_URL or PG* target can never
 # reach the tests: only the temporary container connection string is passed through.
 set -euo pipefail
 
 usage() {
-  echo "Usage: bash scripts/test-ai-growth-p0-isolated.sh [p0|billing|modagpt|modagpt-industries|modagpt-brain|app-store|production-chain|trading-wholesale|full]" >&2
+  echo "Usage: bash scripts/test-ai-growth-p0-isolated.sh [p0|billing|modagpt|modagpt-industries|modagpt-brain|app-store|production-chain|trading-wholesale|leather-studio|full]" >&2
 }
 
 suite="${1:-p0}"
 case "$suite" in
-  p0|billing|modagpt|modagpt-industries|modagpt-brain|app-store|production-chain|trading-wholesale|full) ;;
+  p0|billing|modagpt|modagpt-industries|modagpt-brain|app-store|production-chain|trading-wholesale|leather-studio|full) ;;
   --full) suite="full" ;;
   *) usage; exit 2 ;;
 esac
@@ -128,6 +128,7 @@ case "$suite" in
   app-store) test_files=(tests/integration/app-store.postgres.test.ts) ;;
   production-chain) test_files=(tests/integration/production-chain.postgres.test.ts) ;;
   trading-wholesale) test_files=(tests/integration/trading-wholesale.postgres.test.ts) ;;
+  leather-studio) test_files=(tests/integration/leather-studio-project.postgres.test.ts) ;;
   full) test_files=(tests/integration/*.postgres.test.ts) ;;
 esac
 
@@ -162,6 +163,9 @@ isolated \
   MODAGPT_INDUSTRIES_TEST_DATABASE_URL="$database_url" \
   MODAGPT_INDUSTRIES_TEST_RUN_ID="$run_id" \
   MODAGPT_INDUSTRIES_TEST_CONTAINER_ID="$container_id" \
+  LEATHER_STUDIO_TEST_DATABASE_URL="$database_url" \
+  LEATHER_STUDIO_TEST_RUN_ID="$run_id" \
+  LEATHER_STUDIO_TEST_CONTAINER_ID="$container_id" \
   node --import tsx --test --test-concurrency=1 "${test_files[@]}"
 
 echo "Isolated PostgreSQL suite '$suite' passed; the temporary database will be removed."

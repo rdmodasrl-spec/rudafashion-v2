@@ -17,15 +17,26 @@ export type ModaGptBrainRecordKind = 'memory' | 'knowledge' | 'fact' | 'experien
 export type ModaGptBrainAccessContext = {
   tenantId: string;
   merchantId: string;
+  industryId: string;
+  studioId: string;
+  knowledgeNamespace: string;
   actorId: string;
   permissions: readonly string[];
   scopes: readonly ModaGptBrainScope[];
 };
 
+export type ModaGptBrainAccessInput = Omit<
+  ModaGptBrainAccessContext,
+  'industryId' | 'studioId' | 'knowledgeNamespace'
+>;
+
 export type ModaGptBrainCandidate = {
   id: string;
   tenantId: string;
   merchantId: string | null;
+  industryId: string;
+  studioId: string;
+  knowledgeNamespace: string;
   kind: ModaGptBrainRecordKind;
   scope: ModaGptBrainScope;
   content: string;
@@ -83,6 +94,9 @@ export function validateModaGptBrainAccessContext(
   if (
     !/^[A-Za-z0-9_-]{1,120}$/.test(context.tenantId)
     || !/^[A-Za-z0-9_-]{1,120}$/.test(context.merchantId)
+    || !/^[a-z][a-z0-9_]{0,119}$/.test(context.industryId)
+    || !/^[a-z][a-z0-9_]{0,119}$/.test(context.studioId)
+    || !/^[a-z][a-z0-9_]{0,119}$/.test(context.knowledgeNamespace)
     || !/^[A-Za-z0-9_-]{1,160}$/.test(context.actorId)
     || context.tenantId !== context.merchantId
     || !Array.isArray(context.permissions)
@@ -99,6 +113,11 @@ export function isModaGptBrainCandidateEligible(
   validateModaGptBrainAccessContext(context);
   if (candidate.tenantId !== context.tenantId) return false;
   if (candidate.merchantId !== context.merchantId) return false;
+  if (
+    candidate.industryId !== context.industryId
+    || candidate.studioId !== context.studioId
+    || candidate.knowledgeNamespace !== context.knowledgeNamespace
+  ) return false;
   if (!context.scopes.includes(candidate.scope)) return false;
   if (
     !context.permissions.includes('*')

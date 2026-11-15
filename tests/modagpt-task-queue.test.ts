@@ -32,6 +32,7 @@ class MemoryTaskStore implements ModaGptTaskStore {
       if (
         existing.taskType !== input.taskType
         || existing.merchantId !== input.merchantId
+        || existing.projectId !== (input.projectId ?? null)
         || existing.payload !== input.payload
       ) throw new Error('MODAGPT_TASK_IDEMPOTENCY_CONFLICT');
       return { id: existing.id, status: existing.status, deduplicated: true };
@@ -39,6 +40,7 @@ class MemoryTaskStore implements ModaGptTaskStore {
     const task: ModaGptTask<string> & { availableAt: number } = {
       id: String(this.nextId++),
       merchantId: input.merchantId,
+      projectId: input.projectId ?? null,
       tenantId: input.tenantId,
       actorId: input.actorId,
       traceId: input.traceId,
@@ -479,7 +481,7 @@ test('worker rejects invalid leases and reports loss of task ownership', async (
   const losingStore: ModaGptTaskStore = {
     enqueue: store.enqueue.bind(store),
     claim: async workerId => ({
-      id: 'lost', merchantId: null, tenantId: null, actorId: null, traceId: 'trace-lost',
+      id: 'lost', merchantId: null, projectId: null, tenantId: null, actorId: null, traceId: 'trace-lost',
       parentTaskId: null, goal: 'lost', taskType: 'ops.health_check', status: 'running', priority: 0,
       agentId: null, payload: '{}', context: {}, plan: null, attempts: 1, retryCount: 0,
       maxAttempts: 1, idempotencyKey: null, lockedBy: workerId, error: null
@@ -612,6 +614,7 @@ test('Prisma store persists task context and uses compare-and-set lifecycle writ
     taskType: 'ai.workflow.run',
     payload: JSON.stringify({ workflow: 'product_publish' }),
     merchantId: 'merchant-1',
+    projectId: 'c4c9d488-6f9e-4e31-b639-e0730f64726e',
     tenantId: 'merchant-1',
     actorId: 'actor-1',
     traceId: 'trace-prisma-1',
@@ -626,6 +629,7 @@ test('Prisma store persists task context and uses compare-and-set lifecycle writ
   });
   assert.equal(enqueued.status, 'queued');
   assert.equal(createdData?.tenantId, 'merchant-1');
+  assert.equal(createdData?.projectId, 'c4c9d488-6f9e-4e31-b639-e0730f64726e');
   assert.equal(createdData?.traceId, 'trace-prisma-1');
   assert.equal(createdData?.priority, 5);
   assert.equal(createdData?.context, JSON.stringify({ productId: 'product-1' }));
@@ -723,6 +727,7 @@ test('Prisma store deduplicates matching legacy tasks during tenant-key migratio
           status: 'queued',
           taskType: 'ai.workflow.run',
           merchantId: 'merchant-1',
+          projectId: null,
           tenantId: 'merchant-1',
           actorId: null,
           traceId: 'legacy-task-1',

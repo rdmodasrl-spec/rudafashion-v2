@@ -7,7 +7,8 @@ export const merchantIndustryDemoAccounts = [
   { code: '004', templateId: 'department_wholesale', merchantId: 'demo-industry-department-wholesale' },
   { code: '005', templateId: 'bags_wholesale', merchantId: 'demo-industry-bags-wholesale' },
   { code: '006', templateId: 'department_chain_retail', merchantId: 'demo-industry-department-chain-retail' },
-  { code: '007', templateId: 'general_retail', merchantId: 'demo-industry-general-retail' }
+  { code: '007', templateId: 'general_retail', merchantId: 'demo-industry-general-retail' },
+  { code: '008', templateId: 'restaurant_ordering', merchantId: 'demo-industry-restaurant-ordering' }
 ] as const satisfies readonly {
   code: string;
   templateId: MerchantIndustryTemplateId;

@@ -1,11 +1,12 @@
 # MODAUI AI TOOLS PLATFORM —— 专业 AI 创作与营销平台（协议、门禁与能力范围）
 
-> **文档状态**：v0.4。协议与门禁（P0）已实施上线并完成生产真实调用验证；**P1 额度与用量记账、能力真值、三端工具中心 UI 已实施**（2026-10-30）。专业工作中心（图片/视频/语音/发布/分析）仍为**未接通**，接口未接通前不提供可点击入口，也不返回假结果。
-> **基线日期**：2026-10-30。**代码基线**：分支 `main`。
+> **文档状态**：v0.5。协议与门禁（P0）已上线并完成生产真实调用验证；P1 额度/用量记账、能力真值、三端工具中心 UI 已实施（v0.4）；**P1 供应商网关基础层（目录 + 峰谷计价）与 Sharp/FFmpeg 本地媒体引擎已实施并有真实执行测试**（v0.5，2026-10-30）。图片生成、视频生成、语音、发布、分析仍为**未接通**，未接通前不提供可点击入口，也不返回假结果。
+> **基线日期**：2026-10-30。**代码基线**：分支 `production`（本阶段改动在 `feat/ai-tools-provider-gateway` 分支，未部署生产）。
+
 > **适用范围**：MODAUI / ModaGPT 商家侧 AI 能力、App Store 安装机制、工具执行、计费与租户隔离。
 > **不适用范围**：已冻结的服装生产批发、服装批发行业 AI 行为（只允许"不改变行为地"接入本协议）。
 
-> **当前工程补充**：本文后续“现状审计”保留了早期设计阶段的历史记录，不能单独代表当前代码状态。Tool Manifest、应用安装授权和商家工具运行时已有后续实现；具体以 `src/server/aiToolManifest.ts`、`src/server/aiToolRegistry.ts`、`src/server/modauiAiTools.ts`、`src/server/modagptMerchantTaskExecutor.ts` 及当前测试为准。四个非服装/贸易行业的只读分析闭环另见 [`../modules/modaui-four-industry-ai.md`](../modules/modaui-four-industry-ai.md)。
+> **当前工程补充**：本文后续“现状审计”保留了早期设计阶段的历史记录，不能单独代表当前代码状态。Tool Manifest、应用安装授权和商家工具运行时已有后续实现；具体以 `src/server/aiToolManifest.ts`、`src/server/aiToolRegistry.ts`、`src/server/modauiAiTools.ts`、`src/server/modagptMerchantTaskExecutor.ts` 及当前测试为准。八行业 AI Studio 的行业状态、分析与采购工作流统一见 [`../modules/modaui-industry-studios-v2.md`](../modules/modaui-industry-studios-v2.md)。
 
 本次新增行业能力必须用服务端 `Merchant.industryTemplate` 选择专业 Pack。不得仅用粗粒度 `Merchant.industry` 区分百货批发和百货连锁；不得改变服装生产批发、服装批发或贸易批发既有行为。三端复用现有 ModaUI 任务 API，不增加聊天实现、数据库权威源或任务 API。
 
@@ -31,12 +32,16 @@ MODAUI AI Tools 的定位是**专业级 AI 创作与营销平台**，不是模�
 | 工作中心 | 职责 | 当前状态 |
 |---|---|---|
 | 创作工作台 | 自然语言目标 → 任务计划 → 审批 → 组合执行 | 计划 |
-| 图片工作室 | 生图、多参考图、局部编辑、商品一致性、虚拟试衣 | 未接通（无图片供应商凭据） |
-| 视频工作室 | 文生视频/图生视频、时间轴剪辑、渲染导出 | 未接通 |
+| 图片工作室 | 生图、多参考图、局部编辑、商品一致性、虚拟试衣 | **本地处理已可用**（裁剪/缩放/压缩/格式转换/平台预设/缩略图，Sharp）；生图与编辑**未接通**（无图片供应商凭据） |
+| 视频工作室 | 文生视频/图生视频、时间轴剪辑、渲染导出 | **本地剪辑已可用**（裁剪/拼接/转码/抽音轨/截帧/烧字幕，FFmpeg）；生成与时间轴 UI **未接通** |
 | 语音与多语言 | 配音、跨语言、字幕时间戳 | 未接通；当前只提供文本翻译 |
 | 发布中心 | 账号授权、排期、多平台真实发布与回执 | 未接通 |
 | 品牌与素材 | 品牌规范、商品素材、版本、授权记录 | 计划（复用现有对象存储） |
 | 营销分析 | 平台真实表现数据、对比与建议 | 未接通 |
+
+> 重要区分：`本地处理可用` **不等于** `AI 生成可用`。图片中心当前没有任何"按一下出图"的能力，
+> 因此生图入口仍不渲染；已可用的只有不调用付费模型、供应商成本为 0 的本地媒体处理能力。
+
 
 **工具准入标准（全部满足才可进入正式清单）**：真实 API 或真实本地处理；明确商用许可；明确输入输出契约；
 真实任务状态与结果；可记录费用；失败/超时/重试；商家租户隔离；可被原生 AI 自动调用；应用内可独立使用；
@@ -63,12 +68,33 @@ MODAUI AI Tools 的定位是**专业级 AI 创作与营销平台**，不是模�
 | 调用额度（日/月）与用量记账 | 已完成 | `src/server/aiToolQuota.ts`、`loadMerchantAiToolQuota`、`recordAiToolUsage`；写 `ModaGptAiUsageRecord`（`feature='ai.tools'`、`model=toolId`），超额返回 `AI_TOOL_QUOTA_EXCEEDED` |
 | 工作中心能力真值（6 个中心） | 已完成 | `src/server/aiToolCapabilities.ts`；未接通中心返回 `not_connected` + 真实原因，前端不渲染可点击按钮 |
 | 三端工具中心 UI | 已完成（代码 + 构建；真机视觉待验收） | 电脑端 `MerchantPortal` → 「工具中心」；手机网页端「更多 → 工具中心」；小程序 `pages/ai-tools/index` |
-| 图片/视频/语音/发布/分析 | **未接通** | 图片需 `FAL_KEY` 或本地 Automatic1111 可达（当前均无）；视频/语音/发布/分析无 Provider Adapter，且发布需平台 OAuth 授权 |
+| 供应商与模型目录（Provider Gateway） | 已完成（纯逻辑层） | `src/server/aiProviderCatalog.ts`：能力驱动解析、数据合规分级、凭据名过滤、`AI_PROVIDER_CATALOG_JSON` 覆盖；调用点不得写死模型 ID |
+| 供应商峰谷成本核算 | 已完成（纯逻辑层） | `src/server/aiProviderPricing.ts`：UTC 优惠窗口、token 三档价、图片/视频/配音/识别/搜索计价、微美元整数运算；高峰价未配置时拒绝估算 |
+| 本地媒体引擎（Sharp + FFmpeg） | 已完成（真实执行已验证） | `src/server/aiMediaToolkit.ts`：图片裁剪/缩放/压缩/转换/预设/缩略图；视频探针/裁剪/拼接/转码/抽音轨/截帧/烧字幕；临时目录隔离、超时、体积上限、`execFile` 参数数组 |
+| Provider Adapter（真实 API 调用） | **未接通** | 无 DeepSeek/Gemini/Runway/TTS/搜索 实际调用适配器；仅有既有 `aiEmployeeProviders.ts` 文本与 fal 图片通道 |
+| 确定性图片引擎（`src/server/aiImageEngine.ts`） | 已完成（13 项真实像素单测通过） | 商品分割/抠图/白底主图/像素质检/主色/颜色变体/感知哈希去重/多画幅裁切；纯 Sharp，无付费 API |
+| 图片类工具（质检 / 白底主图 / 多画幅） | 已完成（代码 + 真实 handler 单测；真机 UI 待验收） | `ai_tools_image_quality`、`ai_tools_image_product_shot`、`ai_tools_image_reframe`；`tests/ai-tools-image-tools.test.ts` |
+| AI 生成式图片（文生图/图生图） | **未接通** | 需 `FAL_KEY` 或本地 SD WebUI；见 `docs/engineering/modules/modaui-engines.md` |
+| 视频 / 语音 / 发布 / 分析 | **未接通** | 视频需 `RUNWAY_API_KEY`；语音需 TTS/Whisper 通道；发布需平台 OAuth；分析需平台数据授权 |
+| 商家 AI 广告生产（四条路线 + 编辑器 + 发布） | **待验证（仅规格先行）** | 规格：`docs/engineering/modules/modaui-ai-advertising.md`；本阶段只落真实引擎与图片工具，广告工作流未实现 |
+
 | 按次扣费（credits 结算） | **未接通** | `cost.credits` 仍为 0；`ModaGptBillingFeature('ai.tools')` 未启用时不扣费，启用后由运营配置生效 |
 
 > 规则：**未接通的能力不得出现在可点击入口里，也不得用 Mock/静态进度伪装成功。** 新增能力必须先在此表把状态改为"已完成"并附证据。
+>
+> 口径说明（2026-10-30）：`aiToolCapabilities.ts` 的「图片中心」状态只表示**生成式**图片能力（需要 `FAL_KEY` 或本地 SD WebUI），因此即使 `ai_tools_image_quality` / `ai_tools_image_product_shot` / `ai_tools_image_reframe` 已可真实执行，该中心仍可能显示 `not_connected`；这三个工具的真实可用性以工具清单（`GET /api/merchant/ai-tools`）与工具定义为准，不因图片中心状态而被隐藏或谎报为可用。
 
-### 1.3 Provider Adapter 契约（规划，未实现）
+### 1.3 Provider Adapter 契约
+
+**状态（2026-10-30）：目录与计价层已实现，真实调用适配器未实现。**
+
+- 已实现：`src/server/aiProviderCatalog.ts`（供应商/模型/能力/档位/数据政策/超时重试/凭据名 + 目录覆盖）、
+  `src/server/aiProviderPricing.ts`（峰谷成本核算）。业务代码只按「能力 + 档位」解析模型，不写死模型 ID。
+- 未实现：`submit/poll/cancel` 三类真实 HTTP 适配器（DeepSeek、Gemini、Runway、Google TTS、OpenAI ASR、搜索）。
+
+**模型命名规则**：DeepSeek 使用官方当前名称 `deepseek-flash`、`deepseek-v4-pro`。Flash 支持图片理解、工具调用、
+JSON 输出与长上下文；Pro 不支持图片输入。模型名只存在于目录配置中，产品代码不得出现 `deepseek-chat`、
+`deepseek-reasoner` 等历史名称，也不得把 DeepSeek 当作图片或视频生成服务。
 
 外部供应商一律通过适配器接入，**业务代码不得写死模型名称**。适配器必须实现：
 
@@ -544,6 +570,34 @@ resolveMerchantToolset({
 > 该记录证明 P0 的「安装—调用—停用—恢复—卸载」是真实闭环，不是接口名占位。图片/视频/发布仍为未接通，不在本记录范围内。
 
 
+### P1.5｜供应商网关基础层与本地媒体引擎（已实施 2026-10-30，未部署）
+
+**已实现（纯逻辑层 + 真实本地执行，均无外部凭据依赖）**
+
+| 交付 | 文件 | 关键规则 |
+|---|---|---|
+| 供应商/模型目录 | `src/server/aiProviderCatalog.ts` | 按「能力 + 档位」解析模型，调用点不写死模型 ID；`status` 停用的模型不参与路由；凭据只比对**名称**，目录内不含任何密钥 |
+| 数据合规分流 | 同上 `dataPolicy` | `self_hosted` / `commercial_paid` / `free_tier` 三档；商家私密素材可限定只走 `self_hosted`（本地 Whisper） |
+| 峰谷成本核算 | `src/server/aiProviderPricing.ts` | UTC 优惠窗口（默认 DeepSeek 北京 00:30–08:30 = UTC 16:30–00:30，可运营覆盖）；token 分缓存命中/未命中/输出三档；图片按张+分辨率、视频按秒+分辨率、配音按字符、识别按分钟、搜索按请求数 |
+| 成本安全规则 | 同上 | 高峰价未配置 → `PEAK_RATE_NOT_CONFIGURED` 而不是按非高峰价低估；计价类型不匹配 → 明确报错；金额用微美元整数，向上取整到分，真实成本不会记成 0 |
+| 本地媒体引擎 | `src/server/aiMediaToolkit.ts` | Sharp：缩放/裁剪/压缩/格式转换/缩略图/社交平台预设；FFmpeg：探针/裁剪/拼接/转码/抽音轨/截帧/烧字幕；独立临时目录 + 超时 + 输出体积上限 + `execFile` 参数数组（无 shell 注入面） |
+
+**验收（本次真实执行，非静态检查）**
+
+| 项 | 命令 | 结果 |
+|---|---|---|
+| 目录与路由单测 | `node --import tsx --test tests/ai-provider-catalog.test.ts` | 通过（模型名、能力标签、凭据过滤、数据政策、覆盖校验、无密钥泄漏） |
+| 峰谷计价单测 | `node --import tsx --test tests/ai-provider-pricing.test.ts` | 通过（跨零点窗口、Flash/Pro 三档价、图片/视频/TTS/ASR/搜索、高峰拒绝、取整规则） |
+| 媒体引擎真实执行 | `node --import tsx --test tests/ai-media-toolkit.test.ts` | 8/8 通过：真实 Sharp 输出 1:1 / 9:16 / 16:9；真实 ffmpeg 生成 2 秒视频 → 裁剪为 1 秒 → 两段拼接回 2 秒；抽音轨、截帧（PNG 160×120）均被 ffprobe/Sharp 复核 |
+
+**尚未接线（必须明确）**
+
+- 三个模块目前是**能力层**，尚未接入 `POST /api/merchant/ai-tools/:toolId/invoke`（没有对应工具定义、没有 Manifest 条目、也没有媒体素材存储读写）。
+  因此商家端现在还调用不到本地媒体处理，不能对外宣称"已可剪辑"。
+- 真实 Provider Adapter（DeepSeek/Gemini/Runway/TTS/ASR/搜索的 HTTP 调用、轮询、取消、账单回读）未实现。
+- 供应商成本尚未写入 `ModaGptAiUsageRecord.actualCostMinor`（字段已存在，接线在下一阶段随 Adapter 一起完成）。
+
+
 
 ### P1｜付费与额度（已实施 2026-10-30）
 
@@ -656,5 +710,7 @@ grep -n "model App\b" -A 40 prisma/schema.prisma                           # App
 | 2026-10-30 | v0.1 | 初版：只读审计 + Tool Manifest v1 协议 + 分阶段计划 | 未写任何功能代码；P0 需评审通过后才实施 |
 | 2026-10-30 | v0.2 | 产品定位升级为专业 AI 创作与营销平台；新增 §1.1 六个工作中心、§1.2 能力状态矩阵、§1.3 Provider Adapter 契约与自动路由；P0 协议与门禁已实施（Manifest v1、7 天试用授权、安装/停用/卸载联动、运行时门禁、管理端与商家端接口、2 个真实工具）；P4 改为按闭环交付 | 未接通能力（图片/视频/语音/发布/分析）明确标记，不提供入口；核心 MODAGPT 工具不注册到本应用 |
 | 2026-10-30 | v0.3 | 上线生产（提交 `bf6d3acc`，迁移已应用，App Store 已种入 `modaui-ai-tools`）；新增 `npm run smoke:ai-tools` 生产闭环冒烟；停用应用的拒绝原因细分为 `app_disabled`（有安装记录但停用）与 `app_not_installed`（无安装记录） | 生产实测已完成第 8 项验收；图片/视频/发布仍为未接通，等供应商凭据 |
+| 2026-10-30 | v0.4 | P1：`aiToolQuota.ts` 套餐日/月额度、`ModaGptAiUsageRecord` 幂等用量账本、`aiToolCapabilities.ts` 六中心真值、`GET /api/merchant/ai-tools` 与 invoke 响应扩展；三端工具中心 UI（Web/手机网页/小程序）；`ai.tools` 加入计费特性键；生产 `smoke:ai-tools` 17/17 通过（提交 `edcd75b8`） | 复用既有用量表与计费特性，未新增表；未接通能力仍不渲染入口 |
+| 2026-10-30 | v0.5 | 新增 §1.5/P1.5 供应商网关基础层：`aiProviderCatalog.ts`（能力驱动模型解析、数据合规分级、目录覆盖，不含密钥）+ `aiProviderPricing.ts`（DeepSeek 峰谷动态计价、图片/视频/语音/识别/搜索计价、高峰价缺失即拒绝）+ `aiMediaToolkit.ts`（Sharp/FFmpeg 真实本地处理）；新增 29 项单测全部通过 | 三者均为能力层，尚未接入 invoke 路由与用量 `actualCostMinor`；真实 Provider Adapter 未实现，本阶段未部署生产 |
 
 **维护要求**：实施 P0 时，必须同步更新本文 §2（现状）与模块登记表 `modaui-ai-tools-platform` 行；代码与本文不一致时以代码为准并立即修正本文，不得让设计文档停留在旧行为。

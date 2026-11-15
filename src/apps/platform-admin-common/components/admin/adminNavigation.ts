@@ -1,7 +1,7 @@
 export type AdminTab =
   | 'overview' | 'merchants' | 'account_identities' | 'vault_requests' | 'products' | 'customers'
   | 'orders' | 'inventory' | 'showrooms' | 'appointments' | 'pos' | 'finance' | 'notifications' | 'settings'
-  | 'audit_logs' | 'ai_support' | 'ai_center' | 'ai_provider_settings' | 'modagpt_operator' | 'modagpt_billing'
+  | 'audit_logs' | 'ai_support' | 'ai_center' | 'ai_provider_settings' | 'ai_providers' | 'modagpt_operator' | 'modagpt_billing'
   | 'growth' | 'marketing_attribution' | 'partners' | 'support_requests' | 'merchant_support' | 'merchant_support_settings'
   | 'fashion_content' | 'gallery' | 'fashion_community' | 'website_collector' | 'promotions' | 'bi_dashboard' | 'risk_monitor'
   | 'growth_workbench' | 'growth_acquisition' | 'growth_content' | 'growth_analytics'
@@ -78,6 +78,8 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
       { key: 'ai_center', label: '智能代理' },
       { key: 'modagpt_operator', label: '运营助手' },
       { key: 'ai_provider_settings', label: '模型管理' },
+      // 导航四字规则：本项固定为「密钥管理」，对应页面标题「AI 服务商」控制台（见 modaui-ai-provider-console.md §3）。
+      { key: 'ai_providers', label: '密钥管理' },
       { key: 'modagpt_billing', label: '计费管理' },
       { key: 'risk_monitor', label: '风险监测' },
       { key: 'app_store_mgmt', label: '生态应用' },

@@ -4,7 +4,7 @@
       <view class="topbar-side">
         <button class="topbar-action back-action" bindtap="goBack" aria-label="返回">‹</button>
       </view>
-      <view class="topbar-center"><text class="topbar-title">{{section === 'chat' ? 'ModaUI' : section === 'create' ? '创作中心' : section === 'designs' ? '我的作品' : '店铺知识库'}}</text></view>
+      <view class="topbar-center"><text class="topbar-title">{{section === 'chat' ? 'ModaUI' : section === 'create' ? '创作中心' : section === 'designs' ? '我的作品' : section === 'projects' ? (leatherStudioEnabled ? '皮具项目' : '服装项目') : '店铺知识库'}}</text></view>
       <view class="topbar-side topbar-side-right">
         <button class="topbar-action" bindtap="toggleMenu" aria-label="更多操作" aria-expanded="{{menuOpen}}">
           <view class="more-glyph"><view></view><view></view><view></view></view>
@@ -15,19 +15,29 @@
 
   <scroll-view wx:if="{{section === 'chat'}}" class="chat-scroll" scroll-y scroll-into-view="message-bottom" scroll-with-animation>
     <view wx:if="{{messages.length === 0}}" class="welcome">
-      <view class="core-stage">
-        <canvas type="2d" id="modaui-core" class="core-canvas"></canvas>
-        <view class="core-greeting">
-          <text class="core-greeting-line">你好，</text>
-          <text class="core-greeting-line">我是 MODAUI。</text>
-          <text class="core-subcopy">我可以帮你处理商品、订单、库存、数据分析，并提供时尚行业的专业建议。</text>
+      <view wx:if="{{industryContextLoaded && industryChatOnly}}" class="industry-welcome">
+        <text class="industry-welcome-title">你有什么想法？</text>
+        <text class="industry-welcome-subtitle">{{industryTitle}}</text>
+        <view wx:if="{{industryPrompts.length}}" class="industry-prompt-list">
+          <button wx:for="{{industryPrompts}}" wx:key="label" class="industry-prompt-button" data-prompt="{{item.prompt}}" bindtap="usePrompt">{{item.label}}</button>
         </view>
       </view>
-      <view class="feature-list">
-        <view wx:for="{{visibleHomeModes}}" wx:key="id" class="feature-row {{item.unavailable ? 'feature-disabled' : ''}}" data-mode="{{item.id}}" bindtap="selectMode">
-          <text class="feature-chat-text">{{item.welcomeText}}</text>
+      <view wx:elif="{{industryContextLoaded}}" class="welcome-fashion">
+        <view class="core-stage">
+          <canvas type="2d" id="modaui-core" class="core-canvas"></canvas>
+          <view class="core-greeting">
+            <text class="core-greeting-line">你好，</text>
+            <text class="core-greeting-line">我是 MODAUI。</text>
+            <text class="core-subcopy">我可以帮你处理商品、订单、库存、数据分析，并提供时尚行业的专业建议。</text>
+          </view>
+        </view>
+        <view class="feature-list">
+          <view wx:for="{{visibleHomeModes}}" wx:key="id" class="feature-row {{item.unavailable ? 'feature-disabled' : ''}}" data-mode="{{item.id}}" bindtap="selectMode">
+            <text class="feature-chat-text">{{item.welcomeText}}</text>
+          </view>
         </view>
       </view>
+      <view wx:else class="industry-welcome"><text class="industry-welcome-subtitle">正在读取商家行业配置…</text></view>
     </view>
 
     <view wx:else class="message-list">
@@ -95,7 +105,7 @@
     </view>
   </scroll-view>
 
-  <scroll-view wx:elif="{{section === 'create'}}" class="section-scroll" scroll-y>
+  <scroll-view wx:elif="{{section === 'create' && !industryChatOnly}}" class="section-scroll" scroll-y>
     <view class="section-heading">
       <text class="section-title">创作</text>
     </view>
@@ -108,7 +118,7 @@
     </view>
   </scroll-view>
 
-  <scroll-view wx:elif="{{section === 'designs'}}" class="section-scroll" scroll-y>
+  <scroll-view wx:elif="{{section === 'designs' && !industryChatOnly}}" class="section-scroll" scroll-y>
     <view class="section-heading">
       <text class="section-title">我的作品</text>
     </view>
@@ -124,6 +134,122 @@
       <view wx:for="{{designs}}" wx:key="id" class="design-card" data-index="{{index}}" bindtap="openDesign">
         <view class="design-image-placeholder"><text>RUDA</text><text wx:if="{{designLoadingId === item.id}}" class="thumbnail-loading">载入中</text></view>
         <view class="design-meta"><text class="design-title">{{item.title}}</text><button class="favorite-button" data-index="{{index}}" catchtap="toggleFavorite">{{item.isFavorite ? '♥' : '♡'}}</button></view>
+      </view>
+    </view>
+  </scroll-view>
+
+  <scroll-view wx:elif="{{section === 'projects' && studioProjectsEnabled}}" class="section-scroll project-scroll" scroll-y>
+    <view class="section-heading">
+      <text class="section-title">{{leatherStudioEnabled ? '皮具项目' : '服装项目'}}</text>
+      <text class="section-description">项目、文件和任务通过已授权的共享工作区保存。</text>
+    </view>
+    <view wx:if="{{studioProjectsError}}" class="state-card state-error">
+      {{studioProjectsError}}
+      <button wx:if="{{!studioProjectConflict}}" class="retry-button" bindtap="loadStudioProjects">重试</button>
+      <button wx:if="{{studioProjectConflict}}" class="retry-button" bindtap="loadLatestStudioProject">载入服务器最新版本</button>
+    </view>
+    <view wx:if="{{studioProjectsNotice}}" class="project-notice">{{studioProjectsNotice}}</view>
+    <button class="project-primary-button" bindtap="createStudioProject" loading="{{studioProjectsSaving}}" disabled="{{studioProjectsSaving || studioProjectFilesUploading || studioProjectRetryUploadAvailable}}">＋　{{leatherStudioEnabled ? '新建皮具项目' : '新建服装项目'}}</button>
+    <view wx:if="{{studioProjectsLoading}}" class="state-card">正在读取项目…</view>
+    <view wx:elif="{{studioProjects.length === 0}}" class="state-card">暂无项目。创建后可在其他已授权商家端继续查看。</view>
+    <view wx:else class="project-list">
+      <view wx:for="{{studioProjects}}" wx:key="id" class="project-row">
+        <view class="project-row-copy">
+          <text class="project-row-title">{{item.title}}</text>
+          <text class="project-row-meta">版本 {{item.revision}}</text>
+        </view>
+        <button class="project-open-button" data-id="{{item.id}}" bindtap="openStudioProject" disabled="{{studioProjectsLoading || studioProjectFilesUploading || studioProjectRetryUploadAvailable}}">打开</button>
+      </view>
+    </view>
+    <view wx:if="{{studioProjectId}}" class="project-editor">
+      <text class="project-editor-title">项目内容 · 版本 {{studioProjectRevision}}</text>
+      <label class="project-field">
+        <text>项目名称</text>
+        <input value="{{studioProjectTitle}}" maxlength="160" placeholder="填写项目名称" bindinput="onStudioProjectTitleInput" />
+      </label>
+      <label class="project-field">
+        <text>设计简报</text>
+        <textarea value="{{studioProjectBrief}}" maxlength="10000" auto-height placeholder="款式方向、面料、版型或待确认事项" bindinput="onStudioProjectBriefInput" />
+      </label>
+      <view wx:if="{{!leatherStudioEnabled}}" class="project-field">
+        <text>关联作品</text>
+        <text class="project-footnote">作品由服务端验证商家归属；保存新版本后与电脑和手机 Web 同步。</text>
+        <view wx:if="{{studioProjectDesignsLoading}}" class="project-footnote">正在读取作品库…</view>
+        <view wx:elif="{{studioProjectDesignsError}}" class="project-footnote">{{studioProjectDesignsError}}<button class="retry-button" bindtap="loadStudioProjectDesignOptions">重试</button></view>
+        <view wx:elif="{{studioProjectDesignOptions.length <= 1}}" class="project-footnote">作品库暂无可关联作品。</view>
+        <view wx:else class="project-design-picker-row">
+          <picker range="{{studioProjectDesignOptions}}" range-key="title" value="{{studioProjectDesignIndex}}" bindchange="onStudioProjectDesignPickerChange">
+            <view class="task-picker">{{studioProjectDesignOptions[studioProjectDesignIndex].title || '选择作品'}} <text>⌄</text></view>
+          </picker>
+          <button class="project-secondary-button" bindtap="addStudioProjectDesign" disabled="{{studioProjectsSaving}}">添加</button>
+        </view>
+        <view wx:if="{{studioProjectDesigns.length}}" class="project-design-list">
+          <view wx:for="{{studioProjectDesigns}}" wx:key="designId" class="project-design-row">
+            <text>{{item.title}}</text>
+            <button class="project-open-button" data-id="{{item.designId}}" bindtap="removeStudioProjectDesign" disabled="{{studioProjectsSaving}}">解除关联</button>
+          </view>
+        </view>
+      </view>
+        <view class="project-file-section">
+          <view class="project-section-heading">
+            <text class="project-editor-title">项目文件</text>
+            <button class="project-secondary-button" bindtap="refreshStudioProjectFiles" loading="{{studioProjectFilesLoading}}" disabled="{{studioProjectFilesLoading || studioProjectFilesUploading}}">刷新</button>
+          </view>
+          <text class="project-footnote">支持图片、PDF、DXF 和 GLB。上传后保存新版本，文件引用才会进入项目快照。</text>
+          <view class="project-file-actions">
+            <button class="project-secondary-button" bindtap="chooseStudioProjectImage" loading="{{studioProjectFilesUploading}}" disabled="{{studioProjectFilesUploading || studioProjectsSaving}}">选择图片</button>
+            <button class="project-secondary-button" bindtap="chooseStudioProjectFile" loading="{{studioProjectFilesUploading}}" disabled="{{studioProjectFilesUploading || studioProjectsSaving}}">选择工程文件</button>
+            <button wx:if="{{studioProjectRetryUploadAvailable}}" class="project-secondary-button" bindtap="retryStudioProjectFile" loading="{{studioProjectFilesUploading}}" disabled="{{studioProjectFilesUploading}}">重试当前文件</button>
+            <button wx:if="{{studioProjectRetryUploadAvailable}}" class="project-secondary-button" bindtap="discardStudioProjectFile" disabled="{{studioProjectFilesUploading}}">放弃当前文件</button>
+          </view>
+          <view wx:if="{{studioProjectFilesError}}" class="project-footnote state-error" role="alert">{{studioProjectFilesError}}</view>
+          <view wx:if="{{studioProjectFilesNotice}}" class="project-notice">{{studioProjectFilesNotice}}</view>
+          <view wx:if="{{studioProjectFilesLoading && studioProjectFiles.length === 0}}" class="project-footnote">正在读取项目文件…</view>
+          <view wx:elif="{{studioProjectFiles.length === 0}}" class="project-footnote">项目还没有可用文件。</view>
+          <view wx:else class="project-design-list">
+            <view wx:for="{{studioProjectFiles}}" wx:key="id" class="project-design-row">
+              <view class="project-file-copy">
+                <text class="project-file-name">{{item.fileName}}</text>
+                <text class="project-footnote">{{item.sizeLabel}} · {{item.linked ? '关联到新版本' : '未关联'}}</text>
+              </view>
+              <view class="project-file-row-actions">
+                <button class="project-open-button" data-id="{{item.id}}" bindtap="toggleStudioProjectFile" disabled="{{studioProjectsSaving || studioProjectConflict || studioProjectFilesUploading}}">{{item.linked ? '移除引用' : '关联'}}</button>
+                <button class="project-open-button" data-id="{{item.id}}" bindtap="downloadStudioProjectFile">下载</button>
+              </view>
+            </view>
+            <button wx:if="{{studioProjectFilesNextCursor}}" class="project-secondary-button" bindtap="loadMoreStudioProjectFiles" loading="{{studioProjectFilesLoading}}" disabled="{{studioProjectFilesLoading}}">加载更多文件</button>
+          </view>
+        </view>
+        <view class="project-file-section">
+          <view class="project-section-heading">
+            <text class="project-editor-title">AI 任务</text>
+            <button class="project-secondary-button" bindtap="refreshStudioProjectJobs" loading="{{studioProjectJobsLoading}}" disabled="{{studioProjectJobsLoading}}">刷新</button>
+          </view>
+          <view wx:if="{{studioProjectJobsError}}" class="project-footnote state-error" role="alert">{{studioProjectJobsError}}</view>
+          <view wx:if="{{studioProjectJobsLoading && studioProjectJobs.length === 0}}" class="project-footnote">正在读取任务…</view>
+          <view wx:elif="{{studioProjectJobs.length === 0}}" class="project-footnote">项目还没有关联的 AI 任务。</view>
+          <view wx:else class="project-design-list">
+            <view wx:for="{{studioProjectJobs}}" wx:key="jobId" class="project-design-row">
+              <view class="project-file-copy">
+                <text class="project-file-name">{{item.statusLabel}}</text>
+                <text class="project-footnote">{{item.jobId}}</text>
+                <text wx:if="{{item.errorCode}}" class="project-footnote">{{item.errorCode}}</text>
+                <button class="project-open-button" data-id="{{item.jobId}}" bindtap="toggleStudioProjectJobDetail" disabled="{{studioProjectJobDetailLoadingId}}">{{studioProjectJobDetailLoadingId === item.jobId ? '读取中…' : (studioProjectJobDetail.jobId === item.jobId ? '收起详情' : '查看详情')}}</button>
+                <view wx:if="{{studioProjectJobDetail.jobId === item.jobId}}" class="project-job-detail">
+                  <text>运行状态：{{studioProjectJobDetail.runtimeStatus}}</text>
+                  <text wx:if="{{studioProjectJobDetail.summary}}">{{studioProjectJobDetail.summary}}</text>
+                  <text wx:if="{{studioProjectJobDetail.approvalId}}">待审批编号：{{studioProjectJobDetail.approvalId}}</text>
+                  <text wx:for="{{studioProjectJobDetail.errors}}" wx:key="*this">{{item}}</text>
+                </view>
+              </view>
+            </view>
+            <button wx:if="{{studioProjectJobsNextCursor}}" class="project-secondary-button" bindtap="loadMoreStudioProjectJobs" loading="{{studioProjectJobsLoading}}" disabled="{{studioProjectJobsLoading}}">加载更多任务</button>
+          </view>
+        </view>
+        <text class="project-footnote">文件上传使用私有对象存储；断网后可重试当前选中的文件，离开页面后需重新选择。</text>
+      <view class="project-editor-actions">
+        <button wx:if="{{!leatherStudioEnabled}}" class="project-secondary-button" bindtap="openStudioBriefInChat">载入到对话</button>
+        <button class="project-primary-button" bindtap="saveStudioProject" loading="{{studioProjectsSaving}}" disabled="{{studioProjectsSaving || studioProjectConflict}}">保存新版本</button>
       </view>
     </view>
   </scroll-view>
@@ -223,22 +349,32 @@
 
   <view wx:if="{{error}}" class="error-note">{{error}}</view>
   <view wx:if="{{section === 'chat'}}" class="composer-dock">
-    <view class="task-mode-row">
+    <view wx:if="{{industryChatOnly}}" class="industry-task-tabs">
+      <button class="industry-task-tab {{!taskMode ? 'industry-task-tab-active' : ''}}" data-mode="chat" bindtap="setTaskMode" aria-pressed="{{!taskMode}}" disabled="{{loading}}">对话</button>
+      <button class="industry-task-tab {{taskMode ? 'industry-task-tab-active' : ''}}" data-mode="task" bindtap="setTaskMode" aria-pressed="{{taskMode}}" disabled="{{loading}}">业务任务</button>
+    </view>
+    <view wx:else class="task-mode-row">
       <button class="task-mode-toggle {{taskMode ? 'task-mode-toggle-active' : ''}}" bindtap="toggleTaskMode" aria-pressed="{{taskMode}}" disabled="{{loading}}">
         {{taskMode ? '退出业务任务' : '业务任务'}}
       </button>
       <text wx:if="{{taskMode}}" class="task-mode-hint">预览后确认，业务由服务端执行</text>
     </view>
-    <view wx:if="{{!taskMode && !activeMode && !toolsOpen}}" class="quick-actions">
+    <view wx:if="{{!industryChatOnly && !taskMode && !activeMode && !toolsOpen}}" class="quick-actions">
       <button wx:for="{{quickModes}}" wx:key="id" class="quick-action" data-mode="{{item.id}}" bindtap="selectMode">{{item.title}}</button>
     </view>
     <view wx:if="{{toolsOpen}}" class="tools-menu">
-      <button class="tool-option" data-section="create" bindtap="openSection">创作中心</button>
-      <button class="tool-option" data-section="designs" bindtap="openSection">我的作品</button>
-      <button wx:for="{{modes}}" wx:key="id" class="tool-option" data-mode="{{item.id}}" bindtap="selectMode">{{item.title}}</button>
+      <block wx:if="{{!industryChatOnly}}">
+        <button class="tool-option" data-section="create" bindtap="openSection">创作中心</button>
+        <button class="tool-option" data-section="designs" bindtap="openSection">我的作品</button>
+        <button wx:if="{{studioProjectsEnabled}}" class="tool-option" data-section="projects" bindtap="openSection">{{leatherStudioEnabled ? '皮具项目' : '服装项目'}}</button>
+        <button wx:for="{{modes}}" wx:key="id" class="tool-option" data-mode="{{item.id}}" bindtap="selectMode">{{item.title}}</button>
+      </block>
+      <block wx:else>
+        <button wx:for="{{industryPrompts}}" wx:key="label" class="tool-option" data-prompt="{{item.prompt}}" bindtap="usePrompt">{{item.label}}</button>
+      </block>
     </view>
     <view class="composer">
-      <button wx:if="{{!taskMode}}" class="composer-tool {{toolsOpen ? 'composer-tool-active' : ''}}" bindtap="toggleTools" aria-label="创作工具">
+      <button wx:if="{{!taskMode}}" class="composer-tool {{toolsOpen ? 'composer-tool-active' : ''}}" bindtap="toggleTools" aria-label="{{industryChatOnly ? '行业提示' : '创作工具'}}">
         <text class="composer-plus">＋</text>
       </button>
       <textarea class="composer-input" value="{{input}}" disabled="{{loading || taskPreview}}" placeholder="{{taskMode ? '描述要执行的业务任务，例如比较供应商或创建采购草稿…' : activeMode === 'tryon' ? '补充描述（可选）' : '询问 ModaUI'}}" placeholder-class="composer-placeholder" maxlength="500" auto-height adjust-position="{{true}}" bindinput="onInput" />
@@ -276,6 +412,7 @@
       <view class="menu-group-label">创作工具</view>
       <button class="menu-row" data-section="create" bindtap="openSection">创作中心</button>
       <button class="menu-row" data-section="designs" bindtap="openSection">我的作品</button>
+      <button wx:if="{{studioProjectsEnabled}}" class="menu-row" data-section="projects" bindtap="openSection">{{leatherStudioEnabled ? '皮具项目' : '服装项目'}}</button>
       <button class="menu-row" data-mode="edit" bindtap="selectMode">服装换色</button>
       <button class="menu-row" data-mode="productLaunch" bindtap="selectMode">商业模特</button>
       <view class="menu-divider"></view>

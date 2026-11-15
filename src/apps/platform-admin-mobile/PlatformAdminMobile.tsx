@@ -31,6 +31,7 @@ import { AdminPermissionManager } from '../platform-admin-common/components/admi
 import { AdminNotificationEvents } from '../platform-admin-common/components/admin/AdminNotificationEvents';
 import { AdminMerchantSupport } from '../platform-admin-common/components/admin/AdminMerchantSupport';
 import { AdminAiControlCenter } from '../platform-admin-common/components/admin/AdminAiControlCenter';
+import { AdminAiProviderConsole } from '../platform-admin-common/components/admin/AdminAiProviderConsole';
 import { AdminAppStoreMgmt } from '../platform-admin-common/components/admin/AdminAppStoreMgmt';
 import { AdminGrowthWorkbench } from '../platform-admin-common/components/admin/AdminGrowthWorkbench';
 import { AdminGrowthAcquisition } from '../platform-admin-common/components/admin/AdminGrowthAcquisition';
@@ -50,7 +51,7 @@ type MobileAdminTab =
   | 'merchant_support_settings' | 'overview' | 'showrooms' | 'growth' | 'ai_center' | 'modagpt_operator' | 'partners'
   | 'marketing_attribution' | 'promotions' | 'bi_dashboard' | 'merchant_support' | 'support_requests'
   | 'growth_workbench' | 'growth_acquisition' | 'growth_content' | 'growth_analytics'
-  | 'ai_provider_settings' | 'modagpt_billing' | 'app_store_mgmt' | 'feature_flags'
+  | 'ai_provider_settings' | 'ai_providers' | 'modagpt_billing' | 'app_store_mgmt' | 'feature_flags'
   | 'model_review' | 'permission_manager';
 
 function getMobileTab(tab: AdminTab): MobileAdminTab | null {
@@ -90,6 +91,7 @@ function getMobileTab(tab: AdminTab): MobileAdminTab | null {
     merchant_support: 'merchant_support',
     support_requests: 'support_requests',
     ai_provider_settings: 'ai_provider_settings',
+    ai_providers: 'ai_providers',
     modagpt_billing: 'modagpt_billing',
     app_store_mgmt: 'app_store_mgmt',
     feature_flags: 'feature_flags',
@@ -466,6 +468,7 @@ export const PlatformAdminMobile: React.FC<PlatformAdminMobileProps> = ({ initia
         {activeTab === 'growth_analytics' && <AdminGrowthAnalytics />}
         {activeTab === 'ai_center' && <AdminAiControlCenter view="agents" />}
         {activeTab === 'ai_provider_settings' && <AdminAiControlCenter view="models" />}
+        {activeTab === 'ai_providers' && <AdminAiProviderConsole />}
         {activeTab === 'modagpt_operator' && <AdminModaGptOperator merchants={merchants.map(merchant => ({ id: merchant.id, name: merchant.name }))} />}
         {activeTab === 'fashion_content' && <AdminFashionContentHub />}
         {activeTab === 'merchant_support' && <AdminMerchantSupport />}

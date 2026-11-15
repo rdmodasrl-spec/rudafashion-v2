@@ -69,6 +69,22 @@
           </picker>
         </view>
       </view>
+      <view class="field-group industry-group">
+        <text class="field-label">企业所属行业 <text class="required-mark">*</text></text>
+        <picker range="{{industryOptions}}" range-key="label" value="{{industryIndex}}" bindchange="onIndustryChange" disabled="{{industryLoading || industryOptions.length === 0}}">
+          <view class="form-input picker-value {{industryLabel ? '' : 'picker-placeholder'}}">{{industryLabel || (industryLoading ? '正在加载行业…' : '请选择行业')}}</view>
+        </picker>
+        <view wx:if="{{industryLoadError}}" class="industry-load-error">
+          <text>{{industryLoadError}}</text>
+          <button class="industry-retry-button" bindtap="loadIndustryOptions">重试</button>
+        </view>
+      </view>
+      <checkbox-group wx:if="{{capabilityOptions.length}}" class="capability-options" bindchange="onCapabilityChange">
+        <label wx:for="{{capabilityOptions}}" wx:key="id" class="capability-option">
+          <checkbox value="{{item.id}}" checked="{{item.selected}}" color="#201e1a" />
+          <text>{{item.label}}</text>
+        </label>
+      </checkbox-group>
       <text class="group-label">业务类型 <text class="required-mark">*</text></text>
       <view class="role-list">
         <view wx:for="{{roleOptions}}" wx:key="id" class="role-option {{item.selected ? 'role-option-selected' : ''}}" data-id="{{item.id}}" bindtap="toggleRole">
@@ -78,18 +94,12 @@
           <view class="role-radio {{item.selected ? 'role-radio-selected' : ''}}"></view>
         </view>
       </view>
-      <text class="group-label category-heading">主营品类 <text class="required-mark">*</text></text>
-      <view class="category-grid">
+      <text wx:if="{{industry}}" class="group-label category-heading">{{industry === 'RETAIL_RESTAURANT' ? '经营品类' : '主营品类'}} <text class="required-mark">*</text></text>
+      <view wx:if="{{industry}}" class="category-grid">
         <view wx:for="{{categoryOptions}}" wx:key="id" class="category-option {{item.selected ? 'category-option-selected' : ''}}" data-id="{{item.id}}" bindtap="toggleCategory">
           <text>{{item.label}}</text>
           <text wx:if="{{item.selected}}" class="category-check">✓</text>
         </view>
-      </view>
-      <view class="field-group industry-group">
-        <text class="field-label">企业所属行业 <text class="required-mark">*</text></text>
-        <picker range="{{industryOptions}}" range-key="label" value="{{industryIndex}}" bindchange="onIndustryChange">
-          <view class="form-input picker-value {{industryLabel ? '' : 'picker-placeholder'}}">{{industryLabel || '请选择行业'}}</view>
-        </picker>
       </view>
       <view class="optional-fields-toggle" bindtap="toggleOptionalFields">
         <text>{{showOptionalFields ? '收起选填资料' : '补充资料（选填）'}}</text>

@@ -7,14 +7,21 @@ import { PasswordInput } from '../common/PasswordInput';
 import { formatInternationalPhoneNumber, PhoneNumberInput } from '../common/PhoneNumberInput';
 import { AuthLanguageSelector } from './AuthShell';
 import { useB2B } from '../../../../context/B2BContext';
-import { DEFAULT_MERCHANT_INDUSTRY_TEMPLATE_ID, merchantIndustryTemplates } from '../../../../constants/merchantIndustryTemplates';
+import {
+  getMerchantFormalIndustry,
+  merchantFormalIndustries,
+  resolveFormalMerchantIndustry,
+  type MerchantFormalIndustryId,
+  type MerchantIndustryCapabilityId
+} from '../../../../constants/merchantIndustryTemplates';
 
-type BusinessRole = 'PRODUCER' | 'WHOLESALER' | 'RETAILER';
+type BusinessRole = 'PRODUCER' | 'WHOLESALER' | 'RETAILER' | 'RESTAURANT_OPERATOR';
 
 const roleOptions: Array<{ id: BusinessRole; icon: React.ElementType; zh: string; it: string; descriptionZh: string; descriptionIt: string }> = [
   { id: 'PRODUCER', icon: Factory, zh: '生产商', it: 'Produttore', descriptionZh: '生产或拥有自己的品牌商品', descriptionIt: 'Produci o possiedi un marchio' },
   { id: 'WHOLESALER', icon: Truck, zh: '批发商', it: 'Grossista', descriptionZh: '采购商品并批发给零售商', descriptionIt: 'Acquisti e rivendi ai negozi' },
-  { id: 'RETAILER', icon: Store, zh: '零售商', it: 'Rivenditore', descriptionZh: '为自己的门店或零售业务采购', descriptionIt: 'Acquisti per il tuo negozio' }
+  { id: 'RETAILER', icon: Store, zh: '零售商', it: 'Rivenditore', descriptionZh: '为自己的门店或零售业务采购', descriptionIt: 'Acquisti per il tuo negozio' },
+  { id: 'RESTAURANT_OPERATOR', icon: Store, zh: '餐饮经营者', it: 'Operatore di ristorazione', descriptionZh: '经营餐厅、咖啡馆、外卖或餐饮服务', descriptionIt: 'Gestisci ristoranti, caffè, asporto o servizi di ristorazione' }
 ];
 const categoryOptions = [
   { id: 'WOMENSWEAR', label: '女装 / Womenswear' },
@@ -43,6 +50,14 @@ const categoryOptions = [
   { id: 'PET_PRODUCTS', label: '宠物用品 / Pet products' },
   { id: 'OTHER', label: '其他 / Other' }
 ];
+const restaurantCategoryOptions = [
+  { id: 'RESTAURANT', label: '餐厅 / Restaurant' },
+  { id: 'CAFE', label: '咖啡馆 / Cafe' },
+  { id: 'TAKEAWAY', label: '外卖 / Takeaway' },
+  { id: 'BAKERY', label: '烘焙 / Bakery' },
+  { id: 'CATERING', label: '餐饮服务 / Catering' },
+  { id: 'OTHER', label: '其他 / Other' }
+];
 
 export const RegistrationPortal: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const { lang, localizeCopy } = useB2B();
@@ -50,7 +65,8 @@ export const RegistrationPortal: React.FC<{ onBack: () => void }> = ({ onBack })
   const [step, setStep] = useState(1);
   const [roles, setRoles] = useState<BusinessRole[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
-  const [industry, setIndustry] = useState(DEFAULT_MERCHANT_INDUSTRY_TEMPLATE_ID);
+  const [industry, setIndustry] = useState<MerchantFormalIndustryId>('WHOLESALE_APPAREL');
+  const [capabilityIds, setCapabilityIds] = useState<MerchantIndustryCapabilityId[]>([]);
   const [verificationMethod, setVerificationMethod] = useState<'email' | 'phone'>('email');
   const [phoneCountry, setPhoneCountry] = useState('Italy');
   const [verificationCode, setVerificationCode] = useState('');
@@ -71,10 +87,24 @@ export const RegistrationPortal: React.FC<{ onBack: () => void }> = ({ onBack })
   const [companyStatus, setCompanyStatus] = useState('VERIFICATION_PENDING');
   const [accountIdentityReviewRequired, setAccountIdentityReviewRequired] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const selectedIndustry = getMerchantFormalIndustry(industry);
+  const industryResolution = resolveFormalMerchantIndustry({ formalIndustryId: industry, capabilityIds });
+  const isRestaurant = industry === 'RETAIL_RESTAURANT';
+  const visibleRoleOptions = isRestaurant
+    ? roleOptions.filter(option => option.id === 'RESTAURANT_OPERATOR')
+    : selectedIndustry?.businessModel === 'WHOLESALE'
+      ? roleOptions.filter(option => option.id === 'PRODUCER' || option.id === 'WHOLESALER')
+      : roleOptions.filter(option => option.id === 'RETAILER');
+  const categoryChoices = isRestaurant ? restaurantCategoryOptions : categoryOptions;
+  const allowedCategories = new Set(industryResolution.ok ? industryResolution.template.categories : []);
+  const visibleCategoryOptions = categoryChoices.filter(option => allowedCategories.has(option.id));
 
   const patch = (key: keyof typeof form, value: string | boolean) => setForm(previous => ({ ...previous, [key]: value }));
   const selectRole = (role: BusinessRole) => setRoles([role]);
   const toggleCategory = (category: string) => setCategories(previous => previous.includes(category) ? previous.filter(item => item !== category) : [...previous, category]);
+  const toggleCapability = (capability: MerchantIndustryCapabilityId) => setCapabilityIds(previous =>
+    previous.includes(capability) ? previous.filter(item => item !== capability) : [...previous, capability]
+  );
   const verificationDestination = verificationMethod === 'email'
     ? form.email.trim().toLowerCase()
     : formatInternationalPhoneNumber(phoneCountry, form.phone);
@@ -123,9 +153,9 @@ export const RegistrationPortal: React.FC<{ onBack: () => void }> = ({ onBack })
     if (step === 2 && (!form.displayName || !form.country || !form.city)) {
       setError(localizeCopy("请选择国家和城市，并填写企业名称", "Inserisci il nome dell’azienda e seleziona paese e città.")); return;
     }
-    if (step === 3 && roles.length !== 1) { setError(localizeCopy("请选择一个业务类型", "Seleziona un tipo di attività.")); return; }
+    if (step === 3 && (roles.length !== 1 || (isRestaurant && roles[0] !== 'RESTAURANT_OPERATOR'))) { setError(localizeCopy("请选择一个业务类型", "Seleziona un tipo di attività.")); return; }
     if (step === 3 && categories.length === 0) { setError(localizeCopy("请选择至少一个主营品类", "Seleziona almeno una categoria.")); return; }
-    if (step === 3 && !industry) { setError(localizeCopy("请选择企业所属行业", "Seleziona il settore aziendale.")); return; }
+    if (step === 3 && (!industry || !industryResolution.ok)) { setError(localizeCopy("请选择可用的企业行业", "Seleziona un settore disponibile.")); return; }
     setStep(value => Math.min(4, value + 1));
   };
   const submit = async () => {
@@ -137,6 +167,7 @@ export const RegistrationPortal: React.FC<{ onBack: () => void }> = ({ onBack })
         success: true;
         companyId: string;
         merchantId?: string | null;
+        formalIndustryId?: MerchantFormalIndustryId | null;
         merchantLoginAvailable?: boolean;
         workspace?: { workspaceNameZh?: string | null; workspaceNameIt?: string | null } | null;
         status?: string;
@@ -147,7 +178,8 @@ export const RegistrationPortal: React.FC<{ onBack: () => void }> = ({ onBack })
         legalName: form.legalName || form.displayName,
         roles,
         categories,
-        industryTemplate: industry,
+        formalIndustryId: industry,
+        capabilityIds,
         verificationToken
       });
       setCompanyId(result.companyId);
@@ -172,7 +204,7 @@ export const RegistrationPortal: React.FC<{ onBack: () => void }> = ({ onBack })
       setRefreshing(false);
     }
   };
-  const industryLabel = merchantIndustryTemplates.find(item => item.id === industry);
+  const industryLabel = selectedIndustry;
 
   if (step === 5) {
     return <div className="min-h-[85vh] flex items-center justify-center px-4 py-10">
@@ -219,8 +251,8 @@ export const RegistrationPortal: React.FC<{ onBack: () => void }> = ({ onBack })
 
         {step === 1 && <div className="space-y-4">
           <h2 className="text-lg font-bold">{localizeCopy("验证联系方式", "Verifica i tuoi contatti")}</h2>
-          {verificationMethod === 'email' && <input type="email" value={form.email} onChange={e => { patch('email', e.target.value); setVerificationToken(''); setVerificationSent(false); }} placeholder={localizeCopy("企业邮箱", "Email aziendale")} className="w-full rounded-lg border border-neutral-300 px-3 py-2.5 text-sm" />}
-          <PasswordInput value={form.password} onChange={e => patch('password', e.target.value)} placeholder={localizeCopy("密码（至少 8 位）", "Password (almeno 8 caratteri)")} className="w-full rounded-lg border border-neutral-300 px-3 py-2.5 pr-10 text-sm" />
+          {verificationMethod === 'email' && <input type="email" value={form.email} onChange={e => { patch('email', e.target.value); setVerificationToken(''); setVerificationSent(false); }} placeholder={localizeCopy("企业邮箱", "Email aziendale")} className="w-full rounded-lg border border-neutral-300 px-3 py-2.5 text-sm placeholder:text-neutral-600" />}
+          <PasswordInput value={form.password} onChange={e => patch('password', e.target.value)} placeholder={localizeCopy("密码（至少 8 位）", "Password (almeno 8 caratteri)")} className="w-full rounded-lg border border-neutral-300 px-3 py-2.5 pr-10 text-sm placeholder:text-neutral-600" />
           <div className="grid grid-cols-2 gap-2 rounded-xl bg-neutral-100 p-1 text-xs font-bold">
             {(['email', 'phone'] as const).map(method => <button type="button" key={method} onClick={() => { setVerificationMethod(method); setVerificationToken(''); setVerificationSent(false); }} className={`rounded-lg px-3 py-2 ${verificationMethod === method ? 'bg-white shadow-sm' : 'text-neutral-500'}`}>{method === 'email' ? (localizeCopy("邮箱", "Email")) : (localizeCopy("手机号", "Telefono"))}</button>)}
           </div>
@@ -233,7 +265,7 @@ export const RegistrationPortal: React.FC<{ onBack: () => void }> = ({ onBack })
             placeholder="333 1234567"
           />}
           {!verificationToken && <div className="flex gap-2">
-            <input value={verificationCode} onChange={e => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder={localizeCopy("6 位验证码", "Codice a 6 cifre")} className="min-w-0 flex-1 rounded-lg border border-neutral-300 px-3 py-2.5 text-sm" />
+            <input value={verificationCode} onChange={e => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder={localizeCopy("6 位验证码", "Codice a 6 cifre")} className="min-w-0 flex-1 rounded-lg border border-neutral-300 px-3 py-2.5 text-sm placeholder:text-neutral-600" />
             <button type="button" onClick={() => void (verificationSent ? verifyContact() : requestVerification())} disabled={verificationBusy || (!verificationSent && verificationCooldown > 0)} className="rounded-lg bg-black px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{verificationSent ? (localizeCopy("验证", "Verifica")) : verificationCooldown > 0 ? `${verificationCooldown}s` : (localizeCopy("发送验证码", "Invia codice"))}</button>
             {verificationSent && <button type="button" onClick={() => void requestVerification()} disabled={verificationBusy || verificationCooldown > 0} className="rounded-lg border border-neutral-300 px-3 py-2 text-xs font-bold text-neutral-700 disabled:opacity-50">{verificationCooldown > 0 ? `${verificationCooldown}s` : (localizeCopy("重新发送", "Invia di nuovo"))}</button>}
           </div>}
@@ -283,20 +315,56 @@ export const RegistrationPortal: React.FC<{ onBack: () => void }> = ({ onBack })
         {step === 3 && <div>
           <h2 className="text-lg font-bold">{localizeCopy("选择业务类型", "Scegli il tipo di attività")}</h2>
           <p className="mt-1 text-sm text-neutral-500">{localizeCopy("选择一个主要业务身份，其他类型可在账户开通后申请。", "Scegli l’attività principale. Potrai richiedere altri profili in seguito.")}</p>
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">{roleOptions.map(option => { const Icon = option.icon; const selected = roles.includes(option.id); return <button type="button" key={option.id} onClick={() => selectRole(option.id)} className={`min-h-36 rounded-xl border p-4 text-left transition ${selected ? 'border-black bg-neutral-950 text-white shadow-lg' : 'border-neutral-200 bg-white hover:-translate-y-0.5 hover:border-neutral-500'}`}><Icon className="h-6 w-6" /><strong className="mt-4 block text-sm">{isZh ? option.zh : option.it}</strong><small className={`mt-2 block text-xs leading-5 ${selected ? 'text-neutral-300' : 'text-neutral-500'}`}>{isZh ? option.descriptionZh : option.descriptionIt}</small>{selected && <Check className="mt-3 h-5 w-5" />}</button>; })}</div>
-          <div className="mt-7 flex items-center gap-2 text-sm font-bold"><Tag className="h-4 w-4" />{localizeCopy("主营商品品类", "Categorie principali")}</div>
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">{categoryOptions.map(option => { const selected = categories.includes(option.id); const label = option.label.split(' / '); return <button type="button" key={option.id} onClick={() => toggleCategory(option.id)} className={`rounded-lg border px-3 py-2.5 text-left text-xs font-semibold ${selected ? 'border-black bg-neutral-950 text-white' : 'border-neutral-200 text-neutral-700 hover:border-neutral-400'}`}>{isZh ? label[0] : label[label.length - 1]}{selected && <Check className="float-right h-3.5 w-3.5" />}</button>; })}</div>
-          <label className="mt-6 block text-xs font-semibold text-neutral-700">
+          <label className="mt-5 block text-xs font-semibold text-neutral-700">
             {localizeCopy("企业所属行业（必选）", "Settore aziendale (obbligatorio)")}
-            <select value={industry} onChange={event => setIndustry(event.target.value as typeof industry)} required className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-sm font-normal text-neutral-900">
+            <select
+              value={industry}
+              onChange={event => {
+                const nextIndustry = getMerchantFormalIndustry(event.target.value);
+                if (!nextIndustry) return;
+                setIndustry(nextIndustry.id);
+                setCapabilityIds([]);
+                setRoles(nextIndustry.id === 'RETAIL_RESTAURANT' ? ['RESTAURANT_OPERATOR'] : []);
+                setCategories([]);
+              }}
+              required
+              className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-sm font-normal text-neutral-900"
+            >
               <option value="">{localizeCopy("请选择经营类型", "Seleziona un tipo")}</option>
-              {merchantIndustryTemplates.map(template => (
-                <option key={template.id} value={template.id} disabled={template.status !== 'open'}>
-                  {localizeCopy(template.zh, template.it)}{template.status === 'open' ? '' : localizeCopy('（即将开放）', ' (presto)')}
+              {merchantFormalIndustries.map(formalIndustry => (
+                <option
+                  key={formalIndustry.id}
+                  value={formalIndustry.id}
+                  disabled={formalIndustry.registrationStatus !== 'open' || formalIndustry.workspaceAdapterTemplateIds.length === 0}
+                >
+                  {localizeCopy(formalIndustry.zh, formalIndustry.it)}
+                  {formalIndustry.registrationStatus !== 'open' || formalIndustry.workspaceAdapterTemplateIds.length === 0
+                    ? localizeCopy('（即将开放）', ' (presto)')
+                    : ''}
                 </option>
               ))}
             </select>
           </label>
+          {selectedIndustry?.capabilityIds.map(capability => {
+            const checked = capabilityIds.includes(capability);
+            const label = capability === 'APPAREL_OWN_PRODUCTION'
+              ? localizeCopy("启用自有服装生产", "Attiva la produzione interna di abbigliamento")
+              : localizeCopy("启用自有皮具生产", "Attiva la produzione interna di pelletteria");
+            return (
+              <label key={capability} className="mt-4 flex min-h-11 items-center gap-3 text-sm text-neutral-800">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggleCapability(capability)}
+                  className="h-4 w-4 accent-neutral-900"
+                />
+                <span>{label}</span>
+              </label>
+            );
+          })}
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">{visibleRoleOptions.map(option => { const Icon = option.icon; const selected = roles.includes(option.id); return <button type="button" key={option.id} onClick={() => selectRole(option.id)} className={`min-h-36 rounded-xl border p-4 text-left transition ${selected ? 'border-black bg-neutral-950 text-white shadow-lg' : 'border-neutral-200 bg-white hover:-translate-y-0.5 hover:border-neutral-500'}`}><Icon className="h-6 w-6" /><strong className="mt-4 block text-sm">{isZh ? option.zh : option.it}</strong><small className={`mt-2 block text-xs leading-5 ${selected ? 'text-neutral-300' : 'text-neutral-500'}`}>{isZh ? option.descriptionZh : option.descriptionIt}</small>{selected && <Check className="mt-3 h-5 w-5" />}</button>; })}</div>
+          <div className="mt-7 flex items-center gap-2 text-sm font-bold"><Tag className="h-4 w-4" />{localizeCopy(isRestaurant ? "经营品类" : "主营商品品类", isRestaurant ? "Tipo di attività" : "Categorie principali")}</div>
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">{visibleCategoryOptions.map(option => { const selected = categories.includes(option.id); const label = option.label.split(' / '); return <button type="button" key={option.id} onClick={() => toggleCategory(option.id)} className={`rounded-lg border px-3 py-2.5 text-left text-xs font-semibold ${selected ? 'border-black bg-neutral-950 text-white' : 'border-neutral-200 text-neutral-700 hover:border-neutral-400'}`}>{isZh ? label[0] : label[label.length - 1]}{selected && <Check className="float-right h-3.5 w-3.5" />}</button>; })}</div>
         </div>}
         {step === 4 && (
           <div className="space-y-4">
@@ -309,8 +377,16 @@ export const RegistrationPortal: React.FC<{ onBack: () => void }> = ({ onBack })
                 return isZh ? item?.zh : item?.it;
               }).join(', ')}</div>
               <div>{localizeCopy("所属行业", "Settore")}: {industryLabel ? localizeCopy(industryLabel.zh, industryLabel.it) : industry}</div>
+              {capabilityIds.length > 0 && (
+                <div>
+                  {localizeCopy("生产能力", "Produzione")}: {capabilityIds.map(capability => capability === 'APPAREL_OWN_PRODUCTION'
+                    ? localizeCopy("服装自有生产", "Produzione interna di abbigliamento")
+                    : localizeCopy("皮具自有生产", "Produzione interna di pelletteria")
+                  ).join('、')}
+                </div>
+              )}
               <div>{localizeCopy("品类", "Categorie")}: {categories.map(category => {
-                const item = categoryOptions.find(option => option.id === category)?.label.split(' / ');
+                const item = [...categoryOptions, ...restaurantCategoryOptions].find(option => option.id === category)?.label.split(' / ');
                 return isZh ? item?.[0] : item?.[item.length - 1];
               }).join(', ')}</div>
             </div>

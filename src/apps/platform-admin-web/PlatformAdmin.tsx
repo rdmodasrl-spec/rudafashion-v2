@@ -52,6 +52,7 @@ import { AdminGrowthContent } from '../platform-admin-common/components/admin/Ad
 import { AdminGrowthAnalytics } from '../platform-admin-common/components/admin/AdminGrowthAnalytics';
 import { AdminFashionContentHub } from '../platform-admin-common/components/admin/AdminFashionContentHub';
 import { AdminAiControlCenter } from '../platform-admin-common/components/admin/AdminAiControlCenter';
+import { AdminAiProviderConsole } from '../platform-admin-common/components/admin/AdminAiProviderConsole';
 import { AdminModaGptOperator } from '../platform-admin-common/components/admin/AdminModaGptOperator';
 import { AdminDatabaseCenter } from '../platform-admin-common/components/admin/AdminDatabaseCenter';
 import { AdminRiskMonitor } from '../platform-admin-common/components/admin/AdminRiskMonitor';
@@ -1140,6 +1141,7 @@ export const PlatformAdmin: React.FC<{ initialTab?: AdminTab }> = ({ initialTab 
       {adminTab === 'growth_analytics' && <AdminGrowthAnalytics />}
       {adminTab === 'ai_center' && <AdminAiControlCenter view="agents" />}
       {adminTab === 'ai_provider_settings' && <AdminAiControlCenter view="models" />}
+      {adminTab === 'ai_providers' && <AdminAiProviderConsole />}
       {adminTab === 'modagpt_operator' && <AdminModaGptOperator merchants={merchants.map(merchant => ({ id: merchant.id, name: merchant.name }))} />}
       {adminTab === 'modagpt_billing' && <AdminModaGptBilling />}
       {adminTab === 'feature_flags' && <AdminFeatureFlags />}

@@ -16,6 +16,10 @@ export type AiEmployeeInferenceOperation =
   | 'vision:gemini'
   | 'creative:fal'
   | 'creative:fal_tryon'
+  | 'studio:reasoning:deepseek'
+  | 'studio:vision:deepseek'
+  | 'studio:image:fal'
+  | 'studio:image_edit:fal'
   | 'probe:reasoning:ollama'
   | 'probe:vision:ollama';
 

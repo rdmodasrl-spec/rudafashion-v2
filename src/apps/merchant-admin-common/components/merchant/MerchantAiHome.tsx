@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, ArrowUp, BookOpen, Check, CreditCard, Download, Heart, History, ImagePlus, Lightbulb, LogOut, MessageSquarePlus, Mic, MoreVertical, Paperclip, Plus, RefreshCw, Search, Shirt, SlidersHorizontal, Sparkles, Trash2, UserRound, X } from 'lucide-react';
-import { apiDelete, apiGet, apiPatch, apiPost } from '../../../../api/client';
+import { ArrowLeft, ArrowRight, ArrowUp, BookOpen, Check, CreditCard, Download, FolderKanban, Heart, History, ImagePlus, Lightbulb, LogOut, MessageSquarePlus, Mic, MoreVertical, Paperclip, Plus, RefreshCw, Search, Shirt, SlidersHorizontal, Sparkles, Trash2, UserRound, X } from 'lucide-react';
+import { apiDelete, apiGet, apiPatch, apiPost, ApiError } from '../../../../api/client';
 import { ModaGptPricingSheet } from './ModaGptPricingSheet';
 import { ModaGptGarmentRecolor } from './ModaGptGarmentRecolor';
+import { ModaUIProjects } from './modaui/ModaUIProjects';
 import { MerchantBrainKnowledge } from './MerchantBrainKnowledge';
 import { useB2B } from '../../../../context/B2BContext';
 import { getIntlLocale } from '../../../../i18n/translations';
@@ -14,6 +15,12 @@ import { createModaCoreLife } from './modaui/modaCoreLife';
 import { useMicLevel, useSpeechReply } from './modaui/useModaCoreAudio';
 import { AssistantReplyActions } from './AssistantReplyActions';
 import { assistantReplyFrameInterval, buildAssistantReplyFrames } from '../../../../shared/assistantReplyReveal';
+import type { Product } from '../../../../types/b2b';
+import {
+  getMerchantIndustryTemplate,
+  type MerchantIndustryTemplateId
+} from '../../../../constants/merchantIndustryTemplates';
+import { merchantTaskErrorCopy, requestsProcurementDraft } from './modaui/modauiIndustryChat';
 
 
 
@@ -82,6 +89,16 @@ type AssistantConversation = {
   messageCount: number;
 };
 
+type ProcurementSupplierOption = { id: string; name: string; status: string };
+type ProcurementCatalog = { suppliers: ProcurementSupplierOption[]; products: Product[] };
+type ProcurementDraftFields = {
+  supplierId: string;
+  productId: string;
+  variantId: string;
+  quantity: string;
+  unitCost: string;
+};
+
 type FashionMode = 'design' | 'generate' | 'tryon' | 'edit' | 'fashionVideo' | 'inspiration' | 'productLaunch';
 type ModaGptSection = 'chat' | 'create' | 'designs' | 'knowledge' | 'recolor';
 type ModaGptEntitlements = {
@@ -105,6 +122,8 @@ type MerchantAiHomeProps = {
   isIt: boolean;
   merchantId: string;
   merchantName: string;
+  industryTemplateId?: MerchantIndustryTemplateId | null;
+  industryChatOnly?: boolean;
   copilotContext: {
     context: string;
     scope: string;
@@ -205,7 +224,19 @@ function readAttachmentFile(file: File): Promise<string> {
   });
 }
 
-export const MerchantAiHome: React.FC<MerchantAiHomeProps> = ({ isIt, merchantId, merchantName, copilotContext, initialMode, onExit, onNavigate, bottomNavigation, onComposerFocus }) => {
+export const MerchantAiHome: React.FC<MerchantAiHomeProps> = ({
+  isIt,
+  merchantId,
+  merchantName,
+  industryTemplateId = null,
+  industryChatOnly = false,
+  copilotContext,
+  initialMode,
+  onExit,
+  onNavigate,
+  bottomNavigation,
+  onComposerFocus
+}) => {
   const { localizeCopy, lang, logout } = useB2B();
   const sharedChatContext = { context: copilotContext.context, scope: copilotContext.scope };
   const [question, setQuestion] = useState('');
@@ -217,6 +248,7 @@ export const MerchantAiHome: React.FC<MerchantAiHomeProps> = ({ isIt, merchantId
   const [activeSection, setActiveSection] = useState<ModaGptSection>('chat');
   const [selectedCreation, setSelectedCreation] = useState<FashionMode | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [studioProjectsOpen, setStudioProjectsOpen] = useState(false);
   const [historySearch, setHistorySearch] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const [pricingOpen, setPricingOpen] = useState(false);
@@ -262,7 +294,21 @@ export const MerchantAiHome: React.FC<MerchantAiHomeProps> = ({ isIt, merchantId
     summary: string;
     sideEffects: string;
     requiresApprovalForSensitiveActions: boolean;
+    draftRequired: boolean;
   } | null>(null);
+  const [taskCatalog, setTaskCatalog] = useState<ProcurementCatalog | null>(null);
+  const [taskCatalogLoading, setTaskCatalogLoading] = useState(false);
+  const [taskDraft, setTaskDraft] = useState<ProcurementDraftFields>({
+    supplierId: '',
+    productId: '',
+    variantId: '',
+    quantity: '1',
+    unitCost: ''
+  });
+  const [taskRetryLocked, setTaskRetryLocked] = useState(false);
+  const [pendingTaskId, setPendingTaskId] = useState<string | null>(null);
+  const [taskStatus, setTaskStatus] = useState('');
+  const [taskPolling, setTaskPolling] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [error, setError] = useState('');
   const conversationIdRef = useRef<string | null>(null);
@@ -271,6 +317,8 @@ export const MerchantAiHome: React.FC<MerchantAiHomeProps> = ({ isIt, merchantId
   const personImageInputRef = useRef<HTMLInputElement>(null);
   const garmentImageInputRef = useRef<HTMLInputElement>(null);
   const chatAttachmentInputRef = useRef<HTMLInputElement>(null);
+  const questionInputRef = useRef<HTMLTextAreaElement>(null);
+  const taskIdempotencyKeyRef = useRef<string | null>(null);
   const speechRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const questionTypingTimerRef = useRef<number | null>(null);
   const designSaveRequestIdsRef = useRef(new WeakMap<AssistantMessage, string>());
@@ -283,6 +331,8 @@ export const MerchantAiHome: React.FC<MerchantAiHomeProps> = ({ isIt, merchantId
   const { speaking: speechSpeaking, pulseRef: speechPulseRef, speak: speakReply, cancel: cancelSpeech } = useSpeechReply(isIt);
   // 粒子核心与聊天输入、真实请求、真实回答片段、语音生命周期共用同一条事件通道。
   const coreLife = useMemo(() => createModaCoreLife(), []);
+  const industryTemplate = getMerchantIndustryTemplate(industryTemplateId);
+  const industryPrompts = industryTemplate?.modauiPrompts || [];
   const replyRevealTimerRef = useRef<number | null>(null);
   const replyRevealRef = useRef<{ id: string; full: string; onDone?: () => void } | null>(null);
   const coreState: ModaCoreVisualState = error
@@ -736,6 +786,7 @@ export const MerchantAiHome: React.FC<MerchantAiHomeProps> = ({ isIt, merchantId
     const result = await apiPost<{
       success: true;
       imageDataUrl: string;
+      imageOrigin?: 'ai_generated';
       quota?: { used: number; limit: number; remaining: number };
       credits?: { used: number; remaining: number };
     }>('/api/merchant/modagpt/images', {
@@ -756,8 +807,8 @@ export const MerchantAiHome: React.FC<MerchantAiHomeProps> = ({ isIt, merchantId
     setMessages(current => [...current, {
       role: 'assistant',
       content: localizeCopy(
-        `商品上新视觉图 ${index + 1}/${totalImages}。请检查款式细节和生成结果；只有点击“保存到作品库”后才会保存。`,
-        `Immagine prodotto ${index + 1}/${totalImages}. Verifica il risultato; verrà salvato solo dopo aver scelto “Salva nei progetti”.`
+        `AI 创作概念图 ${index + 1}/${totalImages}（非实物实拍）。请核对商品细节；只有点击“保存到作品库”后才会保存。`,
+        `Concept generato con IA ${index + 1}/${totalImages} (non è una foto del prodotto reale). Verifica i dettagli; verrà salvato solo dopo aver scelto “Salva nei progetti”.`
       ),
       imageDataUrl: result.imageDataUrl,
       designCategory: 'imageGeneration'
@@ -807,6 +858,7 @@ export const MerchantAiHome: React.FC<MerchantAiHomeProps> = ({ isIt, merchantId
         const result = await apiPost<{
           success: true;
           imageDataUrl: string;
+          imageOrigin?: 'ai_generated';
           quota?: { used: number; remaining: number };
           credits?: { used: number; remaining: number };
         }>('/api/merchant/modagpt/images', {
@@ -869,6 +921,25 @@ export const MerchantAiHome: React.FC<MerchantAiHomeProps> = ({ isIt, merchantId
     }
   };
 
+  const taskSuppliers = (taskCatalog?.suppliers || []).filter(supplier => supplier.status === 'active');
+  const taskProducts = (taskCatalog?.products || []).filter(product =>
+    product.lifecycleStatus !== 'archived' && product.skus.some(sku => Boolean(sku.variantId) && sku.isActive !== false)
+  );
+  const selectedTaskProduct = taskProducts.find(product => product.id === taskDraft.productId) || null;
+  const taskVariants = selectedTaskProduct?.skus.filter(sku => Boolean(sku.variantId) && sku.isActive !== false) || [];
+  const taskDraftValid = Boolean(
+    taskDraft.supplierId
+    && taskDraft.productId
+    && taskDraft.variantId
+    && taskDraft.quantity.trim()
+    && Number.isInteger(Number(taskDraft.quantity))
+    && Number(taskDraft.quantity) > 0
+    && taskDraft.unitCost.trim()
+    && Number.isFinite(Number(taskDraft.unitCost))
+    && Number(taskDraft.unitCost) >= 0
+  );
+  const taskDraftAmount = Number(taskDraft.quantity) * Number(taskDraft.unitCost);
+
   const previewTask = async (message: string) => {
     if (!message.trim() || busy) return;
     setBusy(true);
@@ -885,22 +956,128 @@ export const MerchantAiHome: React.FC<MerchantAiHomeProps> = ({ isIt, merchantId
         sideEffects: string;
         requiresApprovalForSensitiveActions: boolean;
       }>('/api/merchant/modagpt/task/preview', { message: message.trim() });
-      setTaskPreview({ message: message.trim(), ...result });
+      const draftRequired = result.workflow === 'procurement_management' && requestsProcurementDraft(message);
+      if (draftRequired) {
+        setTaskCatalogLoading(true);
+        const [supplierResult, productResult] = await Promise.all([
+          apiGet<{ success: true; suppliers: ProcurementSupplierOption[] }>('/api/merchant/suppliers'),
+          apiGet<{ success: true; products: Product[] }>('/api/merchant/products')
+        ]);
+        const activeSuppliers = supplierResult.suppliers.filter(supplier => supplier.status === 'active');
+        const eligibleProducts = productResult.products.filter(product =>
+          product.lifecycleStatus !== 'archived' && product.skus.some(sku => Boolean(sku.variantId) && sku.isActive !== false)
+        );
+        const firstProduct = eligibleProducts[0];
+        const firstVariant = firstProduct?.skus.find(sku => Boolean(sku.variantId) && sku.isActive !== false);
+        setTaskCatalog({ suppliers: supplierResult.suppliers, products: productResult.products });
+        setTaskDraft({
+          supplierId: activeSuppliers[0]?.id || '',
+          productId: firstProduct?.id || '',
+          variantId: firstVariant?.variantId || '',
+          quantity: '1',
+          unitCost: ''
+        });
+      } else {
+        setTaskCatalog(null);
+        setTaskDraft({ supplierId: '', productId: '', variantId: '', quantity: '1', unitCost: '' });
+      }
+      taskIdempotencyKeyRef.current = null;
+      setTaskRetryLocked(false);
+      setTaskStatus('');
+      setTaskPreview({ message: message.trim(), ...result, draftRequired });
     } catch (previewError) {
-      setError(previewError instanceof Error ? previewError.message : localizeCopy('无法准备任务，请检查权限或稍后重试。', 'Impossibile preparare l’attività. Verifica i permessi e riprova.'));
+      setError(merchantTaskErrorCopy(previewError, isIt));
     } finally {
+      setTaskCatalogLoading(false);
       setBusy(false);
+    }
+  };
+
+  const pollTaskStatus = async (taskId: string) => {
+    setPendingTaskId(taskId);
+    setTaskPolling(true);
+    setTaskStatus(`任务已受理（${taskId}），正在读取服务端状态。`);
+    try {
+      let latest: {
+        runtimeStatus: string;
+        status: string;
+        summary: string | null;
+        approvalId: string | null;
+        errors: string[];
+      } | null = null;
+      for (let attempt = 0; attempt < 60; attempt += 1) {
+        const task = await apiGet<{
+          success: true;
+          runtimeStatus: string;
+          status: string;
+          summary: string | null;
+          approvalId: string | null;
+          errors: string[];
+        }>(`/api/merchant/modagpt/task/${encodeURIComponent(taskId)}`);
+        latest = task;
+        setTaskStatus(`任务（${taskId}）状态：${task.runtimeStatus}`);
+        if (['completed', 'failed', 'dead_letter', 'cancelled', 'waiting_approval'].includes(task.runtimeStatus)) break;
+        await new Promise(resolve => window.setTimeout(resolve, 1_000));
+      }
+      if (!latest) throw new Error('MODAGPT_TASK_STATUS_INVALID');
+      const finalMessage = latest.runtimeStatus === 'waiting_approval'
+        ? `任务等待商家审批${latest.approvalId ? `（${latest.approvalId}）` : ''}；审批前不会执行敏感操作。${latest.summary || ''}`
+        : ['failed', 'dead_letter', 'cancelled'].includes(latest.runtimeStatus)
+          ? `任务未完成（${latest.runtimeStatus}）：${latest.errors.join('、') || '请检查任务后重试。'}`
+          : latest.runtimeStatus === 'completed'
+            ? latest.status === 'needs_input'
+              ? `任务尚未创建采购草稿：${latest.summary || '请补充必需的采购信息后重新提交。'}`
+              : `任务已完成：${latest.summary || latest.status}。`
+            : `任务仍在处理中，任务编号：${taskId}。`;
+      setTaskStatus(finalMessage);
+      const isTerminal = ['completed', 'failed', 'dead_letter', 'cancelled', 'waiting_approval'].includes(latest.runtimeStatus);
+      setPendingTaskId(isTerminal ? null : taskId);
+      setMessages(current => {
+        const resultId = `task-result-${taskId}`;
+        const resultMessage: AssistantMessage = { role: 'assistant', id: resultId, content: finalMessage };
+        const existingIndex = current.findIndex(message => message.id === resultId);
+        if (existingIndex < 0) return [...current, resultMessage];
+        return current.map((message, index) => index === existingIndex ? resultMessage : message);
+      });
+    } catch (statusError) {
+      const statusMessage = `任务已受理（${taskId}），但暂时无法读取状态：${merchantTaskErrorCopy(statusError, isIt)}`;
+      setTaskStatus(statusMessage);
+      setPendingTaskId(taskId);
+    } finally {
+      setTaskPolling(false);
     }
   };
 
   const confirmTask = async () => {
     const preview = taskPreview;
     if (!preview || busy) return;
+    let inputs: Record<string, unknown> = {};
+    if (preview.draftRequired) {
+      const validSupplier = taskSuppliers.some(supplier => supplier.id === taskDraft.supplierId);
+      const validProduct = taskProducts.some(product => product.id === taskDraft.productId);
+      const validVariant = taskVariants.some(variant => variant.variantId === taskDraft.variantId);
+      if (!taskDraftValid || !validSupplier || !validProduct || !validVariant) {
+        setError(localizeCopy('请选择有效供应商、商品和 SKU，并填写正整数数量及非负单位成本。', 'Seleziona un fornitore, un prodotto e uno SKU validi; inserisci quantità intera e costo non negativo.'));
+        return;
+      }
+      inputs = {
+        create_procurement_draft: {
+          supplierId: taskDraft.supplierId,
+          items: [{
+            productId: taskDraft.productId,
+            variantId: taskDraft.variantId,
+            quantity: Number(taskDraft.quantity),
+            unitCost: Number(taskDraft.unitCost)
+          }],
+          currency: 'EUR'
+        }
+      };
+    }
+    const idempotencyKey = taskIdempotencyKeyRef.current || `merchant-task-${crypto.randomUUID()}`;
+    taskIdempotencyKeyRef.current = idempotencyKey;
+    setTaskRetryLocked(true);
     setBusy(true);
-    setTaskPreview(null);
-    setTaskMode(false);
     setError('');
-    setMessages(current => [...current, { role: 'user', content: preview.message }]);
     try {
       const created = await apiPost<{
         success: true;
@@ -909,46 +1086,43 @@ export const MerchantAiHome: React.FC<MerchantAiHomeProps> = ({ isIt, merchantId
       }>('/api/merchant/modagpt/task', {
         message: preview.message,
         conversationId: conversationIdRef.current || undefined,
-        inputs: {}
-      }, 30_000, { 'Idempotency-Key': `merchant-task-${crypto.randomUUID()}` });
-      setMessages(current => [...current, {
-        role: 'assistant',
-        content: `任务已提交到服务端队列（${created.taskId}），当前状态：${created.status}。入队不代表业务操作已完成。`
-      }]);
-      let latest: {
-        runtimeStatus: string;
-        status: string;
-        summary: string | null;
-        approvalId: string | null;
-        errors: string[];
-      } | null = null;
-      for (let attempt = 0; attempt < 30; attempt += 1) {
-        await new Promise(resolve => setTimeout(resolve, 1_000));
-        const task = await apiGet<{
-          success: true;
-          runtimeStatus: string;
-          status: string;
-          summary: string | null;
-          approvalId: string | null;
-          errors: string[];
-        }>(`/api/merchant/modagpt/task/${encodeURIComponent(created.taskId)}`);
-        latest = task;
-        if (['completed', 'failed', 'dead_letter', 'cancelled', 'waiting_approval'].includes(task.runtimeStatus)) break;
-      }
-      if (!latest) throw new Error('MODAGPT_TASK_STATUS_INVALID');
-      const finalMessage = latest.runtimeStatus === 'waiting_approval'
-        ? `任务等待商家审批${latest.approvalId ? `（${latest.approvalId}）` : ''}，敏感操作尚未执行。${latest.summary || ''}`
-        : ['failed', 'dead_letter', 'cancelled'].includes(latest.runtimeStatus)
-          ? `任务未完成（${latest.runtimeStatus}）：${latest.errors.join('、') || '请检查任务后重试。'}`
-          : latest.runtimeStatus === 'completed'
-            ? `任务已完成：${latest.summary || latest.status}。`
-            : `任务仍在处理中，任务编号：${created.taskId}。`;
-      setMessages(current => [...current, { role: 'assistant', content: finalMessage }]);
+        inputs
+      }, 30_000, { 'Idempotency-Key': idempotencyKey });
+      taskIdempotencyKeyRef.current = null;
+      setTaskRetryLocked(false);
+      setTaskPreview(null);
+      setTaskCatalog(null);
+      setTaskMode(false);
+      setMessages(current => [...current, { role: 'user', content: preview.message }]);
+      await pollTaskStatus(created.taskId);
     } catch (taskError) {
-      setError(taskError instanceof Error ? taskError.message : localizeCopy('无法确认任务状态，请稍后检查任务列表。', 'Impossibile confermare lo stato. Controlla le attività più tardi.'));
+      setError(merchantTaskErrorCopy(taskError, isIt));
+      if (taskError instanceof ApiError && [400, 401, 403, 404, 422].includes(taskError.status)) {
+        taskIdempotencyKeyRef.current = null;
+        setTaskRetryLocked(false);
+      }
     } finally {
       setBusy(false);
     }
+  };
+
+  const cancelTaskPreview = () => {
+    if (taskRetryLocked) {
+      setError(localizeCopy('提交结果尚未确认，请使用同一请求重试，避免重复采购。', 'Esito non confermato: riprova con la stessa richiesta per evitare duplicati.'));
+      return;
+    }
+    if (taskPreview) setQuestion(taskPreview.message);
+    setTaskPreview(null);
+    setTaskCatalog(null);
+    setError('');
+    taskIdempotencyKeyRef.current = null;
+  };
+
+  const fillIndustryPrompt = (prompt: string) => {
+    setTaskMode(true);
+    setQuestion(prompt);
+    setError('');
+    window.requestAnimationFrame(() => questionInputRef.current?.focus());
   };
 
   const sendQuestion = async (value = question, messageAttachments = attachments) => {
@@ -1095,6 +1269,7 @@ export const MerchantAiHome: React.FC<MerchantAiHomeProps> = ({ isIt, merchantId
         const result = await apiPost<{
           success: true;
           imageDataUrl: string;
+          imageOrigin?: 'ai_generated';
           quota?: { used: number; limit: number; remaining: number };
           credits?: { used: number; remaining: number };
         }>('/api/merchant/modagpt/images', fashionMode === 'tryon'
@@ -1116,7 +1291,9 @@ export const MerchantAiHome: React.FC<MerchantAiHomeProps> = ({ isIt, merchantId
           role: 'assistant',
           content: fashionMode === 'tryon'
             ? (localizeCopy('这是本次 AI 换衣效果图。', 'Ecco il risultato del virtual try-on.'))
-            : (localizeCopy('这是生成的服装设计图。', 'Ecco la proposta visiva.')),
+            : (result.imageOrigin === 'ai_generated'
+              ? localizeCopy('这是 AI 创作概念图，不是实物实拍；请核对细节后再保存。', 'Concept generato con IA, non è una foto del prodotto reale. Verifica i dettagli prima di salvarlo.')
+              : localizeCopy('这是生成的创意图。', 'Ecco la proposta visiva.')),
           imageDataUrl: result.imageDataUrl,
           designCategory: fashionMode === 'tryon' ? 'tryOn' : 'imageGeneration'
         }]);
@@ -1512,30 +1689,43 @@ export const MerchantAiHome: React.FC<MerchantAiHomeProps> = ({ isIt, merchantId
             {localizeCopy('任务模式', 'Modalità attività')}
             {taskMode && <span className="ml-auto text-[9px] font-medium text-emerald-700">{localizeCopy('已开启', 'Attivo')}</span>}
           </button>
-          <div className="mx-3 my-1 h-px bg-neutral-100" />
-          <p className="px-3 pb-1 pt-2.5 text-[9px] font-medium tracking-[0.14em] text-neutral-400">{localizeCopy('创作工具', 'Strumenti creativi')}</p>
-          <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); setActiveSection('create'); setError(''); }} className="flex min-h-9 w-full items-center gap-2.5 rounded-xl px-3 text-left text-[11px] font-medium text-neutral-700 hover:bg-neutral-100 active:bg-neutral-100">
-            <Sparkles className="h-4 w-4 shrink-0 text-neutral-500" strokeWidth={1.8} />
-            {localizeCopy('创作中心', 'Create')}
-          </button>
-          <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); setActiveSection('designs'); setError(''); }} className="flex min-h-9 w-full items-center gap-2.5 rounded-xl px-3 text-left text-[11px] font-medium text-neutral-700 hover:bg-neutral-100 active:bg-neutral-100">
-            <Shirt className="h-4 w-4 shrink-0 text-neutral-500" strokeWidth={1.8} />
-            {localizeCopy('我的作品', 'I miei contenuti')}
-          </button>
-          <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); setActiveSection('recolor'); setError(''); }} className="flex min-h-9 w-full items-center gap-2.5 rounded-xl px-3 text-left text-[11px] font-medium text-neutral-700 hover:bg-neutral-100 active:bg-neutral-100">
-            <ImagePlus className="h-4 w-4 shrink-0 text-neutral-500" strokeWidth={1.8} />
-            {localizeCopy('服装换色', 'Ricolora capo')}
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            disabled={!fashionModes.find(mode => mode.id === 'productLaunch')?.available}
-            onClick={() => { setMenuOpen(false); activateCreation('productLaunch'); }}
-            className="flex min-h-9 w-full items-center gap-2.5 rounded-xl px-3 text-left text-[11px] font-medium text-neutral-700 hover:bg-neutral-100 active:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <UserRound className="h-4 w-4 shrink-0 text-neutral-500" strokeWidth={1.8} />
-            {localizeCopy('商业模特', 'Modelli moda')}
-          </button>
+          {!industryChatOnly && <>
+            <div className="mx-3 my-1 h-px bg-neutral-100" />
+            <p className="px-3 pb-1 pt-2.5 text-[9px] font-medium tracking-[0.14em] text-neutral-400">{localizeCopy('创作工具', 'Strumenti creativi')}</p>
+            <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); setActiveSection('create'); setError(''); }} className="flex min-h-9 w-full items-center gap-2.5 rounded-xl px-3 text-left text-[11px] font-medium text-neutral-700 hover:bg-neutral-100 active:bg-neutral-100">
+              <Sparkles className="h-4 w-4 shrink-0 text-neutral-500" strokeWidth={1.8} />
+              {localizeCopy('创作中心', 'Create')}
+            </button>
+            <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); setActiveSection('designs'); setError(''); }} className="flex min-h-9 w-full items-center gap-2.5 rounded-xl px-3 text-left text-[11px] font-medium text-neutral-700 hover:bg-neutral-100 active:bg-neutral-100">
+              <Shirt className="h-4 w-4 shrink-0 text-neutral-500" strokeWidth={1.8} />
+              {localizeCopy('我的作品', 'I miei contenuti')}
+            </button>
+            <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); setActiveSection('recolor'); setError(''); }} className="flex min-h-9 w-full items-center gap-2.5 rounded-xl px-3 text-left text-[11px] font-medium text-neutral-700 hover:bg-neutral-100 active:bg-neutral-100">
+              <ImagePlus className="h-4 w-4 shrink-0 text-neutral-500" strokeWidth={1.8} />
+              {localizeCopy('服装换色', 'Ricolora capo')}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              disabled={!fashionModes.find(mode => mode.id === 'productLaunch')?.available}
+              onClick={() => { setMenuOpen(false); activateCreation('productLaunch'); }}
+              className="flex min-h-9 w-full items-center gap-2.5 rounded-xl px-3 text-left text-[11px] font-medium text-neutral-700 hover:bg-neutral-100 active:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <UserRound className="h-4 w-4 shrink-0 text-neutral-500" strokeWidth={1.8} />
+              {localizeCopy('商业模特', 'Modelli moda')}
+            </button>
+          </>}
+          {industryTemplateId === 'bags_wholesale' && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => { setMenuOpen(false); setStudioProjectsOpen(true); }}
+              className="flex min-h-9 w-full items-center gap-2.5 rounded-xl px-3 text-left text-[11px] font-medium text-neutral-700 hover:bg-neutral-100 active:bg-neutral-100"
+            >
+              <FolderKanban className="h-4 w-4 shrink-0 text-neutral-500" strokeWidth={1.8} />
+              {localizeCopy('皮具项目', 'Progetti pelletteria')}
+            </button>
+          )}
           <div className="mx-3 my-1 h-px bg-neutral-100" />
           <p className="px-3 pb-1 pt-2.5 text-[9px] font-medium tracking-[0.14em] text-neutral-400">{localizeCopy('其他', 'Altro')}</p>
           <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); setActiveSection('knowledge'); setError(''); }} className="flex min-h-9 w-full items-center gap-2.5 rounded-xl px-3 text-left text-[11px] font-medium text-neutral-700 hover:bg-neutral-100 active:bg-neutral-100">
@@ -1582,7 +1772,29 @@ export const MerchantAiHome: React.FC<MerchantAiHomeProps> = ({ isIt, merchantId
       <section className={`min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4 pt-6 ${activeSection === 'chat' ? 'flex flex-col' : ''}`}>
         {activeSection === 'chat' ? (!messages.length ? (
           <div className="my-auto w-full">
-            <div className="modaui-hero relative overflow-hidden rounded-3xl bg-white px-5 py-7 sm:px-7 sm:py-10">
+            {industryChatOnly ? (
+              <div className="mx-auto flex w-full max-w-2xl flex-col items-center px-2 py-8 text-center">
+                <h1 className="text-[22px] font-semibold tracking-tight text-neutral-950 sm:text-[26px]">
+                  {localizeCopy('你有什么想法？', 'Cosa hai in mente?')}
+                </h1>
+                {industryTemplate && <p className="mt-2 text-[11px] text-neutral-500">{isIt ? industryTemplate.it : industryTemplate.zh}</p>}
+                {industryPrompts.length > 0 && (
+                  <div className="mt-5 flex max-w-full flex-wrap justify-center gap-x-4 gap-y-2">
+                    {industryPrompts.map(prompt => (
+                      <button
+                        key={prompt.labelZh}
+                        type="button"
+                        disabled={busy}
+                        onClick={() => fillIndustryPrompt(isIt ? prompt.promptIt : prompt.promptZh)}
+                        className="min-h-9 rounded-full px-3 text-[11px] text-neutral-500 transition hover:bg-neutral-50 hover:text-neutral-900 disabled:opacity-50"
+                      >
+                        {isIt ? prompt.labelIt : prompt.labelZh}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : <div className="modaui-hero relative overflow-hidden rounded-3xl bg-white px-5 py-7 sm:px-7 sm:py-10">
               <div className="relative flex flex-col items-center gap-1.5 lg:flex-row lg:items-center lg:gap-9">
                 <div className="flex w-full items-center justify-center lg:w-[48%]">
                   <ModaCoreAnchor
@@ -1618,7 +1830,7 @@ export const MerchantAiHome: React.FC<MerchantAiHomeProps> = ({ isIt, merchantId
                   </div>
                 </div>
               </div>
-            </div>
+            </div>}
           </div>
         ) : (
           <div className="mx-auto w-full max-w-2xl space-y-5 py-3" aria-live="polite">
@@ -1842,36 +2054,124 @@ export const MerchantAiHome: React.FC<MerchantAiHomeProps> = ({ isIt, merchantId
       </section>
 
       {taskPreview && (
-        <div className="absolute inset-0 z-[46] flex items-end bg-neutral-950/25" onClick={() => setTaskPreview(null)}>
+        <div className="absolute inset-0 z-[46] flex items-end bg-neutral-950/25" onClick={cancelTaskPreview}>
           <section
             role="dialog"
             aria-modal="true"
             aria-label="ModaUI 任务预览"
             onClick={event => event.stopPropagation()}
-            className="w-full rounded-t-2xl border-t border-neutral-200 bg-white px-4 pt-3 shadow-[0_-12px_36px_rgba(0,0,0,0.14)]"
+            className="max-h-[88dvh] w-full overflow-y-auto overscroll-contain rounded-t-2xl border-t border-neutral-200 bg-white px-4 pt-3 shadow-[0_-12px_36px_rgba(0,0,0,0.14)]"
             style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
           >
             <div className="mx-auto mb-2 h-1 w-9 rounded-full bg-neutral-200" />
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <p className="text-[12px] font-semibold text-neutral-900">执行前预览 · {taskPreview.workflow}</p>
+                <p className="text-[12px] font-semibold text-neutral-900">{localizeCopy('执行前预览', 'Anteprima')} · {taskPreview.workflow}</p>
                 <p className="mt-1 text-[11px] leading-5 text-neutral-600">{taskPreview.summary}</p>
               </div>
-              <button type="button" aria-label="取消任务预览" onClick={() => setTaskPreview(null)} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100"><X className="h-4 w-4" /></button>
+              <button type="button" aria-label={localizeCopy('取消任务预览', 'Annulla anteprima')} disabled={taskRetryLocked} onClick={cancelTaskPreview} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 disabled:opacity-40"><X className="h-4 w-4" /></button>
             </div>
             <p className="mt-3 max-h-32 overflow-y-auto whitespace-pre-wrap rounded-xl bg-neutral-50 p-3 text-[11px] leading-5 text-neutral-700">{taskPreview.message}</p>
             <p className="mt-2 text-[10px] leading-4 text-neutral-500">{taskPreview.sideEffects}</p>
-            <p className="mt-1 text-[9px] text-neutral-400">工具：{taskPreview.tools.join(' · ') || '无'} · 角色：{taskPreview.agents.join(' · ')}</p>
-            {taskPreview.requiresApprovalForSensitiveActions && <p className="mt-1 text-[9px] font-medium text-amber-700">敏感操作需审批</p>}
+            <p className="mt-1 break-words text-[9px] text-neutral-400">{localizeCopy('工具：', 'Strumenti: ')}{taskPreview.tools.join(' · ') || '—'} · {localizeCopy('角色：', 'Ruoli: ')}{taskPreview.agents.join(' · ') || '—'}</p>
+            {taskPreview.requiresApprovalForSensitiveActions && <p className="mt-1 text-[9px] font-medium text-neutral-700">{localizeCopy('敏感操作仍需商家审批。', 'Le azioni sensibili richiedono approvazione.')}</p>}
+            {taskPreview.draftRequired && (
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <label className="grid gap-1 text-[10px] font-medium text-neutral-600">
+                  {localizeCopy('启用供应商', 'Fornitore attivo')}
+                  <select
+                    value={taskDraft.supplierId}
+                    disabled={taskRetryLocked || taskCatalogLoading}
+                    onChange={event => setTaskDraft(current => ({ ...current, supplierId: event.currentTarget.value }))}
+                    className="min-h-10 rounded-lg border border-neutral-300 bg-white px-2 text-[11px] text-neutral-800 disabled:bg-neutral-100"
+                  >
+                    <option value="">{localizeCopy('请选择供应商', 'Seleziona un fornitore')}</option>
+                    {taskSuppliers.map(supplier => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
+                  </select>
+                </label>
+                <label className="grid gap-1 text-[10px] font-medium text-neutral-600">
+                  {localizeCopy('商品', 'Prodotto')}
+                  <select
+                    value={taskDraft.productId}
+                    disabled={taskRetryLocked || taskCatalogLoading}
+                    onChange={event => {
+                      const product = taskProducts.find(item => item.id === event.currentTarget.value);
+                      const firstVariant = product?.skus.find(sku => Boolean(sku.variantId) && sku.isActive !== false);
+                      setTaskDraft(current => ({
+                        ...current,
+                        productId: product?.id || '',
+                        variantId: firstVariant?.variantId || ''
+                      }));
+                    }}
+                    className="min-h-10 rounded-lg border border-neutral-300 bg-white px-2 text-[11px] text-neutral-800 disabled:bg-neutral-100"
+                  >
+                    <option value="">{localizeCopy('请选择商品', 'Seleziona un prodotto')}</option>
+                    {taskProducts.map(product => <option key={product.id} value={product.id}>{product.styleNo} · {product.name}</option>)}
+                  </select>
+                </label>
+                <label className="grid gap-1 text-[10px] font-medium text-neutral-600">
+                  {localizeCopy('SKU / 规格', 'SKU / variante')}
+                  <select
+                    value={taskDraft.variantId}
+                    disabled={taskRetryLocked || taskCatalogLoading || !taskVariants.length}
+                    onChange={event => setTaskDraft(current => ({ ...current, variantId: event.currentTarget.value }))}
+                    className="min-h-10 rounded-lg border border-neutral-300 bg-white px-2 text-[11px] text-neutral-800 disabled:bg-neutral-100"
+                  >
+                    <option value="">{localizeCopy('请选择 SKU', 'Seleziona uno SKU')}</option>
+                    {taskVariants.map(variant => (
+                      <option key={variant.variantId} value={variant.variantId}>
+                        {[variant.sku, variant.color, variant.size].filter(Boolean).join(' · ')}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="grid gap-1 text-[10px] font-medium text-neutral-600">
+                  {localizeCopy('采购数量', 'Quantità')}
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={taskDraft.quantity}
+                    disabled={taskRetryLocked}
+                    onChange={event => setTaskDraft(current => ({ ...current, quantity: event.currentTarget.value }))}
+                    className="min-h-10 rounded-lg border border-neutral-300 bg-white px-2 text-[11px] text-neutral-800 disabled:bg-neutral-100"
+                  />
+                </label>
+                <label className="grid gap-1 text-[10px] font-medium text-neutral-600 sm:col-span-2">
+                  {localizeCopy('单位成本（EUR）', 'Costo unitario (EUR)')}
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={taskDraft.unitCost}
+                    disabled={taskRetryLocked}
+                    onChange={event => setTaskDraft(current => ({ ...current, unitCost: event.currentTarget.value }))}
+                    className="min-h-10 rounded-lg border border-neutral-300 bg-white px-2 text-[11px] text-neutral-800 disabled:bg-neutral-100"
+                  />
+                </label>
+                {taskCatalog && (!taskSuppliers.length || !taskProducts.length) && (
+                  <p role="status" className="text-[10px] leading-4 text-neutral-500 sm:col-span-2">
+                    {localizeCopy('当前没有可用的启用供应商或有效商品/SKU，请先补全资料。', 'Nessun fornitore attivo o prodotto/SKU disponibile. Completa prima i dati.')}
+                  </p>
+                )}
+                {taskDraftValid && Number.isFinite(taskDraftAmount) && (
+                  <p className="text-[10px] font-semibold text-neutral-800 sm:col-span-2">
+                    {localizeCopy('草稿金额预览：', 'Totale bozza: ')}EUR {taskDraftAmount.toFixed(2)}
+                  </p>
+                )}
+              </div>
+            )}
             <div className="mt-3 flex gap-2">
-              <button type="button" onClick={() => setTaskPreview(null)} className="h-10 flex-1 rounded-xl border border-neutral-200 text-[11px] font-medium text-neutral-700 active:bg-neutral-50">取消</button>
-              <button type="button" disabled={busy} onClick={() => void confirmTask()} className="h-10 flex-[1.4] rounded-xl bg-neutral-950 text-[11px] font-semibold text-white disabled:opacity-40">{busy ? '提交中…' : '确认并提交任务'}</button>
+              <button type="button" disabled={taskRetryLocked} onClick={cancelTaskPreview} className="h-10 flex-1 rounded-xl border border-neutral-200 text-[11px] font-medium text-neutral-700 active:bg-neutral-50 disabled:opacity-40">{localizeCopy('取消', 'Annulla')}</button>
+              <button type="button" disabled={busy || taskCatalogLoading || (taskPreview.draftRequired && !taskDraftValid)} onClick={() => void confirmTask()} className="h-10 flex-[1.4] rounded-xl bg-neutral-950 text-[11px] font-semibold text-white disabled:opacity-40">
+                {busy ? localizeCopy('提交中…', 'Invio…') : taskRetryLocked ? localizeCopy('使用同一请求重试', 'Riprova la stessa richiesta') : localizeCopy('确认并提交任务', 'Conferma e invia')}
+              </button>
             </div>
           </section>
         </div>
       )}
 
-      {modeSheetOpen && fashionMode && (
+      {!industryChatOnly && modeSheetOpen && fashionMode && (
         <div className="absolute inset-0 z-[45] flex items-end bg-neutral-950/25" onClick={closeModeSheet}>
           <section
             role="dialog"
@@ -2001,7 +2301,41 @@ export const MerchantAiHome: React.FC<MerchantAiHomeProps> = ({ isIt, merchantId
             >{localizeCopy(`只补生成剩余 ${productLaunchRecovery.totalImages - productLaunchRecovery.nextImageIndex} 张图片`, `Genera solo le ${productLaunchRecovery.totalImages - productLaunchRecovery.nextImageIndex} immagini mancanti`)}</button>}
           </div>
         )}
-        <div className="ruda-ai-suggestions mx-auto mb-2 flex w-full max-w-2xl items-center gap-1.5">
+        {taskStatus && (
+          <div role="status" className="mx-auto mb-2 flex w-full max-w-2xl items-start gap-2 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-[10px] leading-4 text-neutral-600">
+            <span className="min-w-0 flex-1 break-words">{taskStatus}</span>
+            {pendingTaskId && (
+              <button
+                type="button"
+                disabled={taskPolling || busy}
+                onClick={() => void pollTaskStatus(pendingTaskId)}
+                className="shrink-0 rounded-lg border border-neutral-200 bg-white px-2 py-1 font-medium text-neutral-700 disabled:opacity-40"
+              >
+                {taskPolling ? localizeCopy('查询中', 'Verifica…') : localizeCopy('刷新状态', 'Aggiorna')}
+              </button>
+            )}
+          </div>
+        )}
+        {industryChatOnly ? (
+          <div className="mx-auto mb-2 flex w-full max-w-2xl justify-center gap-5 border-b border-neutral-100">
+            <button
+              type="button"
+              aria-pressed={!taskMode}
+              onClick={() => setTaskMode(false)}
+              className={`min-h-9 border-b-2 px-1 text-[11px] font-medium transition ${!taskMode ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-400 hover:text-neutral-700'}`}
+            >
+              {localizeCopy('对话', 'Chat')}
+            </button>
+            <button
+              type="button"
+              aria-pressed={taskMode}
+              onClick={() => setTaskMode(true)}
+              className={`min-h-9 border-b-2 px-1 text-[11px] font-medium transition ${taskMode ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-400 hover:text-neutral-700'}`}
+            >
+              {localizeCopy('业务任务', 'Attività')}
+            </button>
+          </div>
+        ) : <div className="ruda-ai-suggestions mx-auto mb-2 flex w-full max-w-2xl items-center gap-1.5">
           {fashionModes.filter(mode => ['design', 'generate', 'tryon', 'inspiration'].includes(mode.id)).map(({ id, title, Icon }) => {
             const selected = fashionMode === id;
             return (
@@ -2027,9 +2361,9 @@ export const MerchantAiHome: React.FC<MerchantAiHomeProps> = ({ isIt, merchantId
           >
             <SlidersHorizontal className="h-3.5 w-3.5" strokeWidth={1.9} />
           </button>}
-        </div>
+        </div>}
         {composerToolsOpen && <div className="absolute inset-x-3 bottom-[calc(100%-2px)] z-30 mx-auto grid w-auto max-w-2xl grid-cols-2 gap-1 rounded-2xl border border-neutral-200/80 bg-white p-1.5 shadow-[0_16px_40px_rgba(0,0,0,0.12)] sm:inset-x-4">
-          {fashionModes.filter(mode => mode.id !== 'edit').map(({ id, title, Icon }) => <button key={id} type="button" onClick={() => {
+          {!industryChatOnly && fashionModes.filter(mode => mode.id !== 'edit').map(({ id, title, Icon }) => <button key={id} type="button" onClick={() => {
             activateCreation(id);
             setComposerToolsOpen(false);
           }} className="flex min-h-11 items-center gap-2 rounded-xl px-2.5 text-left text-[11px] font-semibold text-neutral-700 hover:bg-neutral-50">
@@ -2065,9 +2399,10 @@ export const MerchantAiHome: React.FC<MerchantAiHomeProps> = ({ isIt, merchantId
         {taskMode && <div className="mx-auto mb-1.5 flex w-full max-w-2xl items-center justify-end">
           <button
             type="button"
+            disabled={taskRetryLocked}
             onClick={() => setTaskMode(false)}
             aria-label={localizeCopy('关闭任务模式', 'Disattiva modalità attività')}
-            className="inline-flex h-6 items-center gap-1 rounded-full border border-neutral-200 bg-white pl-2 pr-1.5 text-[9px] font-medium text-neutral-700 active:bg-neutral-50"
+            className="inline-flex h-6 items-center gap-1 rounded-full border border-neutral-200 bg-white pl-2 pr-1.5 text-[9px] font-medium text-neutral-700 active:bg-neutral-50 disabled:opacity-40"
           >
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" aria-hidden="true" />
             {localizeCopy('任务模式', 'Modalità attività')}
@@ -2081,8 +2416,9 @@ export const MerchantAiHome: React.FC<MerchantAiHomeProps> = ({ isIt, merchantId
           }}
           className="ruda-ai-composer mx-auto flex w-full max-w-2xl items-end gap-2 rounded-3xl border border-neutral-200 bg-white p-2 shadow-[0_3px_18px_rgba(0,0,0,0.055)] transition-shadow focus-within:border-neutral-300 focus-within:shadow-[0_4px_22px_rgba(0,0,0,0.08)]"
         >
-          <button type="button" aria-label={localizeCopy('创作工具', 'Strumenti creativi')} aria-expanded={composerToolsOpen} onClick={() => setComposerToolsOpen(open => !open)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-neutral-500 hover:bg-neutral-50 hover:text-neutral-700 transition"><Plus className="h-4.5 w-4.5" /></button>
+          <button type="button" aria-label={localizeCopy(industryChatOnly ? '添加附件' : '创作工具', industryChatOnly ? 'Allega file' : 'Strumenti creativi')} aria-expanded={composerToolsOpen} onClick={() => setComposerToolsOpen(open => !open)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-neutral-500 hover:bg-neutral-50 hover:text-neutral-700 transition"><Plus className="h-4.5 w-4.5" /></button>
           <textarea
+            ref={questionInputRef}
             value={question}
             onChange={event => {
               if (questionTypingTimerRef.current !== null) {
@@ -2106,7 +2442,9 @@ export const MerchantAiHome: React.FC<MerchantAiHomeProps> = ({ isIt, merchantId
             maxLength={500}
             rows={1}
             aria-label={localizeCopy('发送消息给 ModaUI', 'Messaggio per ModaUI')}
-            placeholder={isIt
+            placeholder={industryChatOnly
+              ? taskMode ? localizeCopy('描述要执行的业务任务…', 'Descrivi l’attività da eseguire…') : localizeCopy('问问 ModaUI…', 'Chiedi a ModaUI…')
+              : isIt
               ? taskMode ? 'Descrivi l’attività da eseguire…'
                 : fashionMode === 'productLaunch' ? 'Descrivi modello, scena e stile…' : fashionMode === 'design' ? 'Descrivi il capo…' : 'Scrivi…'
               : taskMode ? '描述要执行的任务…'
@@ -2148,6 +2486,16 @@ export const MerchantAiHome: React.FC<MerchantAiHomeProps> = ({ isIt, merchantId
           isIt={isIt}
           currentPlan={entitlements?.plan || 'free'}
           onClose={() => setPricingOpen(false)}
+        />
+      )}
+      {studioProjectsOpen && industryTemplateId === 'bags_wholesale' && (
+        <ModaUIProjects
+          key={`${merchantId}:${industryTemplateId}`}
+          isIt={isIt}
+          industryTemplateId={industryTemplateId}
+          initialBrief={question}
+          initialCapability={null}
+          onClose={() => setStudioProjectsOpen(false)}
         />
       )}
     </main>

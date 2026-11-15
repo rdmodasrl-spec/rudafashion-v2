@@ -5,13 +5,16 @@ import {
   Camera,
   Check,
   Download,
+  FileImage,
   FolderOpen,
+  FolderKanban,
   ImagePlus,
   Loader2,
   Maximize2,
   Minimize2,
   Palette,
   RefreshCw,
+  Ruler,
   Save,
   Settings2,
   Shirt,
@@ -23,6 +26,8 @@ import {
 
 import { apiGet, apiPost, ApiError } from '../../../../../api/client';
 import { requestModaGptImage } from '../../../../../api/modagptImageTasks';
+import { uploadMerchantMedia, type UploadedMerchantMedia } from '../../../../../api/merchantMedia';
+import { PRODUCT_CATEGORIES } from '../../../../../constants/productCategories';
 import { useB2B } from '../../../../../context/B2BContext';
 import type { Product } from '../../../../../types/b2b';
 import { buildFashionDesignConceptPrompt, buildModelStudioPrompt } from '../../../../../shared/modagptImageContract';
@@ -31,6 +36,7 @@ import type { ModaCoreVisualState } from './modaCoreEngine';
 import { createModaCoreLife } from './modaCoreLife';
 import type { AudioLevelRef } from './useModaCoreAudio';
 import { ModaGptGarmentRecolor } from '../ModaGptGarmentRecolor';
+import { ModaUIProjects } from './ModaUIProjects';
 import {
   WORKBENCH_CAPABILITIES,
   getWorkbenchCapability,
@@ -49,11 +55,13 @@ import {
   planModaWorkbenchTask,
   type ModaWorkbenchPlan
 } from './modaWorkbenchPlan';
+import { merchantTaskErrorCopy, requestsProcurementDraft } from './modauiIndustryChat';
 
 type WorkbenchProps = {
   isIt: boolean;
   merchantId: string;
   merchantName: string;
+  industryTemplateId?: string | null;
   initialCapability?: WorkbenchCapabilityId | null;
   onExit: () => void;
 };
@@ -92,6 +100,15 @@ type WorkbenchResult = {
   width: number | null;
   height: number | null;
   recolor: boolean;
+};
+
+type ApparelProductDraftFields = {
+  styleNo: string;
+  name: string;
+  category: string;
+  color: string;
+  size: string;
+  sku: string;
 };
 
 type WorkbenchEntry =
@@ -180,43 +197,18 @@ function entitlementSnapshot(entitlements: WorkbenchEntitlements | null): Workbe
   };
 }
 
-function requestsProcurementDraft(message: string): boolean {
-  return /(?:创建|生成|准备|新建).{0,12}(?:采购草稿|采购单|采购订单|进货单|补货订单)/i.test(message);
-}
-
-function merchantTaskErrorCopy(error: unknown, isIt: boolean): string {
-  const code = error instanceof ApiError ? error.code : error instanceof Error ? error.message : '';
-  const known: Record<string, [string, string]> = {
-    MODAGPT_TASK_PERMISSION_REQUIRED: ['当前员工没有采购管理权限，任务未执行。', 'L’utente non dispone dei permessi di acquisto. Attività non eseguita.'],
-    EMPLOYEE_PERMISSION_REQUIRED: ['当前员工没有采购管理权限，任务未执行。', 'L’utente non dispone dei permessi di acquisto. Attività non eseguita.'],
-    MODAGPT_TASK_WORKFLOW_UNAVAILABLE: ['当前商家行业暂不支持此任务。', 'Questo settore non supporta l’attività richiesta.'],
-    MODAGPT_TASK_NOT_FOUND: ['任务不存在或不属于当前商家。', 'Attività non trovata o non appartenente a questo negozio.'],
-    REQUEST_TIMEOUT: ['请求超时；如已提交，请使用同一任务重试或查询状态。', 'Richiesta scaduta: riprova con la stessa attività o controllane lo stato.']
-  };
-  if (code && known[code]) return isIt ? known[code][1] : known[code][0];
-  if (error instanceof ApiError && error.status === 401) {
-    return isIt ? 'Sessione scaduta: accedi di nuovo.' : '登录已过期，请重新登录。';
-  }
-  if (error instanceof ApiError && error.status === 403) {
-    return isIt ? 'Permesso di acquisto mancante; attività non eseguita.' : '缺少采购管理权限，任务未执行。';
-  }
-  if (error instanceof Error && error.message && !/^[A-Z0-9_]{6,}$/.test(error.message)) return error.message;
-  return isIt
-    ? `Impossibile completare l’attività${code ? ` (${code})` : ''}. Verifica i dati o riprova.`
-    : `任务未能完成${code ? `（${code}）` : ''}。请检查权限和输入后重试。`;
-}
-
-
 export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
   isIt,
   merchantId,
   merchantName,
+  industryTemplateId,
   initialCapability = null,
   onExit
 }) => {
-  const { localizeCopy } = useB2B();
+  const { localizeCopy, products, replaceMerchantProductsFromServer } = useB2B();
   const [capability, setCapability] = useState<WorkbenchCapabilityId | null>(initialCapability);
   const [draft, setDraft] = useState('');
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [taskMode, setTaskMode] = useState(false);
   const [taskPreview, setTaskPreview] = useState<MerchantTaskPreview | null>(null);
   const [taskCatalog, setTaskCatalog] = useState<ProcurementCatalog | null>(null);
@@ -233,6 +225,7 @@ export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
   const [pendingTaskId, setPendingTaskId] = useState<string | null>(null);
   const taskIdempotencyKeyRef = useRef<string | null>(null);
   const [assets, setAssets] = useState<WorkbenchAssets>({ person: '', garment: '', personName: '', garmentName: '' });
+  const [studioSourceResultId, setStudioSourceResultId] = useState<string | null>(null);
   const [entries, setEntries] = useState<WorkbenchEntry[]>([]);
   const [entitlements, setEntitlements] = useState<WorkbenchEntitlements | null>(null);
   const [entitlementsError, setEntitlementsError] = useState('');
@@ -241,7 +234,12 @@ export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
   const [notice, setNotice] = useState<{ text: string; tone: 'warn' | 'info' } | null>(null);
   const [consent, setConsent] = useState(false);
   const [imageCount, setImageCount] = useState(1);
+
+  useEffect(() => {
+    setActiveProjectId(null);
+  }, [industryTemplateId, merchantId]);
   const [assetsOpen, setAssetsOpen] = useState(false);
+  const [projectsOpen, setProjectsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
@@ -250,6 +248,18 @@ export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
   const [designsLoading, setDesignsLoading] = useState(false);
   const [designsNotice, setDesignsNotice] = useState('');
   const [savingResultId, setSavingResultId] = useState<string | null>(null);
+  const [productDraftTarget, setProductDraftTarget] = useState<WorkbenchResult | null>(null);
+  const [productDraftFields, setProductDraftFields] = useState<ApparelProductDraftFields>({
+    styleNo: '',
+    name: '',
+    category: 'tops',
+    color: '',
+    size: '',
+    sku: ''
+  });
+  const [productDraftError, setProductDraftError] = useState('');
+  const [productDraftBusyId, setProductDraftBusyId] = useState<string | null>(null);
+  const [productDraftLockedId, setProductDraftLockedId] = useState<string | null>(null);
   const [recolorSource, setRecolorSource] = useState<string | null>(null);
   const [successFlash, setSuccessFlash] = useState(false);
   const [motionEnabled, setMotionEnabled] = useState(() => {
@@ -266,6 +276,10 @@ export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
   const streamRef = useRef<HTMLDivElement>(null);
   const successTimerRef = useRef<number | null>(null);
   const saveRequestIdsRef = useRef<Map<string, string>>(new Map());
+  const productDraftFieldsRef = useRef<Map<string, ApparelProductDraftFields>>(new Map());
+  const productDraftUploadsRef = useRef<Map<string, UploadedMerchantMedia>>(new Map());
+  const productDraftRequestIdsRef = useRef<Map<string, string>>(new Map());
+  const productDraftLockedIdsRef = useRef<Set<string>>(new Set());
   const coreLife = useMemo(() => createModaCoreLife(), []);
 
   const snapshot = useMemo(() => entitlementSnapshot(entitlements), [entitlements]);
@@ -382,6 +396,7 @@ export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
         [slot]: dataUrl,
         [slot === 'person' ? 'personName' : 'garmentName']: file.name
       }));
+      if (slot === 'garment') setStudioSourceResultId(null);
       setNotice(null);
     } catch {
       setNotice({
@@ -397,6 +412,7 @@ export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
       [slot]: '',
       [slot === 'person' ? 'personName' : 'garmentName']: ''
     }));
+    if (slot === 'garment') setStudioSourceResultId(null);
   };
 
   const previewMerchantTask = async (message: string) => {
@@ -537,7 +553,7 @@ export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
     try {
       const created = await apiPost<{ success: true; taskId: string; status: string }>(
         '/api/merchant/modagpt/task',
-        { message: preview.message, inputs },
+        { message: preview.message, inputs, ...(activeProjectId ? { projectId: activeProjectId } : {}) },
         30_000,
         { 'Idempotency-Key': idempotencyKey }
       );
@@ -727,6 +743,21 @@ export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
           privacyConsent: true
         }, merchantId);
         await appendResult({ capability: 'tryon', imageDataUrl: result.imageDataUrl, prompt, taskId: result.taskId, parentId: null });
+      } else if (step.execution === 'server_image_edit') {
+        const referenceImage = assets.garment || assets.person;
+        if (!referenceImage) throw new Error('MODAUI_WORKBENCH_ASSET_MISSING');
+        const result = await requestModaGptImage({
+          task: 'imageEdit',
+          prompt: requestText,
+          referenceImage
+        }, merchantId);
+        await appendResult({
+          capability: 'studio',
+          imageDataUrl: result.imageDataUrl,
+          prompt: requestText,
+          taskId: result.taskId,
+          parentId: studioSourceResultId
+        });
       } else {
         const prompts = buildPrompts(step.capability, requestText);
         for (const prompt of prompts) {
@@ -783,6 +814,141 @@ export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
     }
   };
 
+  const openProductDraft = (result: WorkbenchResult) => {
+    if (!result.savedDesignId) {
+      setNotice({ text: localizeCopy('请先保存作品，再创建商品草稿。', 'Salva prima il risultato, poi crea la bozza prodotto.'), tone: 'warn' });
+      return;
+    }
+    const apparelStudio = industryTemplateId === 'apparel_production_wholesale' || industryTemplateId === 'apparel_wholesale';
+    if (!apparelStudio) return;
+    const defaultCategory = result.prompt.match(/连衣裙|裙装|礼服|dress|gown/i)
+      ? 'dresses'
+      : result.prompt.match(/大衣|风衣|coat|trench/i)
+        ? 'outerwear'
+      : result.prompt.match(/裤|短裤|半裙|下装|jeans|trousers|pants|skirt|shorts/i)
+        ? 'pants'
+        : 'tops';
+    const fields = productDraftFieldsRef.current.get(result.id) ?? {
+      styleNo: '',
+      name: '',
+      category: defaultCategory,
+      color: '',
+      size: '',
+      sku: ''
+    };
+    productDraftFieldsRef.current.set(result.id, fields);
+    setProductDraftTarget(result);
+    setProductDraftFields(fields);
+    setProductDraftError('');
+    setProductDraftLockedId(productDraftLockedIdsRef.current.has(result.id) ? result.id : null);
+  };
+
+  const updateProductDraftField = (key: keyof ApparelProductDraftFields, value: string) => {
+    if (!productDraftTarget || productDraftLockedIdsRef.current.has(productDraftTarget.id)) return;
+    setProductDraftFields(current => {
+      const next = { ...current, [key]: value };
+      productDraftFieldsRef.current.set(productDraftTarget.id, next);
+      return next;
+    });
+  };
+
+  const createProductDraft = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const target = productDraftTarget;
+    if (!target?.savedDesignId || productDraftBusyId) return;
+    const fields = productDraftFields;
+    if (!fields.styleNo.trim() || !fields.name.trim() || !fields.category ||
+      !fields.color.trim() || !fields.size.trim() || !fields.sku.trim()) {
+      setProductDraftError(localizeCopy('请填写款号、名称、品类、颜色、尺码和 SKU。', 'Compila codice, nome, categoria, colore, taglia e SKU.'));
+      return;
+    }
+    if (fields.styleNo.trim().length > 100 || fields.name.trim().length > 200 ||
+      fields.color.trim().length > 80 || fields.size.trim().length > 40 || fields.sku.trim().length > 100) {
+      setProductDraftError(localizeCopy('部分商品资料超出长度限制，请检查后重试。', 'Alcuni campi superano la lunghezza consentita.'));
+      return;
+    }
+
+    setProductDraftBusyId(target.id);
+    setProductDraftError('');
+    try {
+      let uploaded = productDraftUploadsRef.current.get(target.id);
+      if (!uploaded) {
+        const webpDataUrl = await ensureWebpDataUrl(target.imageDataUrl);
+        const response = await fetch(webpDataUrl);
+        if (!response.ok) throw new Error('MODAUI_WORKBENCH_CANVAS_UNAVAILABLE');
+        const imageBlob = await response.blob();
+        if (imageBlob.type !== 'image/webp' || imageBlob.size === 0 || imageBlob.size > 12 * 1024 * 1024) {
+          throw new Error('MODAUI_WORKBENCH_PRODUCT_IMAGE_INVALID');
+        }
+        uploaded = await uploadMerchantMedia(imageBlob, imageBlob.type);
+        productDraftUploadsRef.current.set(target.id, uploaded);
+      }
+
+      const requestKey = productDraftRequestIdsRef.current.get(target.id) ?? crypto.randomUUID();
+      productDraftRequestIdsRef.current.set(target.id, requestKey);
+      productDraftLockedIdsRef.current.add(target.id);
+      setProductDraftLockedId(target.id);
+      const created = await apiPost<{ success: true; product: Product }>('/api/merchant/products', {
+        styleNo: fields.styleNo.trim(),
+        name: fields.name.trim(),
+        category: fields.category,
+        wholesalePrice: 0,
+        rrpPrice: 0,
+        moq: 1,
+        packSize: 1,
+        lifecycleStatus: 'draft',
+        status: 'new',
+        visibility: 'public',
+        skus: [{
+          sku: fields.sku.trim(),
+          color: fields.color.trim(),
+          size: fields.size.trim(),
+          stockCentral: 0,
+          isActive: true
+        }],
+        media: [{
+          id: `media-${crypto.randomUUID()}`,
+          type: 'image',
+          url: uploaded.url,
+          storageKey: uploaded.storageKey,
+          contentType: uploaded.contentType,
+          sizeBytes: uploaded.sizeBytes,
+          role: 'main',
+          alt: 'ModaUI AI 创作概念图'
+        }],
+        creationRequestKey: requestKey
+      }, 30_000, { 'Idempotency-Key': requestKey });
+
+      const currentMerchantProducts = products.filter(product => product.merchantId === merchantId);
+      replaceMerchantProductsFromServer(merchantId, [
+        created.product,
+        ...currentMerchantProducts.filter(product => product.id !== created.product.id)
+      ]);
+      productDraftUploadsRef.current.delete(target.id);
+      productDraftRequestIdsRef.current.delete(target.id);
+      productDraftLockedIdsRef.current.delete(target.id);
+      productDraftFieldsRef.current.delete(target.id);
+      setProductDraftTarget(null);
+      setProductDraftLockedId(null);
+      setNotice({
+        text: localizeCopy('商品草稿已保存到商品中心。图片已加入商品主图；请检查商品资料后再确认发布。', 'Bozza salvata nel Product Center con l’immagine principale. Controlla i dati prima di pubblicare.'),
+        tone: 'info'
+      });
+    } catch (error) {
+      if (error instanceof ApiError && error.status < 500) {
+        productDraftRequestIdsRef.current.delete(target.id);
+        productDraftLockedIdsRef.current.delete(target.id);
+        setProductDraftLockedId(null);
+      } else if (productDraftRequestIdsRef.current.has(target.id)) {
+        productDraftLockedIdsRef.current.add(target.id);
+        setProductDraftLockedId(target.id);
+      }
+      setProductDraftError(productDraftErrorCopy(error, isIt));
+    } finally {
+      setProductDraftBusyId(null);
+    }
+  };
+
   const startFromResult = (result: WorkbenchResult, next: WorkbenchCapabilityId) => {
     if (next === 'recolor') {
       setRecolorSource(result.imageDataUrl);
@@ -799,10 +965,12 @@ export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
       return;
     }
     if (next === 'studio') {
+      setAssets(current => ({ ...current, garment: result.imageDataUrl, garmentName: localizeCopy('当前结果', 'Risultato corrente') }));
+      setStudioSourceResultId(result.id);
       setCapability('studio');
       setNotice({
-        text: localizeCopy('以当前结果为输入的棚拍引擎尚未接入；可用文字描述重新生成棚拍图。', 'Il servizio commerciale da un’immagine non è collegato: descrivi lo scatto a testo.'),
-        tone: 'warn'
+        text: localizeCopy('已放入参考图，请描述要修改的内容。发送后图片会交由 fal.ai 编辑，结果需审核。', 'Immagine inserita: descrivi la modifica. Sarà inviata a fal.ai; verifica il risultato.'),
+        tone: 'info'
       });
       return;
     }
@@ -920,6 +1088,16 @@ export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
         >
           <Save className="h-3.5 w-3.5" />{localizeCopy('保存到素材库', 'Salva nel portfolio')}
         </button>
+        {selectedResult.savedDesignId &&
+          (industryTemplateId === 'apparel_production_wholesale' || industryTemplateId === 'apparel_wholesale') && (
+            <button
+              type="button"
+              onClick={() => openProductDraft(selectedResult)}
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-neutral-300 bg-white px-3 text-xs font-semibold text-neutral-800 hover:bg-neutral-50"
+            >
+              <FileImage className="h-4 w-4" />{localizeCopy('创建商品草稿', 'Crea bozza prodotto')}
+            </button>
+          )}
         <button type="button" onClick={() => downloadResult(selectedResult)} className={resultActionClass}>
           <Download className="h-3.5 w-3.5" />{localizeCopy('下载', 'Scarica')}
         </button>
@@ -971,6 +1149,17 @@ export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
             >
               <FolderOpen className="h-4 w-4" />
             </button>
+            {(industryTemplateId === 'apparel_production_wholesale' || industryTemplateId === 'apparel_wholesale') && (
+              <button
+                type="button"
+                onClick={() => setProjectsOpen(true)}
+                aria-expanded={projectsOpen}
+                aria-label={localizeCopy('服装项目', 'Progetti moda')}
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-neutral-600 hover:bg-neutral-100"
+              >
+                <FolderKanban className="h-4 w-4" />
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setSettingsOpen(true)}
@@ -995,7 +1184,7 @@ export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
         <div className="flex min-h-0 flex-1">
           {!focusMode && (
             <nav
-              aria-label={taskMode ? localizeCopy('经营任务', 'Attività aziendali') : localizeCopy('五项创作', 'Cinque funzioni')}
+              aria-label={taskMode ? localizeCopy('经营任务', 'Attività aziendali') : localizeCopy('六项创作', 'Sei funzioni')}
               className="hidden w-[216px] shrink-0 flex-col gap-1 overflow-y-auto border-r border-neutral-200 bg-white px-2 py-3 lg:flex"
             >
               {taskMode ? (
@@ -1022,7 +1211,7 @@ export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
                     <Icon className="mt-0.5 h-4 w-4 shrink-0" />
                     <span className="min-w-0">
                       <span className="block truncate text-[12px] font-semibold">{isIt ? item.labelIt : item.labelZh}</span>
-                      <span className={`mt-0.5 block truncate text-[10px] ${selected ? 'text-white/60' : 'text-neutral-400'}`}>
+                      <span className={`mt-0.5 block truncate text-xs ${selected ? 'text-white/70' : 'text-neutral-600'}`}>
                         {availability.available
                           ? (isIt ? item.hintIt : item.hintZh)
                           : availabilityLabel(availability.reason ?? 'engine_unavailable', isIt)}
@@ -1059,7 +1248,7 @@ export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
                     {localizeCopy('描述一件服装，或先把图片放进素材槽位。', 'Descrivi un capo o inserisci prima un’immagine.')}
                   </p>
                   <p className="mt-1 text-[11px] text-neutral-500">
-                    {localizeCopy('五个入口只改变当前意图，不会清空素材与已填写的描述。', 'Le cinque voci cambiano solo l’intento: materiali e testo restano.')}
+                    {localizeCopy('六项能力只切换当前意图，不会清空素材与描述；未接入能力不会创建任务。', 'Le sei funzioni cambiano solo l’intento; quelle non attive non creano attività.')}
                   </p>
                 </div>
               )}
@@ -1169,6 +1358,16 @@ export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
                           {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                           {saving ? localizeCopy('保存中', 'Salvataggio') : localizeCopy('保存', 'Salva')}
                         </button>
+                        {result.savedDesignId &&
+                          (industryTemplateId === 'apparel_production_wholesale' || industryTemplateId === 'apparel_wholesale') && (
+                            <button
+                              type="button"
+                              onClick={() => openProductDraft(result)}
+                              className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-neutral-300 bg-white px-3 text-xs font-semibold text-neutral-800 hover:bg-neutral-50"
+                            >
+                              <FileImage className="h-4 w-4" />{localizeCopy('创建商品草稿', 'Crea bozza')}
+                            </button>
+                          )}
                         <button type="button" onClick={() => downloadResult(result)} className={resultActionClass} aria-label={localizeCopy('下载', 'Scarica')}>
                           <Download className="h-3.5 w-3.5" />{localizeCopy('下载', 'Scarica')}
                         </button>
@@ -1375,12 +1574,12 @@ export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
                           ? { text: localizeCopy('当前未接入视频引擎，暂不能创建视频任务。', 'Il motore video non è ancora collegato.'), tone: 'warn' }
                           : null);
                       }}
-                      className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-[11px] font-semibold ${selected ? 'border-neutral-900 bg-neutral-900 text-white shadow-sm' : 'border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'}`}
+                      className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold ${selected ? 'border-neutral-900 bg-neutral-900 text-white shadow-sm' : 'border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'}`}
                     >
                       <Icon className="h-3.5 w-3.5" />
                       {isIt ? item.labelIt : item.labelZh}
                       {!availability.available && (
-                        <span className={`text-[9px] ${selected ? 'text-white/70' : 'text-amber-700'}`}>
+                        <span className={`text-xs ${selected ? 'text-white/70' : 'text-neutral-600'}`}>
                           {availabilityLabel(availability.reason ?? 'engine_unavailable', isIt)}
                         </span>
                       )}
@@ -1604,6 +1803,168 @@ export const ModaUIWorkbench: React.FC<WorkbenchProps> = ({
           </div>
         )}
 
+        {projectsOpen && (
+          <ModaUIProjects
+            key={merchantId}
+            isIt={isIt}
+            industryTemplateId={industryTemplateId}
+            initialBrief={draft}
+            initialCapability={capability}
+            onOpenProject={(brief, nextCapability, projectId) => {
+              setDraft(brief);
+              setActiveProjectId(projectId);
+              setCapability(nextCapability && isWorkbenchCapabilityId(nextCapability) ? nextCapability : null);
+              setTaskMode(false);
+              setNotice({
+                text: localizeCopy('项目简报已载入工作台；运行前请检查输入和所需素材。', 'Brief caricato nel workspace. Controlla input e materiali prima di avviare.'),
+                tone: 'info'
+              });
+            }}
+            onClose={() => setProjectsOpen(false)}
+          />
+        )}
+
+        {productDraftTarget && (
+          <div
+            className="fixed inset-0 z-[123] flex items-end justify-center bg-neutral-950/30 p-0 sm:items-center sm:p-4"
+            role="presentation"
+            onClick={() => setProductDraftTarget(null)}
+          >
+            <form
+              role="dialog"
+              aria-modal="true"
+              aria-label={localizeCopy('创建商品草稿', 'Crea bozza prodotto')}
+              className="max-h-[92dvh] w-full max-w-xl overflow-y-auto rounded-t-xl bg-white p-4 shadow-xl sm:rounded-xl"
+              onClick={event => event.stopPropagation()}
+              onSubmit={event => void createProductDraft(event)}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold text-neutral-950">{localizeCopy('创建商品草稿', 'Crea bozza prodotto')}</h2>
+                  <p className="mt-1 text-xs leading-5 text-neutral-600">
+                    {localizeCopy('AI 图片将作为商品主图上传。请填写真实商品资料；此操作只创建未上架草稿，不会发布。', 'L’immagine AI sarà caricata come immagine principale. Inserisci dati reali: verrà creata solo una bozza non pubblicata.')}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setProductDraftTarget(null)}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-neutral-600 hover:bg-neutral-100"
+                  aria-label={localizeCopy('关闭', 'Chiudi')}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="mt-4 grid gap-4 sm:grid-cols-[112px_minmax(0,1fr)]">
+                <img
+                  src={productDraftTarget.imageDataUrl}
+                  alt={localizeCopy('将作为商品主图的 AI 创作概念图', 'Immagine concettuale AI da usare come immagine principale')}
+                  className="h-32 w-full rounded-lg border border-neutral-200 bg-neutral-50 object-contain sm:h-36"
+                />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-neutral-900">{localizeCopy('发布前仍需检查', 'Da verificare prima della pubblicazione')}</p>
+                  <p className="mt-1 text-xs leading-5 text-neutral-600">
+                    {localizeCopy('图片是 AI 创作概念图，不代表实物照片。价格、库存和其他商品资料不会由 AI 推断。创建后请在商品中心核对并补全。', 'Immagine concettuale AI, non una foto del prodotto reale. Prezzo, scorte e altri dati non vengono dedotti dall’AI. Controlla e completa la scheda nel Product Center.')}
+                  </p>
+                </div>
+              </div>
+              {productDraftError && (
+                <p role="alert" className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-900">
+                  {productDraftError}
+                </p>
+              )}
+              {productDraftLockedId === productDraftTarget.id && (
+                <p role="status" className="mt-3 rounded-lg bg-neutral-100 px-3 py-2 text-xs leading-5 text-neutral-700">
+                  {localizeCopy('上次请求结果尚未确认。请使用相同资料重试，系统会用同一请求编号避免重复创建。', 'Esito precedente non confermato. Riprova con gli stessi dati: verrà riutilizzata la stessa chiave per evitare duplicati.')}
+                </p>
+              )}
+              <fieldset disabled={productDraftBusyId === productDraftTarget.id || productDraftLockedId === productDraftTarget.id} className="mt-4 grid gap-3 sm:grid-cols-2">
+                <label className="grid gap-1 text-xs font-medium text-neutral-700">
+                  {localizeCopy('款号', 'Codice modello')}
+                  <input
+                    required
+                    maxLength={100}
+                    value={productDraftFields.styleNo}
+                    onChange={event => updateProductDraftField('styleNo', event.currentTarget.value)}
+                    className="h-10 min-w-0 rounded-md border border-neutral-300 px-3 text-sm text-neutral-900 outline-none focus:border-neutral-700"
+                  />
+                </label>
+                <label className="grid gap-1 text-xs font-medium text-neutral-700">
+                  {localizeCopy('商品名称', 'Nome prodotto')}
+                  <input
+                    required
+                    maxLength={200}
+                    value={productDraftFields.name}
+                    onChange={event => updateProductDraftField('name', event.currentTarget.value)}
+                    className="h-10 min-w-0 rounded-md border border-neutral-300 px-3 text-sm text-neutral-900 outline-none focus:border-neutral-700"
+                  />
+                </label>
+                <label className="grid gap-1 text-xs font-medium text-neutral-700">
+                  {localizeCopy('服装品类', 'Categoria abbigliamento')}
+                  <select
+                    required
+                    value={productDraftFields.category}
+                    onChange={event => updateProductDraftField('category', event.currentTarget.value)}
+                    className="h-10 min-w-0 rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-900 outline-none focus:border-neutral-700"
+                  >
+                    {PRODUCT_CATEGORIES.filter(item => ['tops', 'shirts', 'tshirts', 'knitwear', 'dresses', 'skirts', 'pants', 'jeans', 'outerwear'].includes(item.value))
+                      .map(item => <option key={item.value} value={item.value}>{isIt ? item.it : item.zh}</option>)}
+                  </select>
+                </label>
+                <label className="grid gap-1 text-xs font-medium text-neutral-700">
+                  {localizeCopy('颜色', 'Colore')}
+                  <input
+                    required
+                    maxLength={80}
+                    value={productDraftFields.color}
+                    onChange={event => updateProductDraftField('color', event.currentTarget.value)}
+                    className="h-10 min-w-0 rounded-md border border-neutral-300 px-3 text-sm text-neutral-900 outline-none focus:border-neutral-700"
+                  />
+                </label>
+                <label className="grid gap-1 text-xs font-medium text-neutral-700">
+                  {localizeCopy('尺码', 'Taglia')}
+                  <input
+                    required
+                    maxLength={40}
+                    value={productDraftFields.size}
+                    onChange={event => updateProductDraftField('size', event.currentTarget.value)}
+                    className="h-10 min-w-0 rounded-md border border-neutral-300 px-3 text-sm text-neutral-900 outline-none focus:border-neutral-700"
+                  />
+                </label>
+                <label className="grid gap-1 text-xs font-medium text-neutral-700">
+                  SKU
+                  <input
+                    required
+                    maxLength={100}
+                    value={productDraftFields.sku}
+                    onChange={event => updateProductDraftField('sku', event.currentTarget.value)}
+                    className="h-10 min-w-0 rounded-md border border-neutral-300 px-3 text-sm text-neutral-900 outline-none focus:border-neutral-700"
+                  />
+                </label>
+              </fieldset>
+              <div className="mt-5 flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setProductDraftTarget(null)}
+                  className="min-h-10 rounded-lg border border-neutral-300 px-4 text-sm font-semibold text-neutral-700 hover:bg-neutral-50"
+                >
+                  {localizeCopy('取消', 'Annulla')}
+                </button>
+                <button
+                  type="submit"
+                  disabled={productDraftBusyId === productDraftTarget.id}
+                  className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-neutral-900 px-4 text-sm font-semibold text-white hover:bg-neutral-800 disabled:bg-neutral-400"
+                >
+                  {productDraftBusyId === productDraftTarget.id && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {productDraftBusyId === productDraftTarget.id
+                    ? localizeCopy('正在保存草稿', 'Salvataggio bozza')
+                    : productDraftLockedId === productDraftTarget.id
+                      ? localizeCopy('使用相同请求重试', 'Riprova stessa richiesta')
+                      : localizeCopy('确认创建草稿', 'Conferma bozza')}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
 
         {settingsOpen && (
           <div className="fixed inset-0 z-[121] flex items-center justify-center bg-neutral-950/30 p-4" role="presentation" onClick={() => setSettingsOpen(false)}>
@@ -1726,7 +2087,8 @@ const capabilityIcons: Record<WorkbenchCapabilityId, React.ComponentType<{ class
   tryon: UserRound,
   recolor: Palette,
   studio: Camera,
-  video: Video
+  video: Video,
+  pattern: Ruler
 };
 
 const resultActionClass = 'inline-flex items-center gap-1 rounded-lg border border-neutral-200 px-2 py-1 text-[10px] font-semibold text-neutral-700 transition hover:border-neutral-400 hover:bg-neutral-50 disabled:opacity-40';
@@ -1764,6 +2126,24 @@ function workbenchErrorCopy(error: unknown, isIt: boolean): string {
   if (entry) return isIt ? entry[1] : entry[0];
   if (error instanceof Error && error.message && !/^[A-Z0-9_]{6,}$/.test(error.message)) return error.message;
   return isIt ? 'Operazione non riuscita, riprova.' : '操作失败，请重试。';
+}
+
+function productDraftErrorCopy(error: unknown, isIt: boolean): string {
+  if (error instanceof ApiError && error.status === 403) {
+    return isIt ? 'Non hai il permesso di creare bozze prodotto. Nessun prodotto è stato creato.' : '当前账号没有创建商品草稿的权限，未创建商品。';
+  }
+  const code = error instanceof ApiError ? error.code : error instanceof Error ? error.message : '';
+  const table: Record<string, [string, string]> = {
+    OBJECT_STORAGE_NOT_CONFIGURED: ['商品图片存储尚未配置，草稿未创建。请联系管理员配置后重试。', 'Archiviazione immagini non configurata: bozza non creata. Contatta l’amministratore.'],
+    PRODUCT_FIELDS_INVALID: ['商品资料不符合当前行业要求，请检查后重试。', 'I dati prodotto non rispettano i requisiti del settore.'],
+    PRODUCT_SKU_INVALID: ['SKU、颜色或尺码无效，请检查后重试。', 'SKU, colore o taglia non validi.'],
+    PRODUCT_MEDIA_INVALID: ['商品图片信息无效，草稿未创建。', 'Dati immagine non validi: bozza non creata.'],
+    PRODUCT_MEDIA_OBJECT_INVALID: ['商品图片未能通过存储校验，草稿未创建。', 'Immagine non verificata: bozza non creata.'],
+    STYLE_NO_ALREADY_EXISTS: ['该款号已存在，请更换款号后重试。', 'Il codice modello esiste già: scegline un altro.'],
+    MODAUI_WORKBENCH_PRODUCT_IMAGE_INVALID: ['生成图片格式或大小不符合商品图片要求，草稿未创建。', 'Formato o dimensione immagine non validi: bozza non creata.']
+  };
+  const entry = code ? table[code] : undefined;
+  return entry ? (isIt ? entry[1] : entry[0]) : workbenchErrorCopy(error, isIt);
 }
 
 function loadImageElement(src: string): Promise<HTMLImageElement> {

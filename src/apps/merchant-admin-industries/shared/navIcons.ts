@@ -1,5 +1,6 @@
 import {
   ArrowLeftRight,
+  BookOpen,
   Boxes,
   ClipboardList,
   LayoutDashboard,
@@ -31,5 +32,7 @@ export const industryModuleIcons: Record<MerchantIndustryModuleKey, typeof Packa
   transfers: ArrowLeftRight,
   team: UsersRound,
   messages: MessageSquare,
-  settings: Settings
+  settings: Settings,
+  restaurant_menu: BookOpen,
+  restaurant_tables: Store
 };

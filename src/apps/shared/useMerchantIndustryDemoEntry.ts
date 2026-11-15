@@ -14,12 +14,12 @@ function clearRequestedDemoCode(): void {
 
 export function useMerchantIndustryDemoEntry(booted: boolean, enabled = true) {
   const { authRole, authMerchantId, loginAsMerchantDemo } = useB2B();
-  const [loading, setLoading] = useState(() => Boolean(getMerchantIndustryDemoAccountByCode(requestedDemoCode())));
+  const [loading, setLoading] = useState(() => import.meta.env.DEV && Boolean(getMerchantIndustryDemoAccountByCode(requestedDemoCode())));
   const [failed, setFailed] = useState(false);
   const attemptedCode = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!enabled) {
+    if (!import.meta.env.DEV || !enabled) {
       setLoading(false);
       return;
     }

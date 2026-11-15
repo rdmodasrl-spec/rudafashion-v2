@@ -7,6 +7,7 @@ import {
   normalizeMerchantOnboardingStatus,
   resolveMerchantOnboardingReviewStatus
 } from '../src/server/merchantOnboarding';
+import { resolveMerchantRegistrationProfile, resolveMerchantRegistrationTemplate } from '../src/server/merchantIndustryTemplates';
 import { merchantIndustryTemplates, openMerchantIndustryTemplates } from '../src/constants/merchantIndustryTemplates';
 
 const root = process.cwd();
@@ -17,6 +18,15 @@ const migrationSource = readFileSync(
   'utf8'
 );
 const moduleSpec = readFileSync(path.join(root, 'docs', 'engineering', 'modules', 'identity-merchant-onboarding.md'), 'utf8');
+const registrationPortalSource = readFileSync(
+  path.join(root, 'src', 'apps', 'shared', 'components', 'auth', 'RegistrationPortal.tsx'),
+  'utf8'
+);
+const b2bContextSource = readFileSync(path.join(root, 'src', 'context', 'B2BContext.tsx'), 'utf8');
+const registrationEntrySource = readFileSync(
+  path.join(root, 'src', 'apps', 'shared', 'components', 'auth', 'RegistrationEntry.tsx'),
+  'utf8'
+);
 
 function routeSegment(startNeedle: string, endNeedle: string): string {
   const start = serverSource.indexOf(startNeedle);
@@ -26,12 +36,55 @@ function routeSegment(startNeedle: string, endNeedle: string): string {
   return serverSource.slice(start, end);
 }
 
-test('all seven merchant industry templates are open and map to unique workspaces', () => {
-  assert.equal(openMerchantIndustryTemplates.length, 7);
-  assert.equal(new Set(merchantIndustryTemplates.map(template => template.id)).size, 7);
-  assert.equal(new Set(merchantIndustryTemplates.map(template => template.workspaceTemplateId)).size, 7);
+test('eight merchant industry templates map uniquely, including Restaurant', () => {
+  assert.equal(merchantIndustryTemplates.length, 8);
+  assert.equal(openMerchantIndustryTemplates.length, 8);
+  assert.equal(new Set(merchantIndustryTemplates.map(template => template.id)).size, 8);
+  assert.equal(new Set(merchantIndustryTemplates.map(template => template.workspaceTemplateId)).size, 8);
   assert.equal(openMerchantIndustryTemplates[0].id, 'apparel_production_wholesale');
   assert.equal(openMerchantIndustryTemplates[0].workspaceTemplateId, 'merchant_admin_apparel_production_wholesale');
+  const restaurant = merchantIndustryTemplates.find(template => template.id === 'restaurant_ordering');
+  assert.equal(restaurant?.status, 'open');
+  assert.equal(restaurant?.industryCode, 'restaurant');
+  assert.equal(restaurant?.studioCode, 'restaurant_studio');
+  assert.equal(restaurant?.knowledgeNamespace, 'restaurant');
+  assert.deepEqual(restaurant?.categories, ['RESTAURANT', 'CAFE', 'TAKEAWAY', 'BAKERY', 'CATERING', 'OTHER']);
+});
+
+test('public merchant registration resolves Restaurant through the normal self-selected template flow', () => {
+  const result = resolveMerchantRegistrationTemplate({ industryTemplate: 'restaurant_ordering' });
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal(result.source, 'SELF_SELECTED');
+    assert.equal(result.template.merchantIndustry, 'RESTAURANT');
+  }
+});
+
+test('Restaurant registration profile accepts only its operator role and industry categories', () => {
+  const template = merchantIndustryTemplates.find(item => item.id === 'restaurant_ordering');
+  assert.ok(template);
+  const profile = resolveMerchantRegistrationProfile(template, {
+    roles: ['RESTAURANT_OPERATOR', 'RETAILER'],
+    categories: ['RESTAURANT', 'TAKEAWAY', 'WOMENSWEAR']
+  });
+  assert.deepEqual(profile.roles, ['RESTAURANT_OPERATOR']);
+  assert.deepEqual(profile.categories, ['RESTAURANT', 'TAKEAWAY']);
+  const apparel = merchantIndustryTemplates.find(item => item.id === 'apparel_production_wholesale');
+  assert.ok(apparel);
+  assert.deepEqual(resolveMerchantRegistrationProfile(apparel, {
+    roles: ['RESTAURANT_OPERATOR'],
+    categories: ['RESTAURANT']
+  }), { categories: [], roles: [] });
+});
+
+test('web registration shows Restaurant-specific operator role and categories', () => {
+  assert.match(registrationPortalSource, /id: 'RESTAURANT_OPERATOR'.*餐饮经营者/);
+  assert.match(registrationPortalSource, /restaurantCategoryOptions/);
+  assert.match(registrationPortalSource, /visibleRoleOptions = isRestaurant/);
+  assert.match(registrationPortalSource, /const categoryChoices = isRestaurant \? restaurantCategoryOptions : categoryOptions/);
+  assert.match(registrationPortalSource, /visibleCategoryOptions = categoryChoices\.filter/);
+  assert.match(registrationPortalSource, /setRoles\(nextIndustry\.id === 'RETAIL_RESTAURANT' \? \['RESTAURANT_OPERATOR'\] : \[\]\)/);
+  assert.match(registrationEntrySource, /registrationType === 'merchant'/);
 });
 
 test('merchant onboarding status machine keeps applicant state separate from merchant access', () => {
@@ -91,6 +144,22 @@ test('merchant register endpoints provision the selected industry workspace imme
   assert.match(full, /setAuthCookie\(res,\s*'ruda_merchant_jwt'/);
   assert.match(full, /provisionModaGptIndustryTeam/);
   assert.match(quick, /setAuthCookie\(res,\s*'ruda_merchant_jwt'/);
+});
+
+test('Restaurant company registration validates template-specific roles and categories', () => {
+  const registration = routeSegment(
+    "app.post('/api/auth/register/company'",
+    '// 3) Buyer 注册'
+  );
+  assert.match(registration, /industryTemplate\.id === 'restaurant_ordering'[\s\S]{0,80}\['RESTAURANT_OPERATOR'\]/);
+  assert.match(registration, /new Set\(industryTemplate\.categories\)/);
+  assert.match(registration, /roles\.length !== 1/);
+  assert.match(registration, /industryTemplate\.id === 'restaurant_ordering'[\s\S]{0,100}\? 'restaurant'/);
+  assert.match(registration, /businessRoles:\s*\{\s*create:\s*roles\.map/);
+  assert.match(serverSource, /template\.id === 'restaurant_ordering'\s*\?\s*\['RESTAURANT_OPERATOR'\]\s*:\s*\['PRODUCER', 'WHOLESALER'\]/);
+  assert.match(serverSource, /templateResolution\.template\.id === 'restaurant_ordering' \? 'restaurant' : 'brand_supplier'/);
+  assert.match(b2bContextSource, /\/api\/auth\/register\/merchant\/quick'[\s\S]{0,180}industryTemplate:\s*industry/);
+  assert.match(moduleSpec, /`RESTAURANT_OPERATOR`/);
 });
 
 test('admin onboarding review is protected and provisions the apparel merchant workspace', () => {

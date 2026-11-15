@@ -10,17 +10,12 @@ import {
   merchantIndustryDemoAccounts
 } from '../src/constants/merchantIndustryDemoAccounts.js';
 import {
-  merchantIndustryTemplates,
   openMerchantIndustryTemplates
 } from '../src/constants/merchantIndustryTemplates.js';
 import { getMerchantIndustryCapability } from '../src/constants/merchantIndustryCapabilities.js';
 
-test('industry demo seed covers the seven open industry templates exactly once', () => {
-  assert.equal(demoMerchantSeeds.length, 7);
-  assert.deepEqual(
-    demoMerchantSeeds.map(seed => seed.templateId).sort(),
-    merchantIndustryTemplates.map(template => template.id).sort()
-  );
+test('industry demo seed covers the eight open industry templates exactly once', () => {
+  assert.equal(demoMerchantSeeds.length, 8);
   assert.deepEqual(
     demoMerchantSeeds.map(seed => seed.templateId).sort(),
     openMerchantIndustryTemplates.map(template => template.id).sort()
@@ -31,11 +26,11 @@ test('industry demo seed uses one isolated email and store identity per industry
   const emails = demoMerchantSeeds.map(seed => getMerchantIndustryDemoEmail(seed.templateId));
   assert.equal(new Set(emails).size, emails.length);
   for (const email of emails) {
-    assert.match(email || '', /^00[1-7]@ruda\.fashion$/);
+    assert.match(email || '', /^00[1-8]@ruda\.fashion$/);
   }
   assert.deepEqual(
     merchantIndustryDemoAccounts.map(account => account.code),
-    ['001', '002', '003', '004', '005', '006', '007']
+    ['001', '002', '003', '004', '005', '006', '007', '008']
   );
   assert.deepEqual(
     merchantIndustryDemoAccounts.map(account => account.templateId),

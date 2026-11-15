@@ -46,15 +46,20 @@ test('PostgreSQL knowledge lifecycle gates retrieval on review, permissions, ver
     permissions: ['brain.read', 'brain.write'],
     scopes: ['MERCHANT'] as const
   };
-  const reviewer = { ...context, permissions: ['brain.read', 'brain.knowledge.review'] };
-  const authorizedReader = { ...context, permissions: ['brain.read', 'inventory.read'] };
+  const resolvedContext = await service.resolveMerchantAccessContext(context);
+  const reviewer = { ...resolvedContext, permissions: ['brain.read', 'brain.knowledge.review'] };
+  const authorizedReader = { ...resolvedContext, permissions: ['brain.read', 'inventory.read'] };
   const firstToken = `zibraquartz${suffix}`;
   const secondToken = `cobaltvelour${suffix}`;
+  const apparelMemoryToken = `apparelmemory${suffix}`;
+  const tradeMemoryToken = `tradememory${suffix}`;
+  const legacyMemoryToken = `legacymemory${suffix}`;
   const otherTenantId = `other-${tenantId}`;
   const createdDocumentIds: string[] = [];
+  const createdMemoryIds: string[] = [];
 
   try {
-    const first = await service.ingestTextDocument(context, {
+    const first = await service.ingestTextDocument(resolvedContext, {
       sourceType: 'DOCUMENT',
       sourceId,
       title: 'Inventory guide',
@@ -66,23 +71,23 @@ test('PostgreSQL knowledge lifecycle gates retrieval on review, permissions, ver
     assert.equal(first.version, 1);
     assert.equal(first.status, 'ingested');
     assert.deepEqual(
-      (await service.retrieveBrainContext(context, firstToken)).results.map(result => result.sourceRef),
+      (await service.retrieveBrainContext(resolvedContext, firstToken)).results.map(result => result.sourceRef),
       []
     );
     await assert.rejects(
-      service.reviewDocument(context, first.id, 'approve'),
+      service.reviewDocument(resolvedContext, first.id, 'approve'),
       /MODAGPT_BRAIN_KNOWLEDGE_REVIEW_PERMISSION_REQUIRED/
     );
     await service.reviewDocument(reviewer, first.id, 'approve');
     assert.deepEqual(
-      (await service.retrieveBrainContext(context, firstToken)).results.map(result => result.sourceRef),
+      (await service.retrieveBrainContext(resolvedContext, firstToken)).results.map(result => result.sourceRef),
       []
     );
     assert.ok((await service.retrieveBrainContext(authorizedReader, firstToken)).results.some(
       result => result.sourceRef === `DOCUMENT:${sourceId}`
     ));
 
-    const second = await service.ingestTextDocument(context, {
+    const second = await service.ingestTextDocument(resolvedContext, {
       sourceType: 'DOCUMENT',
       sourceId,
       title: 'Updated inventory guide',
@@ -99,10 +104,10 @@ test('PostgreSQL knowledge lifecycle gates retrieval on review, permissions, ver
     });
     assert.equal(previous?.status, 'superseded');
     assert.deepEqual(
-      (await service.retrieveBrainContext(context, firstToken)).results.map(result => result.sourceRef),
+      (await service.retrieveBrainContext(resolvedContext, firstToken)).results.map(result => result.sourceRef),
       []
     );
-    assert.ok((await service.retrieveBrainContext(context, secondToken)).results.some(
+    assert.ok((await service.retrieveBrainContext(resolvedContext, secondToken)).results.some(
       result => result.sourceRef === `DOCUMENT:${sourceId}`
     ));
     const expiredChunks = await prisma.modaGptBrainChunk.updateMany({
@@ -111,19 +116,19 @@ test('PostgreSQL knowledge lifecycle gates retrieval on review, permissions, ver
     });
     assert.equal(expiredChunks.count, 1);
     assert.deepEqual(
-      (await service.retrieveBrainContext(context, secondToken)).results.map(result => result.sourceRef),
+      (await service.retrieveBrainContext(resolvedContext, secondToken)).results.map(result => result.sourceRef),
       []
     );
     await prisma.modaGptBrainChunk.updateMany({
       where: { documentId: second.id, tenantId, merchantId: tenantId },
       data: { expiresAt: null }
     });
-    assert.ok((await service.retrieveBrainContext(context, secondToken)).results.some(
+    assert.ok((await service.retrieveBrainContext(resolvedContext, secondToken)).results.some(
       result => result.sourceRef === `DOCUMENT:${sourceId}`
     ));
 
     const rejectedSourceId = `${sourceId}:rejected`;
-    const rejected = await service.ingestTextDocument(context, {
+    const rejected = await service.ingestTextDocument(resolvedContext, {
       sourceType: 'DOCUMENT',
       sourceId: rejectedSourceId,
       title: 'Rejected guidance',
@@ -132,19 +137,19 @@ test('PostgreSQL knowledge lifecycle gates retrieval on review, permissions, ver
     createdDocumentIds.push(rejected.id);
     await service.reviewDocument(reviewer, rejected.id, 'reject');
     assert.deepEqual(
-      (await service.retrieveBrainContext(context, `rejectedguidance${suffix}`)).results.map(result => result.sourceRef),
+      (await service.retrieveBrainContext(resolvedContext, `rejectedguidance${suffix}`)).results.map(result => result.sourceRef),
       []
     );
 
     const staleSourceId = `${sourceId}:out-of-order`;
-    const stale = await service.ingestTextDocument(context, {
+    const stale = await service.ingestTextDocument(resolvedContext, {
       sourceType: 'DOCUMENT',
       sourceId: staleSourceId,
       title: 'Stale guidance',
       content: `staleguidance${suffix} is an older version.`
     });
     createdDocumentIds.push(stale.id);
-    const latest = await service.ingestTextDocument(context, {
+    const latest = await service.ingestTextDocument(resolvedContext, {
       sourceType: 'DOCUMENT',
       sourceId: staleSourceId,
       title: 'Latest guidance',
@@ -168,6 +173,9 @@ test('PostgreSQL knowledge lifecycle gates retrieval on review, permissions, ver
       data: {
         tenantId: otherTenantId,
         merchantId: otherTenantId,
+        industryId: resolvedContext.industryId,
+        studioId: resolvedContext.studioId,
+        knowledgeNamespace: resolvedContext.knowledgeNamespace,
         sourceType: 'DOCUMENT',
         sourceId: otherTenantSourceId,
         title: 'Other tenant document',
@@ -177,6 +185,9 @@ test('PostgreSQL knowledge lifecycle gates retrieval on review, permissions, ver
           create: [{
             tenantId: otherTenantId,
             merchantId: otherTenantId,
+            industryId: resolvedContext.industryId,
+            studioId: resolvedContext.studioId,
+            knowledgeNamespace: resolvedContext.knowledgeNamespace,
             chunkIndex: 0,
             content: otherTenantToken,
             keywordText: otherTenantToken,
@@ -191,13 +202,83 @@ test('PostgreSQL knowledge lifecycle gates retrieval on review, permissions, ver
     });
     createdDocumentIds.push(otherTenantDocument.id);
     assert.deepEqual(
-      (await service.retrieveBrainContext(context, otherTenantToken)).results.map(result => result.sourceRef),
+      (await service.retrieveBrainContext(resolvedContext, otherTenantToken)).results.map(result => result.sourceRef),
+      []
+    );
+
+    const isolatedToken = `isolatedtrade${suffix}`;
+    const otherStudioDocument = await prisma.modaGptBrainDocument.create({
+      data: {
+        tenantId,
+        merchantId: tenantId,
+        industryId: 'trade_wholesale',
+        studioId: 'trade_studio',
+        knowledgeNamespace: 'trade',
+        sourceType: 'DOCUMENT',
+        sourceId: `${sourceId}:other-studio`,
+        title: 'Other industry document',
+        status: 'published',
+        sourceTrust: 'verified',
+        chunks: {
+          create: [{
+            tenantId,
+            merchantId: tenantId,
+            industryId: 'trade_wholesale',
+            studioId: 'trade_studio',
+            knowledgeNamespace: 'trade',
+            chunkIndex: 0,
+            content: isolatedToken,
+            keywordText: isolatedToken,
+            metadata: '{}',
+            authorization: '{}',
+            source: 'HUMAN_REVIEW',
+            verificationStatus: 'verified'
+          }]
+        }
+      },
+      select: { id: true }
+    });
+    createdDocumentIds.push(otherStudioDocument.id);
+    assert.deepEqual(
+      (await service.retrieveBrainContext(resolvedContext, isolatedToken)).results.map(result => result.sourceRef),
+      []
+    );
+
+    const legacyToken = `legacyunclassified${suffix}`;
+    const legacyDocument = await prisma.modaGptBrainDocument.create({
+      data: {
+        tenantId,
+        merchantId: tenantId,
+        sourceType: 'DOCUMENT',
+        sourceId: `${sourceId}:legacy`,
+        title: 'Unclassified historical document',
+        status: 'published',
+        sourceTrust: 'verified',
+        chunks: {
+          create: [{
+            tenantId,
+            merchantId: tenantId,
+            chunkIndex: 0,
+            content: legacyToken,
+            keywordText: legacyToken,
+            metadata: '{}',
+            authorization: '{}',
+            source: 'HUMAN_REVIEW',
+            verificationStatus: 'verified'
+          }]
+        }
+      },
+      select: { id: true }
+    });
+    createdDocumentIds.push(legacyDocument.id);
+    assert.deepEqual(
+      (await service.retrieveBrainContext(resolvedContext, legacyToken)).results.map(result => result.sourceRef),
       []
     );
 
     await service.invalidateDocument(reviewer, second.id);
     assert.deepEqual(
-      (await service.retrieveBrainContext(context, secondToken)).results.map(result => result.sourceRef),
+      (await service.retrieveBrainContext(resolvedContext, secondToken)).results.map(result => result.sourceRef),
       []
     );
     const auditActions = await prisma.employeeAuditLog.findMany({
@@ -208,7 +289,49 @@ test('PostgreSQL knowledge lifecycle gates retrieval on review, permissions, ver
     assert.ok(auditActions.some(record => record.action === 'MODAGPT_BRAIN_DOCUMENT_APPROVE'));
     assert.ok(auditActions.some(record => record.action === 'MODAGPT_BRAIN_DOCUMENT_REJECT'));
     assert.ok(auditActions.some(record => record.action === 'MODAGPT_BRAIN_DOCUMENT_INVALIDATED'));
+
+    const apparelMemory = await service.createMemoryCandidate(resolvedContext, {
+      category: 'operating_rule',
+      scope: 'MERCHANT',
+      content: apparelMemoryToken
+    });
+    createdMemoryIds.push(apparelMemory.id);
+    assert.ok((await service.retrieveBrainContext(resolvedContext, apparelMemoryToken)).results
+      .some(result => result.id === apparelMemory.id));
+
+    const tradeMemory = await prisma.merchantAiEmployeeMemory.create({
+      data: {
+        tenantId,
+        merchantId: tenantId,
+        industryId: 'trade_wholesale',
+        studioId: 'trade_studio',
+        knowledgeNamespace: 'trade',
+        category: 'preference',
+        content: tradeMemoryToken
+      },
+      select: { id: true }
+    });
+    createdMemoryIds.push(tradeMemory.id);
+    const legacyMemory = await prisma.merchantAiEmployeeMemory.create({
+      data: {
+        tenantId,
+        merchantId: tenantId,
+        category: 'preference',
+        content: legacyMemoryToken
+      },
+      select: { id: true }
+    });
+    createdMemoryIds.push(legacyMemory.id);
+    const apparelResultsForTradeToken = (await service.retrieveBrainContext(resolvedContext, tradeMemoryToken))
+      .results.map(result => result.id);
+    const apparelResultsForLegacyToken = (await service.retrieveBrainContext(resolvedContext, legacyMemoryToken))
+      .results.map(result => result.id);
+    assert.equal(apparelResultsForTradeToken.includes(tradeMemory.id), false);
+    assert.equal(apparelResultsForLegacyToken.includes(legacyMemory.id), false);
   } finally {
+    await prisma.merchantAiEmployeeMemory.deleteMany({
+      where: { id: { in: createdMemoryIds }, merchantId: tenantId }
+    });
     await prisma.employeeAuditLog.deleteMany({
       where: { entityType: 'ModaGptBrainDocument', entityId: { in: createdDocumentIds } }
     });

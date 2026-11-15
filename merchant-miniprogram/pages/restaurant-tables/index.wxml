@@ -1,0 +1,68 @@
+<view class="screen restaurant-tables-screen">
+  <view class="restaurant-tables-heading">
+    <view>
+      <text class="page-title">桌台管理</text>
+      <text class="page-note">维护门店桌号与座位数；这里不会创建订单或收款。</text>
+    </view>
+    <button class="secondary-button refresh-button" loading="{{loading}}" bindtap="retry">刷新</button>
+  </view>
+
+  <view wx:if="{{error}}" class="error-box" role="alert">{{error}}</view>
+  <view wx:if="{{notice}}" class="notice-box" role="status">{{notice}}</view>
+  <view wx:if="{{loading}}" class="empty-state" role="status">正在读取桌台…</view>
+
+  <view wx:if="{{!loading && stores.length}}" class="store-picker">
+    <text class="field-label">当前门店</text>
+    <picker range="{{stores}}" range-key="name" value="{{storeIndex}}" bindchange="onStoreChange">
+      <view class="picker-input">{{stores[storeIndex].name}}{{stores[storeIndex].city ? ' · ' + stores[storeIndex].city : ''}}</view>
+    </picker>
+  </view>
+
+  <view wx:if="{{!loading && !stores.length}}" class="empty-state">
+    请先创建并启用门店，再管理桌台。
+  </view>
+
+  <view wx:if="{{storeId && !canManageTables}}" class="notice-box">
+    当前账号可查看桌台；新增和修改需要员工管理权限。
+  </view>
+
+  <view wx:if="{{canManageTables && storeId}}" class="table-actions">
+    <button class="primary-button" bindtap="toggleForm">{{showForm ? '取消新增' : '新增桌台'}}</button>
+  </view>
+
+  <view wx:if="{{showForm && canManageTables}}" class="ruda-card table-form">
+    <text class="section-title">新建桌台</text>
+    <input class="input" value="{{code}}" placeholder="桌号，例如 A01" maxlength="32" data-field="code" bindinput="onInput" />
+    <input class="input" value="{{name}}" placeholder="显示名称" maxlength="80" data-field="name" bindinput="onInput" />
+    <input class="input" type="number" value="{{capacity}}" placeholder="座位数（1–40）" data-field="capacity" bindinput="onInput" />
+    <input class="input" value="{{area}}" placeholder="区域（选填，例如一层）" maxlength="80" data-field="area" bindinput="onInput" />
+    <button class="primary-button form-button" loading="{{busy}}" disabled="{{busy || !code || !name}}" bindtap="createTable">保存桌台</button>
+  </view>
+
+  <view wx:if="{{!loading && storeId && !tables.length}}" class="empty-state">
+    当前门店还没有桌台。
+  </view>
+
+  <view wx:for="{{tables}}" wx:key="id" class="table-row">
+    <view wx:if="{{editingTableId !== item.id}}" class="table-row-main">
+      <view class="table-copy">
+        <text class="item-title">{{item.code}} · {{item.name}}</text>
+        <text class="item-meta">{{item.capacity}} 个座位{{item.area ? ' · ' + item.area : ''}} · {{item.status === 'active' ? '启用' : '停用'}}</text>
+      </view>
+      <view wx:if="{{canManageTables}}" class="table-row-actions">
+        <button class="secondary-button" disabled="{{busyTableId === item.id}}" data-id="{{item.id}}" bindtap="beginEdit">编辑</button>
+        <button class="secondary-button" disabled="{{busyTableId === item.id}}" data-id="{{item.id}}" bindtap="toggleStatus">{{item.status === 'active' ? '停用' : '启用'}}</button>
+      </view>
+    </view>
+    <view wx:else class="table-edit-form">
+      <text class="section-title">{{item.code}} · 编辑桌台</text>
+      <input class="input" value="{{editName}}" placeholder="显示名称" maxlength="80" data-field="editName" bindinput="onEditInput" />
+      <input class="input" type="number" value="{{editCapacity}}" placeholder="座位数（1–40）" data-field="editCapacity" bindinput="onEditInput" />
+      <input class="input" value="{{editArea}}" placeholder="区域（选填）" maxlength="80" data-field="editArea" bindinput="onEditInput" />
+      <view class="table-row-actions">
+        <button class="secondary-button" bindtap="cancelEdit">取消</button>
+        <button class="primary-button" loading="{{busyTableId === item.id}}" disabled="{{busyTableId === item.id}}" bindtap="saveEdit">保存</button>
+      </view>
+    </view>
+  </view>
+</view>

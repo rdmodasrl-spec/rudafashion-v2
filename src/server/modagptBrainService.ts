@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { Prisma, PrismaClient } from '@prisma/client';
+import { getMerchantIndustryTemplate } from '../constants/merchantIndustryTemplates';
 import {
   evaluateModaGptLessonPromotion,
   isModaGptBrainCandidateEligible,
@@ -8,6 +9,7 @@ import {
   rankModaGptBrainCandidates,
   validateModaGptBrainAccessContext,
   type ModaGptBrainAccessContext,
+  type ModaGptBrainAccessInput,
   type ModaGptBrainCandidate,
   type ModaGptBrainRecordKind,
   type ModaGptBrainRankedCandidate,
@@ -20,6 +22,18 @@ const MAX_KNOWLEDGE_DOCUMENT_BYTES = 512 * 1024;
 const MAX_KNOWLEDGE_CHUNK_CHARACTERS = 4_000;
 
 type JsonRecord = Record<string, unknown>;
+
+function namespaceWhere(context: ModaGptBrainAccessContext) {
+  return {
+    industryId: context.industryId,
+    studioId: context.studioId,
+    knowledgeNamespace: context.knowledgeNamespace
+  };
+}
+
+function namespaceData(context: ModaGptBrainAccessContext) {
+  return namespaceWhere(context);
+}
 
 export type ModaGptBrainServiceInputContext = ModaGptBrainAccessContext;
 
@@ -293,6 +307,34 @@ function assertMerchantWriteContext(context: ModaGptBrainAccessContext): void {
 export class ModaGptBrainService {
   constructor(private readonly prisma: PrismaClient, private readonly now: () => Date = () => new Date()) {}
 
+  async resolveMerchantAccessContext(input: ModaGptBrainAccessInput): Promise<ModaGptBrainAccessContext> {
+    if (input.tenantId !== input.merchantId) {
+      throw new Error('MODAGPT_BRAIN_ACCESS_CONTEXT_INVALID');
+    }
+    const merchant = await this.prisma.merchant.findUnique({
+      where: { id: input.merchantId },
+      select: { id: true, industry: true, industryTemplate: true }
+    });
+    if (!merchant) throw new Error('MODAGPT_MERCHANT_NOT_FOUND');
+    const template = getMerchantIndustryTemplate(merchant.industryTemplate);
+    if (
+      !template
+      || template.status !== 'open'
+      || !template.industryCode
+      || !template.studioCode
+      || !template.knowledgeNamespace
+      || String(merchant.industry || '').trim().toUpperCase() !== template.merchantIndustry
+    ) throw new Error('MODAGPT_BRAIN_INDUSTRY_UNAVAILABLE');
+    const context: ModaGptBrainAccessContext = {
+      ...input,
+      industryId: template.industryCode,
+      studioId: template.studioCode,
+      knowledgeNamespace: template.knowledgeNamespace
+    };
+    validateModaGptBrainAccessContext(context);
+    return context;
+  }
+
   private async recordDocumentAudit(
     transaction: Prisma.TransactionClient,
     context: ModaGptBrainServiceInputContext,
@@ -350,6 +392,7 @@ export class ModaGptBrainService {
         where: {
           tenantId: context.tenantId,
           merchantId: context.merchantId,
+          ...namespaceWhere(context),
           scope: { in: [...scopes] },
           status: { in: ['active', 'persistent'] },
           OR: [{ expiresAt: null }, { expiresAt: { gt: now } }]
@@ -357,7 +400,9 @@ export class ModaGptBrainService {
         orderBy: { updatedAt: 'desc' },
         take: 100,
         select: {
-          id: true, tenantId: true, merchantId: true, scope: true, content: true,
+          id: true, tenantId: true, merchantId: true,
+          industryId: true, studioId: true, knowledgeNamespace: true,
+          scope: true, content: true,
           category: true, memoryType: true, source: true, status: true,
           verificationStatus: true, confidence: true, importance: true,
           accessCount: true, createdAt: true, expiresAt: true, validFrom: true,
@@ -368,8 +413,14 @@ export class ModaGptBrainService {
         where: {
           tenantId: context.tenantId,
           merchantId: context.merchantId,
+          ...namespaceWhere(context),
           verificationStatus: 'verified',
-          document: { tenantId: context.tenantId, merchantId: context.merchantId, status: 'published' },
+          document: {
+            tenantId: context.tenantId,
+            merchantId: context.merchantId,
+            ...namespaceWhere(context),
+            status: 'published'
+          },
           AND: [
             {
               OR: knowledgeTerms.length
@@ -389,6 +440,7 @@ export class ModaGptBrainService {
         where: {
           tenantId: context.tenantId,
           merchantId: context.merchantId,
+          ...namespaceWhere(context),
           status: 'verified',
           verificationStatus: 'verified',
           OR: [{ expiresAt: null }, { expiresAt: { gt: now } }]
@@ -404,6 +456,7 @@ export class ModaGptBrainService {
         where: {
           tenantId: context.tenantId,
           merchantId: context.merchantId,
+          ...namespaceWhere(context),
           status: 'verified',
           success: true,
           OR: [{ expiresAt: null }, { expiresAt: { gt: now } }]
@@ -415,6 +468,7 @@ export class ModaGptBrainService {
         where: {
           tenantId: context.tenantId,
           merchantId: context.merchantId,
+          ...namespaceWhere(context),
           status: 'published',
           OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
           AND: [{ OR: [{ requiresApproval: false }, { reviewedAt: { not: null } }] }]
@@ -429,6 +483,7 @@ export class ModaGptBrainService {
         where: {
           tenantId: context.tenantId,
           merchantId: context.merchantId,
+          ...namespaceWhere(context),
           status: 'verified',
           OR: entityTerms.flatMap(term => [
             { displayName: { contains: term, mode: 'insensitive' as const } },
@@ -445,6 +500,7 @@ export class ModaGptBrainService {
         where: {
           tenantId: context.tenantId,
           merchantId: context.merchantId,
+          ...namespaceWhere(context),
           status: 'verified',
           verificationStatus: 'verified',
           OR: [
@@ -468,6 +524,9 @@ export class ModaGptBrainService {
         id: memory.id,
         tenantId: memory.tenantId,
         merchantId: memory.merchantId,
+        industryId: memory.industryId,
+        studioId: memory.studioId,
+        knowledgeNamespace: memory.knowledgeNamespace,
         kind: 'memory' as const,
         scope: memory.scope as ModaGptBrainScope,
         content: `${memory.category}: ${memory.content}`,
@@ -489,6 +548,9 @@ export class ModaGptBrainService {
         id: chunk.id,
         tenantId: chunk.tenantId,
         merchantId: chunk.merchantId,
+        industryId: chunk.industryId,
+        studioId: chunk.studioId,
+        knowledgeNamespace: chunk.knowledgeNamespace,
         kind: 'knowledge' as const,
         scope: 'MERCHANT' as const,
         content: `${chunk.document.title}\n${chunk.content}`,
@@ -510,6 +572,9 @@ export class ModaGptBrainService {
         id: fact.id,
         tenantId: fact.tenantId,
         merchantId: fact.merchantId,
+        industryId: fact.industryId,
+        studioId: fact.studioId,
+        knowledgeNamespace: fact.knowledgeNamespace,
         kind: 'fact' as const,
         scope: 'MERCHANT' as const,
         content: `${fact.subject?.displayName || ''} ${fact.predicate} ${fact.object?.displayName || fact.value || ''}`.trim(),
@@ -530,6 +595,9 @@ export class ModaGptBrainService {
         id: experience.id,
         tenantId: experience.tenantId,
         merchantId: experience.merchantId,
+        industryId: experience.industryId,
+        studioId: experience.studioId,
+        knowledgeNamespace: experience.knowledgeNamespace,
         kind: 'experience' as const,
         scope: 'AGENT' as const,
         content: `${experience.goal}\n${experience.result}`,
@@ -547,6 +615,9 @@ export class ModaGptBrainService {
         id: lesson.id,
         tenantId: lesson.tenantId,
         merchantId: lesson.merchantId,
+        industryId: lesson.industryId,
+        studioId: lesson.studioId,
+        knowledgeNamespace: lesson.knowledgeNamespace,
         kind: 'lesson' as const,
         scope: 'MERCHANT' as const,
         content: `${lesson.pattern}\n${lesson.condition}\n${lesson.recommendation}`,
@@ -573,17 +644,18 @@ export class ModaGptBrainService {
     const selectedChunkIds = results.filter(item => item.kind === 'knowledge').map(item => item.id);
     const operations = [
       ...selectedMemoryIds.map(id => this.prisma.merchantAiEmployeeMemory.updateMany({
-        where: { id, tenantId: context.tenantId, merchantId: context.merchantId },
+        where: { id, tenantId: context.tenantId, merchantId: context.merchantId, ...namespaceWhere(context) },
         data: { accessCount: { increment: 1 }, lastAccessedAt: now }
       })),
       ...selectedChunkIds.map(id => this.prisma.modaGptBrainChunk.updateMany({
-        where: { id, tenantId: context.tenantId, merchantId: context.merchantId },
+        where: { id, tenantId: context.tenantId, merchantId: context.merchantId, ...namespaceWhere(context) },
         data: { accessCount: { increment: 1 }, lastAccessedAt: now }
       })),
       this.prisma.modaGptBrainRetrievalLog.create({
         data: {
           tenantId: context.tenantId,
           merchantId: context.merchantId,
+          ...namespaceData(context),
           actorId: context.actorId,
           queryHash: createHash('sha256').update(searchQuery).digest('hex'),
           scopes: serializeBounded(scopes),
@@ -620,6 +692,7 @@ export class ModaGptBrainService {
           : null,
         tenantId: context.tenantId,
         merchantId: context.merchantId,
+        ...namespaceData(context),
         taskId: input.taskId ? boundedText(input.taskId, 160, 'MODAGPT_BRAIN_TASK_ID_INVALID') : null,
         agentSlug: boundedText(input.agentSlug, 80, 'MODAGPT_BRAIN_AGENT_INVALID'),
         goal: boundedText(input.goal, 2_000, 'MODAGPT_BRAIN_GOAL_INVALID'),
@@ -649,13 +722,24 @@ export class ModaGptBrainService {
       };
     if (!data.idempotencyKey) return this.prisma.modaGptBrainExperience.create({ data });
     const experience = await this.prisma.modaGptBrainExperience.upsert({
-      where: { idempotencyKey: data.idempotencyKey },
+      where: {
+        tenantId_industryId_studioId_knowledgeNamespace_idempotencyKey: {
+          tenantId: context.tenantId,
+          industryId: context.industryId,
+          studioId: context.studioId,
+          knowledgeNamespace: context.knowledgeNamespace,
+          idempotencyKey: data.idempotencyKey
+        }
+      },
       create: data,
       update: {}
     });
     if (
       experience.tenantId !== data.tenantId
       || experience.merchantId !== data.merchantId
+      || experience.industryId !== data.industryId
+      || experience.studioId !== data.studioId
+      || experience.knowledgeNamespace !== data.knowledgeNamespace
       || experience.taskId !== data.taskId
       || experience.agentSlug !== data.agentSlug
       || experience.goal !== data.goal
@@ -672,7 +756,12 @@ export class ModaGptBrainService {
   ) {
     validateModaGptBrainAccessContext(context);
     const experience = await this.prisma.modaGptBrainExperience.findFirst({
-      where: { id: boundedText(experienceId, 160, 'MODAGPT_BRAIN_EXPERIENCE_ID_INVALID'), tenantId: context.tenantId, merchantId: context.merchantId },
+      where: {
+        id: boundedText(experienceId, 160, 'MODAGPT_BRAIN_EXPERIENCE_ID_INVALID'),
+        tenantId: context.tenantId,
+        merchantId: context.merchantId,
+        ...namespaceWhere(context)
+      },
       select: { id: true }
     });
     if (!experience) throw new Error('MODAGPT_BRAIN_EXPERIENCE_NOT_FOUND');
@@ -685,6 +774,7 @@ export class ModaGptBrainService {
           : null,
         tenantId: context.tenantId,
         merchantId: context.merchantId,
+        ...namespaceData(context),
         experienceId,
         evaluationType: boundedText(input.evaluationType, 32, 'MODAGPT_BRAIN_EVALUATION_TYPE_INVALID'),
         quality: input.quality ?? null,
@@ -704,13 +794,24 @@ export class ModaGptBrainService {
       };
     if (!data.idempotencyKey) return this.prisma.modaGptBrainEvaluation.create({ data });
     const evaluation = await this.prisma.modaGptBrainEvaluation.upsert({
-      where: { idempotencyKey: data.idempotencyKey },
+      where: {
+        tenantId_industryId_studioId_knowledgeNamespace_idempotencyKey: {
+          tenantId: context.tenantId,
+          industryId: context.industryId,
+          studioId: context.studioId,
+          knowledgeNamespace: context.knowledgeNamespace,
+          idempotencyKey: data.idempotencyKey
+        }
+      },
       create: data,
       update: {}
     });
     if (
       evaluation.tenantId !== data.tenantId
       || evaluation.merchantId !== data.merchantId
+      || evaluation.industryId !== data.industryId
+      || evaluation.studioId !== data.studioId
+      || evaluation.knowledgeNamespace !== data.knowledgeNamespace
       || evaluation.experienceId !== data.experienceId
       || evaluation.evaluationType !== data.evaluationType
     ) throw new Error('MODAGPT_BRAIN_EVALUATION_IDEMPOTENCY_CONFLICT');
@@ -721,7 +822,12 @@ export class ModaGptBrainService {
     validateModaGptBrainAccessContext(context);
     if (input.experienceId) {
       const experience = await this.prisma.modaGptBrainExperience.findFirst({
-        where: { id: input.experienceId, tenantId: context.tenantId, merchantId: context.merchantId },
+        where: {
+          id: input.experienceId,
+          tenantId: context.tenantId,
+          merchantId: context.merchantId,
+          ...namespaceWhere(context)
+        },
         select: { id: true }
       });
       if (!experience) throw new Error('MODAGPT_BRAIN_EXPERIENCE_NOT_FOUND');
@@ -732,6 +838,7 @@ export class ModaGptBrainService {
     const data = {
         tenantId: context.tenantId,
         merchantId: context.merchantId,
+        ...namespaceData(context),
         experienceId: input.experienceId ?? null,
         messageId,
         actorId: context.actorId,
@@ -743,13 +850,29 @@ export class ModaGptBrainService {
       };
     if (!messageId) return this.prisma.modaGptBrainFeedback.create({ data });
     const existing = await this.prisma.modaGptBrainFeedback.findUnique({
-      where: { tenantId_messageId: { tenantId: context.tenantId, messageId } }
+      where: {
+        tenantId_industryId_studioId_knowledgeNamespace_messageId: {
+          tenantId: context.tenantId,
+          industryId: context.industryId,
+          studioId: context.studioId,
+          knowledgeNamespace: context.knowledgeNamespace,
+          messageId
+        }
+      }
     });
     if (existing && existing.merchantId !== context.merchantId) {
       throw new Error('MODAGPT_BRAIN_FEEDBACK_TENANT_CONFLICT');
     }
     return this.prisma.modaGptBrainFeedback.upsert({
-      where: { tenantId_messageId: { tenantId: context.tenantId, messageId } },
+      where: {
+        tenantId_industryId_studioId_knowledgeNamespace_messageId: {
+          tenantId: context.tenantId,
+          industryId: context.industryId,
+          studioId: context.studioId,
+          knowledgeNamespace: context.knowledgeNamespace,
+          messageId
+        }
+      },
       create: data,
       update: {
         feedbackType: data.feedbackType,
@@ -793,6 +916,7 @@ export class ModaGptBrainService {
           where: {
             tenantId: context.tenantId,
             merchantId: context.merchantId,
+            ...namespaceWhere(context),
             sourceType,
             sourceId
           },
@@ -804,6 +928,7 @@ export class ModaGptBrainService {
         data: {
           tenantId: context.tenantId,
           merchantId: context.merchantId,
+          ...namespaceData(context),
           sourceType,
           sourceId,
           sourceUrl: input.sourceUrl ? boundedText(input.sourceUrl, 2_000, 'MODAGPT_BRAIN_DOCUMENT_URL_INVALID') : null,
@@ -819,6 +944,7 @@ export class ModaGptBrainService {
             create: chunks.map((content, chunkIndex) => ({
               tenantId: context.tenantId,
               merchantId: context.merchantId,
+              ...namespaceData(context),
               chunkIndex,
               content,
               keywordText: content,
@@ -866,7 +992,13 @@ export class ModaGptBrainService {
       `;
       if (!merchant.length) throw new Error('MODAGPT_MERCHANT_NOT_FOUND');
       const document = await transaction.modaGptBrainDocument.findFirst({
-        where: { id, tenantId: context.tenantId, merchantId: context.merchantId, status: 'ingested' },
+        where: {
+          id,
+          tenantId: context.tenantId,
+          merchantId: context.merchantId,
+          ...namespaceWhere(context),
+          status: 'ingested'
+        },
         select: { id: true, sourceType: true, sourceId: true, version: true }
       });
       if (!document) throw new Error('MODAGPT_BRAIN_DOCUMENT_NOT_REVIEWABLE');
@@ -876,6 +1008,7 @@ export class ModaGptBrainService {
           where: {
             tenantId: context.tenantId,
             merchantId: context.merchantId,
+            ...namespaceWhere(context),
             sourceType: document.sourceType,
             sourceId: document.sourceId,
             version: { gt: document.version }
@@ -887,6 +1020,7 @@ export class ModaGptBrainService {
           where: {
             tenantId: context.tenantId,
             merchantId: context.merchantId,
+            ...namespaceWhere(context),
             sourceType: document.sourceType,
             sourceId: document.sourceId,
             version: { lt: document.version },
@@ -900,6 +1034,7 @@ export class ModaGptBrainService {
           id: document.id,
           tenantId: context.tenantId,
           merchantId: context.merchantId,
+          ...namespaceWhere(context),
           status: 'ingested'
         },
         data: {
@@ -911,7 +1046,7 @@ export class ModaGptBrainService {
       });
       if (updated.count !== 1) throw new Error('MODAGPT_BRAIN_DOCUMENT_NOT_REVIEWABLE');
       await transaction.modaGptBrainChunk.updateMany({
-        where: { documentId: id, tenantId: context.tenantId, merchantId: context.merchantId },
+        where: { documentId: id, tenantId: context.tenantId, merchantId: context.merchantId, ...namespaceWhere(context) },
         data: {
           verificationStatus: decision === 'approve' ? 'verified' : 'rejected',
           source: 'HUMAN_REVIEW',
@@ -941,6 +1076,7 @@ export class ModaGptBrainService {
           id,
           tenantId: context.tenantId,
           merchantId: context.merchantId,
+          ...namespaceWhere(context),
           status: { in: ['ingested', 'published'] }
         },
         data: {
@@ -952,7 +1088,7 @@ export class ModaGptBrainService {
       });
       if (updated.count !== 1) throw new Error('MODAGPT_BRAIN_DOCUMENT_NOT_INVALIDATABLE');
       await transaction.modaGptBrainChunk.updateMany({
-        where: { documentId: id, tenantId: context.tenantId, merchantId: context.merchantId },
+        where: { documentId: id, tenantId: context.tenantId, merchantId: context.merchantId, ...namespaceWhere(context) },
         data: {
           verificationStatus: 'invalidated',
           lastVerifiedAt: null,
@@ -978,8 +1114,11 @@ export class ModaGptBrainService {
     const payload = serializeBounded(input.payload, 64 * 1024);
     const existing = await this.prisma.modaGptBrainEvent.findUnique({
       where: {
-        tenantId_eventType_eventId: {
+        tenantId_industryId_studioId_knowledgeNamespace_eventType_eventId: {
           tenantId: context.tenantId,
+          industryId: context.industryId,
+          studioId: context.studioId,
+          knowledgeNamespace: context.knowledgeNamespace,
           eventType,
           eventId
         }
@@ -995,6 +1134,7 @@ export class ModaGptBrainService {
       data: {
         tenantId: context.tenantId,
         merchantId: context.merchantId,
+        ...namespaceData(context),
         eventType,
         eventId,
         payload,
@@ -1033,6 +1173,7 @@ export class ModaGptBrainService {
       data: {
         tenantId: context.tenantId,
         merchantId: context.merchantId,
+        ...namespaceData(context),
         category,
         scope: input.scope,
         memoryType: category,
@@ -1063,14 +1204,26 @@ export class ModaGptBrainService {
     }
     const confidence = boundedScore(input.confidence, 'MODAGPT_BRAIN_CONFIDENCE_INVALID');
     const contradictionGroupId = createHash('sha256')
-      .update(JSON.stringify([context.tenantId, context.merchantId, subjectType, subjectKey, predicate]))
+      .update(JSON.stringify([
+        context.tenantId,
+        context.merchantId,
+        context.industryId,
+        context.studioId,
+        context.knowledgeNamespace,
+        subjectType,
+        subjectKey,
+        predicate
+      ]))
       .digest('hex');
 
     return this.prisma.$transaction(async transaction => {
       const subject = await transaction.modaGptBrainEntity.upsert({
         where: {
-          tenantId_merchantId_entityType_canonicalKey: {
+          tenantId_industryId_studioId_knowledgeNamespace_merchantId_entityType_canonicalKey: {
             tenantId: context.tenantId,
+            industryId: context.industryId,
+            studioId: context.studioId,
+            knowledgeNamespace: context.knowledgeNamespace,
             merchantId: context.merchantId,
             entityType: subjectType,
             canonicalKey: subjectKey
@@ -1079,6 +1232,7 @@ export class ModaGptBrainService {
         create: {
           tenantId: context.tenantId,
           merchantId: context.merchantId,
+          ...namespaceData(context),
           entityType: subjectType,
           canonicalKey: subjectKey,
           displayName: boundedText(input.subjectName, 240, 'MODAGPT_BRAIN_ENTITY_NAME_INVALID'),
@@ -1091,8 +1245,11 @@ export class ModaGptBrainService {
       const object = input.objectType && input.objectKey && input.objectName
         ? await transaction.modaGptBrainEntity.upsert({
           where: {
-            tenantId_merchantId_entityType_canonicalKey: {
+            tenantId_industryId_studioId_knowledgeNamespace_merchantId_entityType_canonicalKey: {
               tenantId: context.tenantId,
+              industryId: context.industryId,
+              studioId: context.studioId,
+              knowledgeNamespace: context.knowledgeNamespace,
               merchantId: context.merchantId,
               entityType: boundedText(input.objectType, 40, 'MODAGPT_BRAIN_ENTITY_TYPE_INVALID'),
               canonicalKey: boundedText(input.objectKey, 200, 'MODAGPT_BRAIN_ENTITY_KEY_INVALID')
@@ -1101,6 +1258,7 @@ export class ModaGptBrainService {
           create: {
             tenantId: context.tenantId,
             merchantId: context.merchantId,
+            ...namespaceData(context),
             entityType: boundedText(input.objectType, 40, 'MODAGPT_BRAIN_ENTITY_TYPE_INVALID'),
             canonicalKey: boundedText(input.objectKey, 200, 'MODAGPT_BRAIN_ENTITY_KEY_INVALID'),
             displayName: boundedText(input.objectName, 240, 'MODAGPT_BRAIN_ENTITY_NAME_INVALID'),
@@ -1115,6 +1273,7 @@ export class ModaGptBrainService {
         where: {
           tenantId: context.tenantId,
           merchantId: context.merchantId,
+          ...namespaceWhere(context),
           subjectEntityId: subject.id,
           predicate,
           status: 'verified'
@@ -1140,6 +1299,7 @@ export class ModaGptBrainService {
           where: {
             tenantId: context.tenantId,
             merchantId: context.merchantId,
+            ...namespaceWhere(context),
             subjectEntityId: subject.id,
             predicate,
             status: 'verified'
@@ -1151,6 +1311,7 @@ export class ModaGptBrainService {
         data: {
           tenantId: context.tenantId,
           merchantId: context.merchantId,
+          ...namespaceWhere(context),
           subjectEntityId: subject.id,
           predicate,
           objectEntityId: object?.id || null,
@@ -1186,6 +1347,7 @@ export class ModaGptBrainService {
         id: { in: evidenceExperienceIds },
         tenantId: context.tenantId,
         merchantId: context.merchantId,
+        ...namespaceWhere(context),
         status: 'verified',
         success: { not: null }
       },
@@ -1213,6 +1375,7 @@ export class ModaGptBrainService {
         data: {
           tenantId: context.tenantId,
           merchantId: context.merchantId,
+          ...namespaceData(context),
           lessonType: boundedText(input.lessonType, 40, 'MODAGPT_BRAIN_LESSON_TYPE_INVALID'),
           pattern: boundedText(input.pattern, 2_000, 'MODAGPT_BRAIN_LESSON_INVALID'),
           condition: boundedText(input.condition, 2_000, 'MODAGPT_BRAIN_LESSON_INVALID'),
@@ -1247,7 +1410,12 @@ export class ModaGptBrainService {
         || error.code !== 'P2002'
       ) throw error;
       const existing = await this.prisma.modaGptBrainLesson.findFirst({
-        where: { tenantId: context.tenantId, merchantId: context.merchantId, sourceRef }
+        where: {
+          tenantId: context.tenantId,
+          merchantId: context.merchantId,
+          ...namespaceWhere(context),
+          sourceRef
+        }
       });
       if (!existing) throw error;
       return { lesson: existing, decision };
@@ -1268,6 +1436,7 @@ export class ModaGptBrainService {
         id: boundedText(lessonId, 160, 'MODAGPT_BRAIN_LESSON_ID_INVALID'),
         tenantId: context.tenantId,
         merchantId: context.merchantId,
+        ...namespaceWhere(context),
         status: 'pending_review',
         requiresApproval: true
       },
@@ -1298,6 +1467,7 @@ export class ModaGptBrainService {
           id,
           tenantId: context.tenantId,
           merchantId: context.merchantId,
+          ...namespaceWhere(context),
           status: 'conflicted',
           contradictionGroupId: { not: null }
         },
@@ -1309,6 +1479,7 @@ export class ModaGptBrainService {
         where: {
           tenantId: context.tenantId,
           merchantId: context.merchantId,
+          ...namespaceWhere(context),
           contradictionGroupId: fact.contradictionGroupId,
           status: 'conflicted'
         },
@@ -1322,7 +1493,12 @@ export class ModaGptBrainService {
       });
       if (decision === 'keep') {
         const kept = await transaction.modaGptBrainFact.updateMany({
-          where: { id: fact.id, tenantId: context.tenantId, merchantId: context.merchantId },
+          where: {
+            id: fact.id,
+            tenantId: context.tenantId,
+            merchantId: context.merchantId,
+            ...namespaceWhere(context)
+          },
           data: {
             status: 'verified',
             verificationStatus: 'verified',

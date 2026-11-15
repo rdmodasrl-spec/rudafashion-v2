@@ -148,5 +148,8 @@ BASE_URL="$base_url" \
   E2E_VIEWER_EMAIL="$viewer_email" \
   E2E_SECOND_MERCHANT_EMAIL="$second_email" \
   E2E_MERCHANT_PASSWORD="$merchant_password" \
+  E2E_ADMIN_JWT_SECRET="mp-e2e-admin-secret-0123456789abcdef" \
+  E2E_TEST_DATABASE_URL="$database_url" \
+  E2E_COMPANY_JWT_SECRET="mp-e2e-buyer-secret-0123456789abcdef" \
   node scripts/verify-merchant-miniprogram.mjs
 echo "Merchant miniprogram integration check passed."

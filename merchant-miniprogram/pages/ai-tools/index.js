@@ -105,6 +105,10 @@ Page({
     await this.load();
   },
 
+  openAdPlanner() {
+    wx.navigateTo({ url: '/pages/ad-planner/index' });
+  },
+
   async load() {
     this.setData({ loading: true, error: '' });
     try {

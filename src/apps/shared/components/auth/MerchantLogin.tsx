@@ -39,6 +39,7 @@ export const MerchantLogin: React.FC<MerchantLoginProps> = ({ initialMode = 'log
   const hostname = window.location.hostname.toLowerCase();
   const isB2BPortal = hostname === PORTAL_DOMAINS.merchant || hostname === PORTAL_DOMAINS.ai;
   const showMerchantCenterTitle = merchantCenter || isB2BPortal;
+  const showIndustryDemoLogin = import.meta.env.DEV;
   const openRegistration = () => {
     setErr('');
     setNotice('');
@@ -301,29 +302,31 @@ export const MerchantLogin: React.FC<MerchantLoginProps> = ({ initialMode = 'log
                 <button type="button" onClick={openRegistration} className="w-full text-xs font-semibold text-neutral-600 hover:text-black">
                   {t('authMerchantNewAccount')}
                 </button>
-                <section aria-labelledby="merchant-demo-heading" className="border-t border-neutral-200 pt-4">
-                  <h2 id="merchant-demo-heading" className="text-sm font-semibold text-neutral-900">
-                    RUDA 七行业闭环演示
-                  </h2>
-                  <p className="mt-1 text-xs leading-5 text-neutral-600">
-                    独立演示商家与测试数据，不影响正式商家。
-                  </p>
-                  <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {merchantIndustryTemplates.filter(template => template.status === 'open').map(template => (
-                      <button
-                        key={template.id}
-                        type="button"
-                        disabled={loading || Boolean(demoLoginIndustry)}
-                        onClick={() => void handleDemoLogin(template.id)}
-                        className="min-h-10 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-left text-xs font-medium text-neutral-800 transition hover:border-neutral-700 hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {demoLoginIndustry === template.id
-                          ? localizeCopy(`正在进入${template.zh}…`, `Accesso a ${template.it}…`)
-                          : localizeCopy(template.zh, template.it)}
-                      </button>
-                    ))}
-                  </div>
-                </section>
+                {showIndustryDemoLogin && (
+                  <section aria-labelledby="merchant-demo-heading" className="border-t border-neutral-200 pt-4">
+                    <h2 id="merchant-demo-heading" className="text-sm font-semibold text-neutral-900">
+                      本地行业后台演示
+                    </h2>
+                    <p className="mt-1 text-xs leading-5 text-neutral-600">
+                      仅供本地开发与隔离测试环境使用；正式环境请使用商家账号登录。
+                    </p>
+                    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {merchantIndustryTemplates.filter(template => template.status === 'open').map(template => (
+                        <button
+                          key={template.id}
+                          type="button"
+                          disabled={loading || Boolean(demoLoginIndustry)}
+                          onClick={() => void handleDemoLogin(template.id)}
+                          className="min-h-10 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-left text-xs font-medium text-neutral-800 transition hover:border-neutral-700 hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {demoLoginIndustry === template.id
+                            ? localizeCopy(`正在进入${template.zh}…`, `Accesso a ${template.it}…`)
+                            : localizeCopy(template.zh, template.it)}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )}
               </>
             )}
             {mode === 'forgot-password' && (

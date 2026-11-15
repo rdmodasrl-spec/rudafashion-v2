@@ -88,6 +88,7 @@ function extractApiPaths(line: string): string[] {
 const CALL_SITE = /\b(?:apiGet|apiPost|apiPut|apiPatch|apiDelete|apiRequest)\s*(?:<[^>]*>)?\(|\brequest\s*\(|\bfetch\s*\(/;
 
 function serverRoutes(): string[] {
+  const serverSource = readFileSync(path.join(root, 'server.ts'), 'utf8');
   const files = [
     path.join(root, 'server.ts'),
     ...readdirSync(path.join(root, 'src/server'))
@@ -98,6 +99,23 @@ function serverRoutes(): string[] {
   for (const file of files) {
     for (const match of readFileSync(file, 'utf8').matchAll(/['"`](\/api\/[^'"`\s]*)['"`]/g)) {
       routes.add(normalizeApiPath(match[1]));
+    }
+  }
+  const routerRoutes = new Map<string, string[]>();
+  for (const routerMatch of serverSource.matchAll(/const\s+([A-Za-z_$][\w$]*)\s*=\s*express\.Router\(\)\s*;/g)) {
+    const routerName = routerMatch[1];
+    const children = [...serverSource.matchAll(
+      new RegExp(`\\b${routerName}\\.(?:get|post|put|patch|delete)\\(\\s*['"\`]([^'"\`]+)['"\`]`, 'g')
+    )].map(match => match[1]);
+    routerRoutes.set(routerName, children);
+  }
+  for (const [routerName, children] of routerRoutes) {
+    for (const mount of serverSource.matchAll(
+      new RegExp(`app\\.use\\(\\s*['"\`](\\/api\\/[^'"\`]+)['"\`]\\s*,\\s*${routerName}\\s*\\)`, 'g')
+    )) {
+      for (const child of children) {
+        routes.add(normalizeApiPath(`${mount[1]}${child === '/' ? '' : child}`));
+      }
     }
   }
   return [...routes];

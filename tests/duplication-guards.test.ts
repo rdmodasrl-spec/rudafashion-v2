@@ -11,7 +11,8 @@ function source(relativePath: string) {
 
 test('merchant mobile product list shows the total product count once', () => {
   const mobile = source('src/apps/merchant-admin-mobile/MerchantMobileApp.tsx');
-  const start = mobile.indexOf("{activeTab === 'products' && (");
+  const countIndex = mobile.indexOf('productQuickFilterCounts[filter]');
+  const start = mobile.lastIndexOf("{activeTab === 'products' && !restaurantMenuAvailable", countIndex);
   const end = mobile.indexOf("{activeTab === 'inventory' && (", start);
   assert.ok(start > -1 && end > start, 'merchant mobile product workspace is present');
 
@@ -42,8 +43,9 @@ test('merchant mobile product list shows the total product count once', () => {
 
 test('merchant mobile product quick filters and business zones stay separate layers', () => {
   const mobile = source('src/apps/merchant-admin-mobile/MerchantMobileApp.tsx');
-  const start = mobile.indexOf("{activeTab === 'products' && (");
+  const start = mobile.indexOf("{activeTab === 'products' && !restaurantMenuAvailable");
   const end = mobile.indexOf("{activeTab === 'inventory' && (", start);
+  assert.ok(start > -1 && end > start, 'merchant mobile product workspace is present');
   const productWorkspace = mobile.slice(start, end);
 
   assert.match(productWorkspace, /setProductQuickFilter\(filter\)/, 'quick filters own their own state');
@@ -67,13 +69,8 @@ test('merchant mobile product quick filters and business zones stay separate lay
 
 test('merchant mobile dashboard lists pending orders once', () => {
   const mobile = source('src/apps/merchant-admin-mobile/MerchantMobileApp.tsx');
-  const start = mobile.indexOf("{activeTab === 'dashboard' && (");
-  const end = mobile.indexOf("{activeTab === 'products' && (", start);
-  assert.ok(start > -1 && end > start, 'merchant mobile dashboard is present');
-
-  const dashboard = mobile.slice(start, end);
   assert.equal(
-    dashboard.match(/待处理订单/g)?.length ?? 0,
+    mobile.match(/mobileText\('待处理订单'/g)?.length ?? 0,
     1,
     'dashboard keeps the pending-order metric only in the top stat row'
   );

@@ -1,5 +1,10 @@
+import { randomUUID } from 'node:crypto';
+import jwt from 'jsonwebtoken';
+import { PrismaClient } from '@prisma/client';
+import { chromium } from 'playwright';
+
 /**
- * 商家小程序 7 条断链的真实 HTTP 校验（配合 scripts/test-merchant-miniprogram-isolated.sh）。
+ * 商家小程序 API 与正式行业注册的真实 HTTP/数据库校验（配合隔离 PostgreSQL 脚本）。
  * 只用公开接口 + 真实数据库，不使用 stub。
  */
 const baseUrl = process.env.BASE_URL;
@@ -31,6 +36,341 @@ const request = async (path, { method = 'GET', token, body } = {}) => {
   try { payload = await response.json(); } catch { payload = null; }
   return { status: response.status, payload };
 };
+
+const industryOptions = await request('/api/merchant/industry-options');
+const formalIndustries = Array.isArray(industryOptions.payload?.industries)
+  ? industryOptions.payload.industries
+  : [];
+const formalIndustryIds = formalIndustries.map(industry => industry.id);
+check(
+  'formal industry options are publicly readable and registry-backed',
+  industryOptions.status === 200
+    && formalIndustryIds.includes('WHOLESALE_APPAREL')
+    && formalIndustryIds.includes('WHOLESALE_COMPREHENSIVE')
+    && formalIndustryIds.includes('RETAIL_RESTAURANT')
+    && !formalIndustryIds.includes('RETAIL_BEAUTY_HAIR')
+    && formalIndustries.every(industry =>
+      typeof industry.label === 'string'
+      && ['WHOLESALE', 'RETAIL'].includes(industry.businessModel)
+      && Array.isArray(industry.capabilityIds)
+      && Array.isArray(industry.categories)),
+  industryOptions
+);
+const apparelIndustry = formalIndustries.find(industry => industry.id === 'WHOLESALE_APPAREL');
+check(
+  'apparel registration exposes optional own-production capability',
+  apparelIndustry?.capabilityIds.includes('APPAREL_OWN_PRODUCTION') === true,
+  apparelIndustry
+);
+
+const formalRegistrationCases = [
+  { formalIndustryId: 'WHOLESALE_APPAREL', capabilityIds: [], role: 'WHOLESALER', category: 'WOMENSWEAR', template: 'apparel_wholesale' },
+  { formalIndustryId: 'WHOLESALE_APPAREL', capabilityIds: ['APPAREL_OWN_PRODUCTION'], role: 'PRODUCER', category: 'WOMENSWEAR', template: 'apparel_production_wholesale' },
+  { formalIndustryId: 'WHOLESALE_LEATHER_GOODS', capabilityIds: [], role: 'WHOLESALER', category: 'LEATHER_GOODS', template: 'bags_wholesale' },
+  { formalIndustryId: 'WHOLESALE_LEATHER_GOODS', capabilityIds: ['LEATHER_OWN_PRODUCTION'], role: 'PRODUCER', category: 'LEATHER_GOODS', template: 'bags_wholesale' },
+  { formalIndustryId: 'WHOLESALE_GENERAL_MERCHANDISE', capabilityIds: [], role: 'WHOLESALER', category: 'OTHER', template: 'department_wholesale' },
+  { formalIndustryId: 'WHOLESALE_COMPREHENSIVE', capabilityIds: [], role: 'WHOLESALER', category: 'OTHER', template: 'department_wholesale' },
+  { formalIndustryId: 'RETAIL_GENERAL_MERCHANDISE', capabilityIds: [], role: 'RETAILER', category: 'OTHER', template: 'department_chain_retail' },
+  { formalIndustryId: 'RETAIL_ECOMMERCE', capabilityIds: [], role: 'RETAILER', category: 'OTHER', template: 'general_retail' },
+  { formalIndustryId: 'RETAIL_RESTAURANT', capabilityIds: [], role: 'RESTAURANT_OPERATOR', category: 'RESTAURANT', template: 'restaurant_ordering' }
+];
+const registrationSecret = process.env.E2E_COMPANY_JWT_SECRET;
+const testDatabaseUrl = process.env.E2E_TEST_DATABASE_URL;
+const adminSecret = process.env.E2E_ADMIN_JWT_SECRET;
+if (!registrationSecret || !testDatabaseUrl || !adminSecret) throw new Error('ISOLATED_REGISTRATION_TEST_CONFIGURATION_REQUIRED');
+const prisma = new PrismaClient({ datasources: { db: { url: testDatabaseUrl } } });
+try {
+  let apparelMerchant = null;
+  for (const registrationCase of formalRegistrationCases) {
+    const email = `formal-${randomUUID()}@example.test`;
+    const password = `Ruda-${randomUUID()}-Aa1!`;
+    const businessName = `Test ${registrationCase.formalIndustryId.slice(-8)} ${randomUUID().slice(0, 6)}`;
+    const verificationToken = jwt.sign(
+      { destination: email, channel: 'email', purpose: 'company_registration' },
+      registrationSecret,
+      { expiresIn: '5m' }
+    );
+    const result = await request('/api/auth/register/company', {
+      method: 'POST',
+      body: {
+        email,
+        password,
+        displayName: businessName,
+        legalName: `${businessName} Ltd`,
+        country: 'Italy',
+        city: 'Prato',
+        acceptedTerms: true,
+        acceptedPrivacy: true,
+        roles: [registrationCase.role],
+        categories: [registrationCase.category],
+        formalIndustryId: registrationCase.formalIndustryId,
+        capabilityIds: registrationCase.capabilityIds,
+        verificationToken
+      }
+    });
+    check(
+      `formal registration provisions ${registrationCase.formalIndustryId}${registrationCase.capabilityIds.length ? ' with capability' : ''}`,
+      result.status === 201
+        && result.payload?.formalIndustryId === registrationCase.formalIndustryId
+        && result.payload?.merchantLoginAvailable === true,
+      result
+    );
+    if (result.status !== 201 || typeof result.payload?.merchantId !== 'string') continue;
+    if (registrationCase.formalIndustryId === 'WHOLESALE_APPAREL' && registrationCase.capabilityIds.length === 0) {
+      apparelMerchant = { id: result.payload.merchantId, email, password, name: businessName };
+    }
+
+    const merchant = await prisma.merchant.findUnique({
+      where: { id: result.payload.merchantId },
+      select: {
+        formalIndustryId: true,
+        industryTemplate: true,
+        studioEntitlements: {
+          select: { formalIndustryId: true, industryTemplate: true, status: true, capabilities: true }
+        }
+      }
+    });
+    const entitlement = merchant?.studioEntitlements[0];
+    check(
+      `formal registration persists merchant and entitlement for ${registrationCase.formalIndustryId}`,
+      merchant?.formalIndustryId === registrationCase.formalIndustryId
+        && merchant.industryTemplate === registrationCase.template
+        && entitlement?.formalIndustryId === registrationCase.formalIndustryId
+        && entitlement.industryTemplate === registrationCase.template
+        && entitlement.status === 'active'
+        && registrationCase.capabilityIds.every(capability => entitlement.capabilities?.[capability] === true),
+      { merchant, registrationCase }
+    );
+  }
+
+  const rejectedEmail = `formal-invalid-${randomUUID()}@example.test`;
+  const rejected = await request('/api/auth/register/company', {
+    method: 'POST',
+    body: {
+      email: rejectedEmail,
+      password: `Ruda-${randomUUID()}-Aa1!`,
+      displayName: 'Invalid capability test',
+      legalName: 'Invalid capability test Ltd',
+      country: 'Italy',
+      city: 'Prato',
+      acceptedTerms: true,
+      acceptedPrivacy: true,
+      roles: ['WHOLESALER'],
+      categories: ['OTHER'],
+      formalIndustryId: 'WHOLESALE_COMPREHENSIVE',
+      capabilityIds: ['APPAREL_OWN_PRODUCTION'],
+      verificationToken: jwt.sign(
+        { destination: rejectedEmail, channel: 'email', purpose: 'company_registration' },
+        registrationSecret,
+        { expiresIn: '5m' }
+      )
+    }
+  });
+  const rejectedAccount = await prisma.authAccount.findFirst({ where: { email: rejectedEmail, role: 'company' } });
+  check(
+    'invalid industry capability is rejected without partial registration writes',
+    rejected.status === 400
+      && rejected.payload?.error === 'INVALID_INDUSTRY_CAPABILITY'
+      && rejectedAccount === null,
+    rejected
+  );
+
+  if (!apparelMerchant) throw new Error('APPAREL_MERCHANT_FIXTURE_UNAVAILABLE');
+  const adminToken = jwt.sign({
+    id: 'studio-entitlement-admin',
+    username: 'studio-entitlement-admin',
+    role: 'admin',
+    permissions: ['merchants.review', 'finance.payouts', 'settings.health']
+  }, adminSecret, { expiresIn: '10m' });
+  const restrictedAdminToken = jwt.sign({
+    id: 'studio-entitlement-restricted-admin',
+    username: 'studio-entitlement-restricted-admin',
+    role: 'admin',
+    permissions: []
+  }, adminSecret, { expiresIn: '10m' });
+
+  await prisma.merchantStudioEntitlement.deleteMany({ where: { merchantId: apparelMerchant.id } });
+  const grantPath = `/api/admin/merchant-center/merchants/${encodeURIComponent(apparelMerchant.id)}/studio-entitlements/WHOLESALE_LEATHER_GOODS`;
+  const unauthorizedGrant = await request(grantPath, {
+    method: 'PUT',
+    token: restrictedAdminToken,
+    body: { capabilityIds: [] }
+  });
+  check('industry authorization requires merchants.review', unauthorizedGrant.status === 403, unauthorizedGrant);
+
+  const grant = await request(grantPath, {
+    method: 'PUT',
+    token: adminToken,
+    body: { capabilityIds: [] }
+  });
+  const entitlementsAfterGrant = await prisma.merchantStudioEntitlement.findMany({
+    where: { merchantId: apparelMerchant.id },
+    orderBy: { formalIndustryId: 'asc' }
+  });
+  check(
+    'grant backfills legacy primary access and adds only the requested industry',
+    grant.status === 200
+      && grant.payload?.changed === true
+      && entitlementsAfterGrant.length === 2
+      && entitlementsAfterGrant.some(entitlement => entitlement.formalIndustryId === 'WHOLESALE_APPAREL' && entitlement.status === 'active')
+      && entitlementsAfterGrant.some(entitlement => entitlement.formalIndustryId === 'WHOLESALE_LEATHER_GOODS' && entitlement.status === 'active'),
+    { grant, entitlementsAfterGrant }
+  );
+  const duplicateGrant = await request(grantPath, {
+    method: 'PUT',
+    token: adminToken,
+    body: { capabilityIds: [] }
+  });
+  check(
+    'repeated grant is idempotent',
+    duplicateGrant.status === 200
+      && duplicateGrant.payload?.changed === false
+      && await prisma.merchantStudioEntitlement.count({ where: { merchantId: apparelMerchant.id } }) === 2,
+    duplicateGrant
+  );
+  const invalidCapability = await request(
+    `/api/admin/merchant-center/merchants/${encodeURIComponent(apparelMerchant.id)}/studio-entitlements/WHOLESALE_COMPREHENSIVE`,
+    { method: 'PUT', token: adminToken, body: { capabilityIds: ['APPAREL_OWN_PRODUCTION'] } }
+  );
+  check(
+    'grant rejects a capability outside the formal industry and writes nothing',
+    invalidCapability.status === 400
+      && invalidCapability.payload?.error === 'INVALID_INDUSTRY_CAPABILITY'
+      && await prisma.merchantStudioEntitlement.count({
+        where: { merchantId: apparelMerchant.id, formalIndustryId: 'WHOLESALE_COMPREHENSIVE' }
+      }) === 0,
+    invalidCapability
+  );
+  const apparelCapabilityGrant = await request(
+    `/api/admin/merchant-center/merchants/${encodeURIComponent(apparelMerchant.id)}/studio-entitlements/WHOLESALE_APPAREL`,
+    { method: 'PUT', token: adminToken, body: { capabilityIds: ['APPAREL_OWN_PRODUCTION'] } }
+  );
+  const entitlementsAfterCapabilityGrant = await prisma.merchantStudioEntitlement.findMany({
+    where: { merchantId: apparelMerchant.id }
+  });
+  check(
+    'capability update affects only its industry and preserves other active grants',
+    apparelCapabilityGrant.status === 200
+      && apparelCapabilityGrant.payload?.changed === true
+      && entitlementsAfterCapabilityGrant.some(entitlement =>
+        entitlement.formalIndustryId === 'WHOLESALE_APPAREL'
+        && entitlement.capabilities?.APPAREL_OWN_PRODUCTION === true
+        && entitlement.capabilities?.apparelPatternEngineering === true
+      )
+      && entitlementsAfterCapabilityGrant.some(entitlement =>
+        entitlement.formalIndustryId === 'WHOLESALE_LEATHER_GOODS' && entitlement.status === 'active'
+      ),
+    { apparelCapabilityGrant, entitlementsAfterCapabilityGrant }
+  );
+
+  const merchantLogin = await request('/api/miniprogram/auth/login/merchant', {
+    method: 'POST',
+    body: { email: apparelMerchant.email, password: apparelMerchant.password }
+  });
+  const merchantToken = merchantLogin.payload?.token;
+  check('registered merchant can authenticate for entitlement checks', merchantLogin.status === 200 && typeof merchantToken === 'string', merchantLogin);
+  if (typeof merchantToken === 'string') {
+    const accessibleStudios = await request('/api/merchant/studios', { token: merchantToken });
+    check(
+      'granted secondary Studio appears in merchant access list',
+      accessibleStudios.status === 200
+        && accessibleStudios.payload?.studios?.some(studio => studio.formalIndustryId === 'WHOLESALE_LEATHER_GOODS'),
+      accessibleStudios
+    );
+  }
+
+  const revokePath = grantPath;
+  const revoke = await request(revokePath, { method: 'DELETE', token: adminToken });
+  const entitlementsAfterRevoke = await prisma.merchantStudioEntitlement.findMany({
+    where: { merchantId: apparelMerchant.id },
+    orderBy: { formalIndustryId: 'asc' }
+  });
+  check(
+    'revoke only deactivates the selected industry and preserves other entitlements',
+    revoke.status === 200
+      && revoke.payload?.changed === true
+      && entitlementsAfterRevoke.length === 2
+      && entitlementsAfterRevoke.some(entitlement => entitlement.formalIndustryId === 'WHOLESALE_LEATHER_GOODS' && entitlement.status === 'revoked' && entitlement.revokedAt !== null)
+      && entitlementsAfterRevoke.some(entitlement => entitlement.formalIndustryId === 'WHOLESALE_APPAREL' && entitlement.status === 'active'),
+    { revoke, entitlementsAfterRevoke }
+  );
+  const repeatedRevoke = await request(revokePath, { method: 'DELETE', token: adminToken });
+  check('repeated revoke is idempotent', repeatedRevoke.status === 200 && repeatedRevoke.payload?.changed === false, repeatedRevoke);
+  if (typeof merchantToken === 'string') {
+    const remainingStudios = await request('/api/merchant/studios', { token: merchantToken });
+    const revokedProjectList = await request('/api/merchant/studio-projects?industryTemplate=bags_wholesale', { token: merchantToken });
+    check(
+      'revoked Studio is hidden and its project API denies access',
+      remainingStudios.status === 200
+        && !remainingStudios.payload?.studios?.some(studio => studio.formalIndustryId === 'WHOLESALE_LEATHER_GOODS')
+        && revokedProjectList.status === 403,
+      { remainingStudios, revokedProjectList }
+    );
+  }
+
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    const browserErrors = [];
+    const adminApiStatuses = [];
+    page.on('pageerror', error => browserErrors.push(`pageerror: ${error.message}`));
+    page.on('console', message => {
+      if (message.type() === 'error') browserErrors.push(`console: ${message.text().slice(0, 180)}`);
+    });
+    page.on('response', response => {
+      const url = new URL(response.url());
+      if (url.pathname.startsWith('/api/')) adminApiStatuses.push(`${response.status()} ${url.pathname}`);
+    });
+    await page.context().addCookies([{
+      name: 'ruda_admin_jwt',
+      value: adminToken,
+      url: baseUrl,
+      httpOnly: true,
+      sameSite: 'Lax'
+    }]);
+    await page.route('**/*', route => {
+      const hostname = new URL(route.request().url()).hostname;
+      if (!['localhost', '127.0.0.1', '::1'].includes(hostname)) return route.abort();
+      return route.continue();
+    });
+    await page.goto(`${baseUrl}/admin?adminTab=merchants`, { waitUntil: 'networkidle', timeout: 90000 });
+    const merchantButton = page.getByRole('button', { name: apparelMerchant.name, exact: true });
+    if (await merchantButton.count() !== 1) throw new Error('PLATFORM_ADMIN_MERCHANT_ROW_NOT_RENDERED');
+    await merchantButton.click();
+    await page.waitForTimeout(1200);
+    if (await page.locator('section[aria-label="行业工作室授权"]').count() !== 1) {
+      console.error(JSON.stringify({
+        adminHeadings: await page.locator('h1,h2,h3').allTextContents(),
+        adminApiStatuses,
+        browserErrors,
+        pageText: (await page.locator('body').innerText()).slice(0, 1200)
+      }));
+      await page.screenshot({ path: '/tmp/ruda-platform-admin-studios-debug.png', fullPage: true });
+      throw new Error('PLATFORM_ADMIN_ENTITLEMENT_SECTION_NOT_RENDERED');
+    }
+    await page.getByLabel('授予或更新行业').selectOption('WHOLESALE_LEATHER_GOODS');
+    const grantButtonVisible = await page.getByRole('button', { name: '授予授权', exact: true }).isVisible();
+    await page.screenshot({ path: '/tmp/ruda-platform-admin-studios-1440.png', fullPage: true });
+    const overflow1440 = await page.evaluate(() =>
+      document.documentElement.scrollWidth > document.documentElement.clientWidth + 1
+    );
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForTimeout(250);
+    const overflow390 = await page.evaluate(() =>
+      document.documentElement.scrollWidth > document.documentElement.clientWidth + 1
+    );
+    await page.screenshot({ path: '/tmp/ruda-platform-admin-studios-390.png', fullPage: true });
+    check(
+      'platform admin entitlement controls render responsively at desktop and mobile widths',
+      grantButtonVisible && !overflow1440 && !overflow390 && browserErrors.length === 0,
+      { overflow1440, overflow390, browserErrors }
+    );
+  } finally {
+    await browser.close();
+  }
+} finally {
+  await prisma.$disconnect();
+}
 
 const login = async (who) => {
   const result = await request('/api/miniprogram/auth/login/employee', {

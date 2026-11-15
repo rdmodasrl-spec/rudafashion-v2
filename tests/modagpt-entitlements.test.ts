@@ -2,8 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   getModaGptEntitlements,
+  buildModaGptStudioImagePrompt,
   parseModaGptImageRequest,
   parseModaGptPlanState,
+  resolveModaGptStudioImagePolicy,
   releaseModaGptUsage,
   reserveModaGptUsage,
   serializeModaGptSettings
@@ -141,4 +143,50 @@ test('image request parser requires explicit try-on consent and bounded inputs',
     privacyConsent: true
   }), null);
   assert.equal(parseModaGptImageRequest({ task: 'unknown', prompt: 'test' }), null);
+});
+
+test('all eight industry templates resolve isolated Studio image policies', () => {
+  const industryTemplates = [
+    ['apparel_production_wholesale', 'apparel_production_wholesale', 'apparel_studio'],
+    ['apparel_wholesale', 'apparel_wholesale', 'apparel_studio'],
+    ['trading_wholesale', 'trade_wholesale', 'trade_studio'],
+    ['department_wholesale', 'department_wholesale', 'department_wholesale_studio'],
+    ['bags_wholesale', 'leather_bag_wholesale', 'leather_studio'],
+    ['department_chain_retail', 'department_store_chain', 'retail_chain_studio'],
+    ['general_retail', 'general_retail', 'retail_studio'],
+    ['restaurant_ordering', 'restaurant', 'restaurant_studio']
+  ] as const;
+
+  for (const [templateId, industryCode, studioCode] of industryTemplates) {
+    const policy = resolveModaGptStudioImagePolicy(templateId, 'imageGeneration');
+    assert.ok(policy, `${templateId} should have an image policy`);
+    assert.equal(policy.industryCode, industryCode);
+    assert.equal(policy.studioCode, studioCode);
+    assert.match(policy.imageGuidance, /\S/);
+  }
+});
+
+test('virtual try-on image policy is restricted to Apparel Studio', () => {
+  assert.ok(resolveModaGptStudioImagePolicy('apparel_production_wholesale', 'tryOn'));
+  assert.ok(resolveModaGptStudioImagePolicy('apparel_wholesale', 'tryOn'));
+  for (const templateId of [
+    'trading_wholesale',
+    'department_wholesale',
+    'bags_wholesale',
+    'department_chain_retail',
+    'general_retail',
+    'restaurant_ordering'
+  ]) {
+    assert.equal(resolveModaGptStudioImagePolicy(templateId, 'tryOn'), null, templateId);
+  }
+  assert.equal(resolveModaGptStudioImagePolicy('unknown-template', 'imageGeneration'), null);
+});
+
+test('restaurant concept-image prompts explicitly identify their AI-generated scope', () => {
+  const policy = resolveModaGptStudioImagePolicy('restaurant_ordering', 'imageGeneration');
+  assert.ok(policy);
+  const prompt = buildModaGptStudioImagePrompt(policy, 'A seasonal noodle dish');
+  assert.match(prompt, /AI 创作/);
+  assert.match(prompt, /不得声称是门店实际出餐/);
+  assert.match(prompt, /A seasonal noodle dish/);
 });

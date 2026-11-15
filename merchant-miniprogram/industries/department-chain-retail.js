@@ -5,6 +5,9 @@ module.exports = {
   templateId: 'department_chain_retail',
   title: '百货连锁',
   summary: '多门店、门店库存、调拨与门店收银',
+  modauiPrompts: [
+    { label: '分析门店销售与库存', prompt: '分析当前商家各门店的销售和库存，列出有数据依据的调拨候选；不要执行调拨。' }
+  ],
   metrics: [
     { key: 'todaySales', label: '今日销售额', suffix: '€', emphasis: true },
     { key: 'pendingOrders', label: '待处理订单', suffix: '单' },

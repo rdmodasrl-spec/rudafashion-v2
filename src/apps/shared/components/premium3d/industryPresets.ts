@@ -1,5 +1,5 @@
 /**
- * 七行业 × Premium 3D 组件映射。
+ * 行业模板 × Premium 3D 组件映射。
  *
  * 同一套 3D 能力不能七个行业一个用法：
  * 每个行业按业务特征选择「首屏 / 材质 / 检视 / 画廊」四类位置，
@@ -11,9 +11,9 @@ export type Premium3DSlot = 'hero' | 'material' | 'inspect' | 'gallery' | 'ambie
 
 export type IndustryPremium3DPlan = {
   /** 行业首屏主视觉 */
-  hero: 'immersive-stage' | 'fluid-backdrop' | 'brand-wordmark' | 'scroll-stage';
+  hero: 'immersive-stage' | 'fluid-backdrop' | 'brand-wordmark' | 'scroll-stage' | 'none';
   /** 商品细节检视 */
-  inspect: 'turntable' | 'flip-transition' | 'depth-hover';
+  inspect: 'turntable' | 'flip-transition' | 'depth-hover' | 'none';
   /** 材质/质感叙事 */
   material?: 'leather' | 'metal' | 'matte' | 'glass';
   /** 环境氛围（背景层） */
@@ -73,6 +73,12 @@ export const INDUSTRY_PREMIUM_3D: Record<MerchantIndustryTemplateId, IndustryPre
     ambient: 'particle',
     maxBlocks: 2,
     rationale: '综合零售追求浏览节奏，动态背景 + 悬停景深即可，避免多品类场景堆叠。'
+  },
+  restaurant_ordering: {
+    hero: 'none',
+    inspect: 'none',
+    maxBlocks: 0,
+    rationale: '餐饮经营工作区尚未开放；当前不登记或启用店铺 3D 区块。'
   }
 };
 

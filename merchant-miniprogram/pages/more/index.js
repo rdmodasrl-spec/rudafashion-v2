@@ -91,7 +91,7 @@ const groups = [
     id: 'tools',
     title: '智能工具',
     items: [
-      { id: 'ai_home', title: '智能助手', description: '商家智能服务入口', icon: 'AI' },
+      { id: 'ai_home', title: 'AI工作室', description: '按行业提供工作室', icon: 'AI' },
       { id: 'ai_tools', title: '工具中心', description: 'AI 应用工具调用额度', icon: '具' },
       { id: 'tryon', title: '虚拟试衣', description: '商品模特试穿效果', icon: '设' },
       { id: 'ai_employees', title: '智能员工', description: '智能员工开通状态', icon: '智' }

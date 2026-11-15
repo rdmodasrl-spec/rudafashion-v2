@@ -1,0 +1,19 @@
+import {
+  MAX_STUDIO_PROJECT_IDEMPOTENCY_KEY_LENGTH,
+  MAX_STUDIO_PROJECT_PAYLOAD_BYTES,
+  MAX_STUDIO_PROJECT_TITLE_LENGTH,
+  hashMerchantStudioProjectInput,
+  normalizeMerchantStudioProjectExpectedRevision,
+  normalizeMerchantStudioProjectIdempotencyKey,
+  normalizeMerchantStudioProjectInput,
+  type MerchantStudioProjectInput
+} from './merchantStudioProject';
+
+export const MAX_LEATHER_PROJECT_PAYLOAD_BYTES = MAX_STUDIO_PROJECT_PAYLOAD_BYTES;
+export const MAX_LEATHER_PROJECT_TITLE_LENGTH = MAX_STUDIO_PROJECT_TITLE_LENGTH;
+export const MAX_LEATHER_PROJECT_IDEMPOTENCY_KEY_LENGTH = MAX_STUDIO_PROJECT_IDEMPOTENCY_KEY_LENGTH;
+export type LeatherStudioProjectInput = MerchantStudioProjectInput;
+export const normalizeLeatherStudioProjectInput = normalizeMerchantStudioProjectInput;
+export const normalizeLeatherStudioIdempotencyKey = normalizeMerchantStudioProjectIdempotencyKey;
+export const hashLeatherStudioProjectInput = hashMerchantStudioProjectInput;
+export const normalizeLeatherStudioExpectedRevision = normalizeMerchantStudioProjectExpectedRevision;

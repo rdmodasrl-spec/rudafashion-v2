@@ -1,6 +1,10 @@
 import type { ModaGptAgentRole } from './modagptRuntime';
 import { getMerchantIndustryTemplate, type MerchantIndustryTemplateId } from '../constants/merchantIndustryTemplates';
-import { getModaGptIndustryTemplateAssistantProfile } from './modagptCoreEmployees';
+import {
+  getModaGptIndustryTemplateAssistantProfile,
+  requireModaGptIndustry,
+  type ModaGptIndustry
+} from './modagptCoreEmployees';
 
 export const modaGptCoreWorkflowIds = [
   'low_inventory_review',
@@ -28,8 +32,18 @@ export function isExecutableModaGptMerchantWorkflow(
   return executableModaGptMerchantWorkflowIds.some(candidate => candidate === workflow);
 }
 
+export function isModaGptProcurementWorkflowAllowed(
+  templateId: MerchantIndustryTemplateId | null,
+  merchantIndustry: ModaGptIndustry | null
+): boolean {
+  return templateId === 'trading_wholesale'
+    || templateId === 'department_wholesale'
+    || (templateId === null && merchantIndustry === 'TRADING_COMPANY');
+}
+
 export type ModaGptCoreTaskRoute = {
   industryTemplate: MerchantIndustryTemplateId | null;
+  merchantIndustry: ModaGptIndustry | null;
   workflow: ModaGptCoreWorkflowId;
   goal: string;
   agents: readonly ModaGptAgentRole[];
@@ -111,6 +125,7 @@ export function superviseModaGptCoreTask(input: {
   registeredWorkflows: readonly string[];
   registeredTools: readonly string[];
   industryTemplate?: unknown;
+  merchantIndustry?: unknown;
 }): ModaGptCoreTaskRoute | null {
   if (typeof input.request !== 'string' || !input.request.trim() || input.request.length > 2_000) {
     throw new Error('MODAGPT_SUPERVISOR_REQUEST_INVALID');
@@ -131,6 +146,9 @@ export function superviseModaGptCoreTask(input: {
   if (input.industryTemplate !== undefined && input.industryTemplate !== null && !template) {
     throw new Error('MODAGPT_SUPERVISOR_TEMPLATE_INVALID');
   }
+  const merchantIndustry = input.merchantIndustry === undefined || input.merchantIndustry === null
+    ? null
+    : requireModaGptIndustry(input.merchantIndustry);
   const industryTemplate = template?.id ?? null;
   const specialist = getModaGptIndustryTemplateAssistantProfile(industryTemplate);
   const businessAnalysis = intentRules.find(rule => rule.workflow === 'business_analysis');
@@ -148,14 +166,19 @@ export function superviseModaGptCoreTask(input: {
   const missingAgents = match.agents.filter(agent => !assigned.has(agent));
   const missingTools = requiredTools.filter(tool => !registeredTools.has(tool));
   const workflowAvailable = input.registeredWorkflows.includes(match.workflow);
+  const industryAllowsWorkflow = match.workflow !== 'procurement_management'
+    || isModaGptProcurementWorkflowAllowed(industryTemplate, merchantIndustry);
   return {
     industryTemplate,
+    merchantIndustry,
     workflow: match.workflow,
     goal: match.goal,
     agents: match.agents.filter(agent => assigned.has(agent)),
     tools: requiredTools.filter(tool => registeredTools.has(tool)),
     execution: !workflowAvailable
       ? 'workflow_unavailable'
+      : !industryAllowsWorkflow
+        ? 'workflow_unavailable'
       : missingAgents.length
         ? 'agent_unavailable'
         : missingTools.length

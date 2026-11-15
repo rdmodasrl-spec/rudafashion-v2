@@ -85,3 +85,79 @@ test('merchant mini program refreshes visible lists and detail without destroyin
   assert.match(form, /product\.expectedUpdatedAt = this\.data\.updatedAt/);
   assert.match(form, /PRODUCT_VERSION_CONFLICT/);
 });
+
+test('Restaurant menu entry uses exact industry/module gating and the shared restaurant API on mobile clients', () => {
+  const mobile = read('src/apps/merchant-admin-mobile/MerchantMobileApp.tsx');
+  const miniConfig = read('merchant-miniprogram/industries/restaurant-ordering.js');
+  const miniPage = read('merchant-miniprogram/pages/restaurant-menu/index.js');
+  const miniApp = JSON.parse(read('merchant-miniprogram/app.json'));
+
+  assert.match(mobile, /currentMerchant\?\.industry === 'RESTAURANT'[\s\S]*?industryTemplate === 'restaurant_ordering'[\s\S]*?modules\.includes\('restaurant_menu'\)/);
+  assert.match(mobile, /restaurantMenuAvailable[\s\S]*?<RestaurantMenuWorkspace \/>/);
+  assert.match(miniConfig, /module: 'restaurant_menu'[\s\S]*?\/pages\/restaurant-menu\/index/);
+  assert.match(miniPage, /context\.templateId !== 'restaurant_ordering'[\s\S]*?hasModule\(context, 'restaurant_menu'\)/);
+  assert.match(miniPage, /hasPermission\(context, 'product\.import\.draft'\)/);
+  assert.match(miniPage, /hasPermission\(context, 'purchase\.manage'\)/);
+  assert.match(miniPage, /\/api\/merchant\/restaurant\/menus\?limit=100/);
+  assert.match(miniPage, /\/api\/merchant\/restaurant\/dishes\?limit=100/);
+  for (const endpoint of [
+    '/api/merchant/restaurant/ingredients',
+    '/api/merchant/suppliers',
+    '/api/merchant/restaurant/purchase-orders',
+    '/submit',
+    '/receipts',
+    '/recipes',
+    '/cost',
+    'publish',
+    'unpublish'
+  ]) {
+    assert.ok(miniPage.includes(endpoint), `Restaurant mini-program must use the shared ${endpoint} contract`);
+  }
+  const webWorkspace = read('src/apps/merchant-admin-common/components/merchant/RestaurantMenuWorkspace.tsx');
+  for (const endpoint of [
+    '/api/merchant/restaurant/ingredients',
+    '/api/merchant/suppliers',
+    '/api/merchant/restaurant/purchase-orders',
+    '/submit',
+    '/receipts',
+    '/recipes',
+    '/cost',
+    'publish',
+    'unpublish'
+  ]) {
+    assert.ok(webWorkspace.includes(endpoint), `Restaurant Web workspace must use the shared ${endpoint} contract`);
+  }
+  assert.match(webWorkspace, /'Idempotency-Key': purchaseCreateRequest\.current\.idempotencyKey/);
+  assert.match(webWorkspace, /expectedVersion: receivingOrder\.version/);
+  assert.match(webWorkspace, /按实际到货数量和发票单价收货/);
+  assert.ok((miniApp.pages as string[]).includes('pages/restaurant-menu/index'));
+});
+
+test('Restaurant table directory uses one tenant-scoped API and exact Restaurant module gating across merchant clients', () => {
+  const mobile = read('src/apps/merchant-admin-mobile/MerchantMobileApp.tsx');
+  const web = read('src/apps/merchant-admin-web/MerchantPortal.tsx');
+  const sharedTables = read('src/apps/merchant-admin-common/components/merchant/RestaurantTableWorkspace.tsx');
+  const miniConfig = read('merchant-miniprogram/industries/restaurant-ordering.js');
+  const miniPage = read('merchant-miniprogram/pages/restaurant-tables/index.js');
+  const miniApp = JSON.parse(read('merchant-miniprogram/app.json'));
+  const server = read('src/server/restaurantCatalogRoutes.ts');
+
+  assert.match(mobile, /modules\.includes\('restaurant_tables'\)[\s\S]*?<RestaurantTableWorkspace \/>/);
+  assert.match(web, /activeTab === 'restaurant_tables'[\s\S]*?<RestaurantTableWorkspace \/>/);
+  assert.match(miniConfig, /module: 'restaurant_tables'[\s\S]*?permission: 'employees\.manage'[\s\S]*?\/pages\/restaurant-tables\/index/);
+  assert.match(miniPage, /context\.templateId !== 'restaurant_ordering'[\s\S]*?hasModule\(context, 'restaurant_tables'\)/);
+  assert.match(miniPage, /hasPermission\(context, 'employees\.manage'\)/);
+  assert.ok((miniApp.pages as string[]).includes('pages/restaurant-tables/index'));
+  for (const endpoint of ['/api/merchant/restaurant/table-stores', '/api/merchant/restaurant/tables']) {
+    assert.ok(sharedTables.includes(endpoint), `Web table workspace must use ${endpoint}`);
+    assert.ok(miniPage.includes(endpoint), `Mini-program table page must use ${endpoint}`);
+    assert.ok(server.includes(endpoint), `Restaurant server must expose ${endpoint}`);
+  }
+  assert.match(miniPage, /'Idempotency-Key': this\._createRequest\.key/);
+  assert.match(miniPage, /expectedVersion: table\.version/);
+  assert.match(server, /tableReadGuards = \[[\s\S]*?requireRestaurantTablesModule[\s\S]*?requireRestaurantMerchant/);
+  assert.match(server, /tableWriteGuards = \[\.\.\.tableReadGuards, requireMenuPublishPermission\]/);
+  const appServer = read('server.ts');
+  assert.match(appServer, /requireRestaurantTablesModule: requireMerchantIndustryModule\('restaurant_tables'\)/);
+  assert.match(server, /version: expectedVersion/);
+});

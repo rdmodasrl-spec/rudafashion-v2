@@ -159,6 +159,7 @@ export interface ProductionChainDeps {
   prisma: PrismaClient;
   merchantAuth: RequestHandler | RequestHandler[];
   employeePermission: (permission: string, ...roles: string[]) => RequestHandler;
+  requireIndustryCapability: RequestHandler;
   requireAppInstalled: RequestHandler;
   sendInternalError: (res: Response, error: unknown, context: string) => void;
   logEmployeeAudit: (
@@ -474,7 +475,8 @@ export function registerProductionChainRoutes(app: Express, deps: ProductionChai
   const prisma = deps.prisma;
   const appGuard: RequestHandler[] = [
     ...(Array.isArray(deps.merchantAuth) ? deps.merchantAuth : [deps.merchantAuth]),
-    deps.requireAppInstalled
+    deps.requireAppInstalled,
+    deps.requireIndustryCapability
   ];
   const viewGuard: RequestHandler[] = [...appGuard, deps.employeePermission('production.view')];
   const manageGuard: RequestHandler[] = [...appGuard, deps.employeePermission('production.manage')];
@@ -2189,4 +2191,3 @@ export function registerProductionChainRoutes(app: Express, deps: ProductionChai
     }
   });
 }
-

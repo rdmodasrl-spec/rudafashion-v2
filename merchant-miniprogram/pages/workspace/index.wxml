@@ -105,12 +105,11 @@
     <view wx:if="{{showStorefrontEditor}}" class="storefront-editor">
       <view class="storefront-template-picker">
         <picker range="{{storefrontDraft.templates}}" range-key="label" value="{{storefrontDraft.templateIndex}}" bindchange="onStorefrontTemplateChange">
-          <view class="input picker-input">网站模板：{{storefrontDraft.selectedTemplate.label || '当前模板待兼容'}}　›</view>
+          <view class="input picker-input">网站模板：{{storefrontDraft.selectedTemplate.label}}　›</view>
         </picker>
         <view class="template-actions">
           <text class="item-meta">{{storefrontDraft.selectedTemplate.description}}</text>
-          <text wx:if="{{storefrontDraft.templateUnsupported}}" class="item-meta">当前模板暂不在行业选项中；为避免覆盖，重新应用已禁用。页面资料仍可保存。</text>
-          <button class="secondary-button template-apply-button" bindtap="applyStorefrontTemplate" disabled="{{storefrontDraft.templateUnsupported}}">一键应用到商家网站</button>
+          <button class="secondary-button template-apply-button" bindtap="applyStorefrontTemplate">一键应用到商家网站</button>
         </view>
       </view>
       <text class="form-section-title">店铺页面</text>
@@ -178,7 +177,7 @@
     <picker range="{{materialUnits}}" range-key="label" value="{{materialUnitIndex}}" bindchange="onMaterialUnitChange">
       <view class="input picker-input">计量单位：{{materialUnits[materialUnitIndex].label}}　›</view>
     </picker>
-    <input class="input" type="digit" data-field="unitCost" value="{{materialDraft.unitCost}}" placeholder="单位成本" bindinput="onMaterialDraftInput" />
+    <input wx:if="{{canViewMaterialCosts}}" class="input" type="digit" data-field="unitCost" value="{{materialDraft.unitCost}}" placeholder="单位成本" bindinput="onMaterialDraftInput" />
     <input class="input" type="digit" data-field="reorderPoint" value="{{materialDraft.reorderPoint}}" placeholder="补货点" bindinput="onMaterialDraftInput" />
     <input class="input" type="number" data-field="leadTimeDays" value="{{materialDraft.leadTimeDays}}" placeholder="交期（天）" bindinput="onMaterialDraftInput" />
     <textarea class="textarea" data-field="notes" value="{{materialDraft.notes}}" placeholder="材料备注" bindinput="onMaterialDraftInput" />

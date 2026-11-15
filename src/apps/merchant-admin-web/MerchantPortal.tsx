@@ -59,6 +59,7 @@ import {
   BookOpen,
   FileText,
   ShoppingCart,
+  Clapperboard,
   Bot
 } from 'lucide-react';
 import { useB2B } from '../../context/B2BContext';
@@ -92,9 +93,9 @@ import {
 } from '../merchant-admin-common/components/merchant/MerchantSettingsPanel';
 import { MerchantAiEmployees } from '../merchant-admin-common/components/merchant/MerchantAiEmployees';
 import { MerchantAiTools } from '../merchant-admin-common/components/merchant/MerchantAiTools';
+import { ModaUiAdPlanner } from '../merchant-admin-common/components/merchant/ModaUiAdPlanner';
 import { MerchantTeamManagement } from '../merchant-admin-common/components/merchant/MerchantTeamManagement';
-import { MERCHANT_STOREFRONT_TEMPLATES, type MerchantStorefrontTemplate } from '../../shared/merchantStorefrontTemplate';
-import { getStorefrontTemplatesForIndustry } from '../../shared/storefrontTemplates/registry';
+import { MERCHANT_STOREFRONT_TEMPLATES } from '../../shared/merchantStorefrontTemplate';
 import { MerchantAiReports } from '../merchant-admin-common/components/merchant/MerchantAiReports';
 import { MerchantAiOrderDrafts } from '../merchant-admin-common/components/merchant/MerchantAiOrderDrafts';
 import { MerchantBusinessCard } from '../merchant-admin-common/components/merchant/MerchantBusinessCard';
@@ -134,8 +135,8 @@ const MerchantProcurementWorkspace = lazy(() =>
 const MerchantSmartPos = lazy(() =>
   import('../merchant-admin-common/components/merchant/MerchantSmartPos').then(module => ({ default: module.MerchantSmartPos }))
 );
-const ModaUIWorkbench = lazy(() =>
-  import('../merchant-admin-common/components/merchant/modaui/ModaUIWorkbench').then(module => ({ default: module.ModaUIWorkbench }))
+const ModaUIEntry = lazy(() =>
+  import('../merchant-admin-common/components/merchant/ModaUIEntry').then(module => ({ default: module.ModaUIEntry }))
 );
 const MerchantAppStore = lazy(() =>
   import('../merchant-admin-common/components/merchant/AppStore').then(module => ({ default: module.AppStore }))
@@ -154,6 +155,12 @@ const MerchantEmailDomains = lazy(() =>
 );
 const MerchantProductionChain = lazy(() =>
   import('../merchant-admin-common/components/merchant/ProductionChain').then(module => ({ default: module.ProductionChain }))
+);
+const RestaurantTableWorkspace = lazy(() =>
+  import('../merchant-admin-common/components/merchant/RestaurantTableWorkspace').then(module => ({ default: module.RestaurantTableWorkspace }))
+);
+const RestaurantMenuWorkspace = lazy(() =>
+  import('../merchant-admin-common/components/merchant/RestaurantMenuWorkspace').then(module => ({ default: module.RestaurantMenuWorkspace }))
 );
 
 type MerchantSettingsEntryId =
@@ -241,7 +248,7 @@ export const MerchantPortal: React.FC<{
 
   // Active sub-tab inside Merchant Portal
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'pos' | 'products' | 'sku_matrix' | 'materials' | 'production' | 'inventory' | 'procurement' | 'orders' | 'vault_requests' | 'customers' | 'growth' | 'content' | 'finance' | 'profile' | 'settings' | 'gallery' | 'ai_employees' | 'ai_tools' | 'fashion_studio' | 'modagpt' | 'app_store' | 'recycle_bin' | 'ai_chat_history' | 'recent_activity'
+    'dashboard' | 'pos' | 'products' | 'sku_matrix' | 'materials' | 'production' | 'inventory' | 'procurement' | 'orders' | 'vault_requests' | 'customers' | 'growth' | 'content' | 'finance' | 'profile' | 'settings' | 'gallery' | 'ai_employees' | 'ai_tools' | 'ad_planner' | 'fashion_studio' | 'modagpt' | 'app_store' | 'recycle_bin' | 'ai_chat_history' | 'recent_activity' | 'restaurant_menu' | 'restaurant_tables'
   >('dashboard');
   const [industrySection, setIndustrySection] = useState<MerchantIndustryModuleKey>('dashboard');
   const pendingIndustrySectionRef = useRef<MerchantIndustryModuleKey | null>(null);
@@ -341,7 +348,9 @@ export const MerchantPortal: React.FC<{
     transfers: '库存调拨',
     team: '员工权限',
     messages: '消息中心',
-    settings: '系统设置'
+    settings: '系统设置',
+    restaurant_menu: '菜单管理',
+    restaurant_tables: '桌台管理'
   };
   const assistantContextLabel = industryPanelActive
     ? industryAssistantLabels[industrySection]
@@ -372,8 +381,10 @@ export const MerchantPortal: React.FC<{
       recycle_bin: localizeCopy('回收站', 'Cestino'),
       ai_chat_history: localizeCopy('AI 聊天记录', 'Cronologia AI'),
       recent_activity: localizeCopy('最近动态', 'Attività recenti'),
-      fashion_studio: localizeCopy('创作空间', 'ModaUI Fashion Studio'),
-      modagpt: localizeCopy('创作空间', 'ModaUI Fashion Studio')
+      fashion_studio: localizeCopy('AI工作室', 'AI Studio · ModaUI'),
+      modagpt: localizeCopy('AI工作室', 'AI Studio · ModaUI'),
+      restaurant_menu: localizeCopy('菜单管理', 'Menu'),
+      restaurant_tables: localizeCopy('桌台管理', 'Tavoli')
     } as const)[activeTab];
   const assistantContextScope = industryPanelActive
     ? industrySection
@@ -582,7 +593,7 @@ export const MerchantPortal: React.FC<{
   const [productionBusy, setProductionBusy] = useState(false);
   const [productionForm, setProductionForm] = useState({ variantId: '', outputLocationId: '', plannedQuantity: 100, priority: 'normal', dueDate: '' });
   type Material = {
-    id: string; code: string; name: string; category: string; unit: string; unitCost: number; reorderPoint: number;
+    id: string; code: string; name: string; category: string; unit: string; unitCost?: number; reorderPoint: number;
     leadTimeDays: number; status: string; unitLocked: boolean; notes?: string | null; supplier?: { id: string; name: string } | null;
     onHandQuantity: number; availableQuantity: number;
     balances: Array<{ location: { code: string; name: string }; onHandQuantity: number; reservedQuantity: number }>;
@@ -601,6 +612,7 @@ export const MerchantPortal: React.FC<{
   };
   const [materials, setMaterials] = useState<Material[]>([]);
   const [materialsLoaded, setMaterialsLoaded] = useState(false);
+  const [canViewMaterialCosts, setCanViewMaterialCosts] = useState(false);
   const [materialMovements, setMaterialMovements] = useState<MaterialMovement[]>([]);
   const [materialBusy, setMaterialBusy] = useState(false);
   const [materialInbound, setMaterialInbound] = useState({ materialId: '', quantity: '', locationCode: 'central', note: '' });
@@ -946,7 +958,14 @@ export const MerchantPortal: React.FC<{
   const currentMerchantId = authMerchantId;
   const isDemoMerchant = Boolean(currentMerchantId?.startsWith('demo-industry-'));
   const currentMerchant = currentMerchantId ? merchants.find(m => m.id === currentMerchantId) : undefined;
-  const storefrontTemplateOptions = getStorefrontTemplatesForIndustry(currentMerchant?.industryTemplate);
+  useEffect(() => {
+    if (currentMerchant?.industryTemplate === 'restaurant_ordering') {
+      setActiveTab('dashboard');
+      setDashboardNavSection('home');
+      setAssistantPanelOpen(false);
+      setAssistantPanelExpanded(false);
+    }
+  }, [currentMerchantId, currentMerchant?.industryTemplate]);
   const updateMerchantProduct = async (productId: string, updates: Partial<Product>) => {
     await updateProduct(productId, updates);
     setServerProducts(previous => previous?.map(product =>
@@ -1039,7 +1058,7 @@ export const MerchantPortal: React.FC<{
       return () => { active = false; };
   }, [assistantSettingsOpen, currentMerchantId]);
   const [storefrontForm, setStorefrontForm] = useState({
-    storefrontTemplate: 'fashion_monochrome' as MerchantStorefrontTemplate,
+    storefrontTemplate: 'fashion_monochrome' as typeof MERCHANT_STOREFRONT_TEMPLATES[number]['id'],
     logo: '', banner: '', showroomImage: '', showroomPanoramicImages: [] as string[],
     storefrontVideo: '',
     storefrontSeoTitle: '', storefrontSeoDescription: '',
@@ -1047,9 +1066,6 @@ export const MerchantPortal: React.FC<{
     tagline: '', tagline_zh: '', tagline_it: '', description: '', description_zh: '', description_it: '',
     specialties: [] as string[]
   });
-  const selectedLegacyStorefrontTemplate = MERCHANT_STOREFRONT_TEMPLATES.find(
-    template => template.id === storefrontForm.storefrontTemplate
-  );
   const [storefrontVideoFile, setStorefrontVideoFile] = useState<File | null>(null);
   const [storefrontVideoPreview, setStorefrontVideoPreview] = useState('');
   const [storefrontBusy, setStorefrontBusy] = useState(false);
@@ -1678,11 +1694,13 @@ export const MerchantPortal: React.FC<{
     );
   };
   const refreshMaterials = async () => {
+    setCanViewMaterialCosts(false);
     const [result, movementResult] = await Promise.all([
-      apiGet<{ success: true; materials: Material[] }>('/api/merchant/materials'),
+      apiGet<{ success: true; canViewCosts: boolean; materials: Material[] }>('/api/merchant/materials'),
       apiGet<{ success: true; movements: MaterialMovement[] }>('/api/merchant/material-movements?limit=100')
     ]);
     setMaterials(result.materials);
+    setCanViewMaterialCosts(result.canViewCosts === true);
     setMaterialsLoaded(true);
     setMaterialMovements(movementResult.movements);
     if (!result.materials.some(material => material.id === materialInbound.materialId && material.status === 'active')) {
@@ -1704,7 +1722,7 @@ export const MerchantPortal: React.FC<{
       name: material.name,
       category: material.category,
       unit: material.unit,
-      unitCost: String(material.unitCost),
+      unitCost: String(material.unitCost ?? 0),
       reorderPoint: String(material.reorderPoint),
       leadTimeDays: String(material.leadTimeDays),
       status: material.status,
@@ -1714,10 +1732,10 @@ export const MerchantPortal: React.FC<{
   const saveMaterial = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (materialBusy) return;
-    const unitCost = Number(materialForm.unitCost);
+    const unitCost = canViewMaterialCosts ? Number(materialForm.unitCost) : 0;
     const reorderPoint = Number(materialForm.reorderPoint);
     const leadTimeDays = Number(materialForm.leadTimeDays);
-    if (!Number.isFinite(unitCost) || unitCost < 0 || !Number.isFinite(reorderPoint) || reorderPoint < 0
+    if ((canViewMaterialCosts && (!Number.isFinite(unitCost) || unitCost < 0)) || !Number.isFinite(reorderPoint) || reorderPoint < 0
       || !Number.isInteger(leadTimeDays) || leadTimeDays < 0) {
       addNotification('warning', '物料资料不正确', '成本、安全库存需为非负数，交期需为非负整数');
       return;
@@ -1725,12 +1743,15 @@ export const MerchantPortal: React.FC<{
     setMaterialBusy(true);
     try {
       const payload = {
-        ...materialForm,
         code: materialForm.code.trim().toUpperCase(),
         name: materialForm.name.trim(),
-        unitCost,
+        category: materialForm.category,
+        unit: materialForm.unit,
+        ...(canViewMaterialCosts ? { unitCost } : {}),
         reorderPoint,
-        leadTimeDays
+        leadTimeDays,
+        status: materialForm.status,
+        notes: materialForm.notes
       };
       if (editingMaterialId) {
         await apiPut(`/api/merchant/materials/${encodeURIComponent(editingMaterialId)}`, payload);
@@ -2094,6 +2115,14 @@ export const MerchantPortal: React.FC<{
   const merchantSubdomainUrl = merchantStorefrontOrigin(currentMerchant.storeSlug || currentMerchant.slug || currentMerchant.id);
   const merchantSharePath = merchantSubdomainUrl;
   const merchantLogo = merchantMediaUrl(currentMerchant.logo, DEFAULT_MERCHANT_LOGO);
+  const restaurantWorkspaceAvailable = currentMerchant.industry === 'RESTAURANT'
+    && currentMerchant.industryTemplate === 'restaurant_ordering'
+    && currentMerchant.workspace?.templateId === 'restaurant_ordering'
+    && currentMerchant.workspace.accessAllowed;
+  const restaurantMenuAvailable = restaurantWorkspaceAvailable
+    && currentMerchant.workspace?.modules.includes('restaurant_menu') === true;
+  const restaurantTablesAvailable = restaurantWorkspaceAvailable
+    && currentMerchant.workspace?.modules.includes('restaurant_tables') === true;
 
   // 严格数据隔离：只筛选属于该商家的商品
   const merchantProducts = serverProducts ?? products.filter(p => p.merchantId === currentMerchantId);
@@ -4486,17 +4515,20 @@ export const MerchantPortal: React.FC<{
       <div className="fixed inset-0 z-[100] flex flex-col justify-center bg-white pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
         {isDemoMerchant && <div role="status" className="mx-auto w-full max-w-5xl px-4 py-3 text-xs font-medium text-neutral-800">演示环境 · 数据仅供功能测试，请勿录入真实业务。</div>}
         <Suspense fallback={<div className="flex h-full w-full items-center justify-center text-sm text-neutral-500">{localizeCopy('ModaUI 正在加载…', 'Caricamento di ModaUI…')}</div>}>
-          {/* 单页工作台：五项创作能力与推理中枢都在这一页，不再有卡片落地页或第二层入口。 */}
-          <ModaUIWorkbench
+          {/* 服装行业保留创作工作台；其他行业复用同一 ModaUI 商家聊天与任务入口。 */}
+          <ModaUIEntry
             key={currentMerchantId}
             isIt={isIt}
             merchantId={currentMerchantId}
             merchantName={currentMerchant.name}
+            industryTemplateId={currentMerchant.workspace?.templateId || currentMerchant.industryTemplate}
+            merchantIndustry={currentMerchant.industry}
             initialCapability={fashionStudioInitialMode
               ? fashionStudioInitialMode === 'productLaunch'
                 ? 'studio'
                 : fashionStudioInitialMode === 'edit' ? 'recolor' : fashionStudioInitialMode
               : null}
+            onNavigate={tab => setActiveTab(tab)}
             onExit={() => {
               setFashionStudioInitialMode(null);
               setActiveTab('dashboard');
@@ -4522,7 +4554,7 @@ export const MerchantPortal: React.FC<{
   const merchantCompanyName = (currentMerchant.companyLegalName || currentMerchant.name || '').trim();
 
   return (
-    <div id="merchant-web-layout" className={`merchant-web-layout mx-auto grid min-h-screen w-full max-w-none grid-cols-1 gap-0 lg:gap-0 ${activeTab === 'settings' ? 'lg:grid-cols-1' : assistantPanelOpen && !assistantPanelExpanded ? 'lg:grid-cols-[192px_minmax(0,1fr)_360px]' : 'lg:grid-cols-[192px_minmax(0,1fr)]'}`}>
+    <div id="merchant-web-layout" className={`merchant-web-layout mx-auto grid min-h-screen w-full max-w-none grid-cols-1 gap-0 lg:gap-0 ${activeTab === 'settings' ? 'lg:grid-cols-1' : assistantPanelOpen && !assistantPanelExpanded && currentMerchant.industryTemplate !== 'restaurant_ordering' ? 'lg:grid-cols-[192px_minmax(0,1fr)_360px]' : 'lg:grid-cols-[192px_minmax(0,1fr)]'}`}>
       <header className="merchant-web-topbar sticky top-0 z-50 col-span-full flex h-14 items-center gap-3 bg-neutral-950 px-3 text-white shadow-sm sm:px-5">
         <div className="flex w-auto min-w-0 shrink-0 items-center gap-2 sm:w-[204px]">
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white text-xs font-semibold text-neutral-950">
@@ -4588,16 +4620,16 @@ export const MerchantPortal: React.FC<{
           <a href="/" className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 px-2.5 py-2 text-[11px] font-semibold text-neutral-200 hover:bg-white/10 sm:px-3">
             <Home className="h-3.5 w-3.5" />{t('navStorefront')}
           </a>
-          <a href={merchantSharePath} target="_blank" rel="noopener noreferrer" className="hidden items-center gap-1.5 rounded-lg border border-white/15 px-3 py-2 text-[11px] font-semibold text-neutral-200 hover:bg-white/10 sm:flex">
+          {!restaurantWorkspaceAvailable && <a href={merchantSharePath} target="_blank" rel="noopener noreferrer" className="hidden items-center gap-1.5 rounded-lg border border-white/15 px-3 py-2 text-[11px] font-semibold text-neutral-200 hover:bg-white/10 sm:flex">
             <ExternalLink className="h-3.5 w-3.5" />{localizeCopy('查看店铺', 'Negozio')}
-          </a>
-          <button type="button" aria-label={localizeCopy('查看待处理订单', 'Ordini da gestire')} onClick={() => setActiveTab('orders')} className="relative flex h-9 w-9 items-center justify-center rounded-lg text-neutral-300 hover:bg-white/10 hover:text-white">
+          </a>}
+          {!restaurantWorkspaceAvailable && <button type="button" aria-label={localizeCopy('查看待处理订单', 'Ordini da gestire')} onClick={() => setActiveTab('orders')} className="relative flex h-9 w-9 items-center justify-center rounded-lg text-neutral-300 hover:bg-white/10 hover:text-white">
             <Bell className="h-4 w-4" />
             {orderActionCount > 0 && <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-neutral-950" />}
-          </button>
-          <button type="button" aria-label={assistantPanelOpen ? (localizeCopy('关闭 GPTmoda 助手', 'Chiudi GPTmoda')) : (localizeCopy('打开 GPTmoda 助手', 'Apri GPTmoda'))} aria-expanded={assistantPanelOpen} onClick={() => setAssistantPanelOpen(open => !open)} className={`flex h-9 items-center gap-2 rounded-lg px-2.5 text-xs font-semibold transition ${assistantPanelOpen ? 'bg-emerald-600 text-white hover:bg-emerald-500' : 'text-neutral-200 hover:bg-white/10'}`}>
+          </button>}
+          {!restaurantWorkspaceAvailable && <button type="button" aria-label={assistantPanelOpen ? (localizeCopy('关闭 GPTmoda 助手', 'Chiudi GPTmoda')) : (localizeCopy('打开 GPTmoda 助手', 'Apri GPTmoda'))} aria-expanded={assistantPanelOpen} onClick={() => setAssistantPanelOpen(open => !open)} className={`flex h-9 items-center gap-2 rounded-lg px-2.5 text-xs font-semibold transition ${assistantPanelOpen ? 'bg-emerald-600 text-white hover:bg-emerald-500' : 'text-neutral-200 hover:bg-white/10'}`}>
             <UserRound className="h-4 w-4" /><span className="hidden sm:inline">GPTmoda</span>
-          </button>
+          </button>}
         </div>
       </header>
       {isDemoMerchant && <div role="status" className="col-span-full border-b border-neutral-300 bg-neutral-100 px-4 py-2 text-xs font-medium text-neutral-800 sm:px-6">演示环境 · 数据仅供功能测试，请勿录入真实业务。</div>}
@@ -4615,12 +4647,22 @@ export const MerchantPortal: React.FC<{
           <ChevronRight className="h-3.5 w-3.5 shrink-0 text-neutral-400" aria-hidden="true" />
         </button>
         <nav aria-label="商家后台导航" className="merchant-web-sidebar-nav mt-3 min-h-0 flex-1 space-y-4 overflow-y-auto px-1">
+          {restaurantWorkspaceAvailable ? (
+            <>
+              <button type="button" id="merchant-sidebar-tab-dashboard" onClick={openMerchantHome} className={`${navItemClass(activeTab === 'dashboard' && dashboardNavSection === 'home')} w-full`}><Home className="h-4 w-4" />{localizeCopy('经营主页', 'Home')}</button>
+              {restaurantMenuAvailable && <button type="button" id="merchant-sidebar-tab-restaurant-menu" onClick={() => setActiveTab('restaurant_menu')} className={`${navItemClass(activeTab === 'restaurant_menu')} w-full`}><BookOpen className="h-4 w-4" />菜单管理</button>}
+              {restaurantTablesAvailable && <button type="button" id="merchant-sidebar-tab-restaurant-tables" onClick={() => setActiveTab('restaurant_tables')} className={`${navItemClass(activeTab === 'restaurant_tables')} w-full`}><Store className="h-4 w-4" />桌台管理</button>}
+            </>
+          ) : (
+            <>
           <div>
             <div className="flex items-center gap-1">
               <button type="button" id="merchant-sidebar-tab-dashboard" onClick={openMerchantHome} className={`${navItemClass(activeTab === 'dashboard' && dashboardNavSection === 'home')} flex-1`}><Home className="h-4 w-4" />{localizeCopy('经营主页', 'Home')}</button>
               <button type="button" aria-label={dashboardNavIsExpanded ? '收起主页菜单' : '展开主页菜单'} aria-expanded={dashboardNavIsExpanded} onClick={() => toggleSidebarNav('dashboard')} className="rounded-lg p-2 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"><ChevronDown className={`h-3.5 w-3.5 transition-transform ${dashboardNavIsExpanded ? 'rotate-180' : ''}`} /></button>
             </div>
             {dashboardNavIsExpanded && <button type="button" id="merchant-sidebar-growth-analytics" onClick={openMerchantAnalytics} className={settingsSubItemClass(activeTab === 'dashboard' && dashboardNavSection === 'analytics')}><BarChart3 className="h-3.5 w-3.5" />{localizeCopy('经营分析', 'Analisi')}</button>}
+            {restaurantMenuAvailable && <button type="button" id="merchant-sidebar-tab-restaurant-menu" onClick={() => setActiveTab('restaurant_menu')} className={`${navItemClass(activeTab === 'restaurant_menu')} mt-1 w-full`}><BookOpen className="h-4 w-4" />菜单管理</button>}
+            {restaurantTablesAvailable && <button type="button" id="merchant-sidebar-tab-restaurant-tables" onClick={() => setActiveTab('restaurant_tables')} className={`${navItemClass(activeTab === 'restaurant_tables')} mt-1 w-full`}><Store className="h-4 w-4" />桌台管理</button>}
             <div className="flex items-center gap-1">
               <button type="button" id="merchant-sidebar-tab-orders" onClick={() => { openSidebarNav('orders'); setActiveTab('orders'); }} className={`${navItemClass(activeTab === 'orders')} flex-1`}><Truck className="h-4 w-4" />{localizeCopy('订单履约', 'Ordini')}{orderActionCount > 0 && <span className="ml-auto min-w-5 rounded-full bg-neutral-200 px-1.5 py-0.5 text-center text-xs font-semibold text-neutral-800">{orderActionCount > 99 ? '99+' : orderActionCount}</span>}</button>
               <button type="button" aria-label={orderNavIsExpanded ? '收起订单菜单' : '展开订单菜单'} aria-expanded={orderNavIsExpanded} onClick={() => toggleSidebarNav('orders')} className="rounded-lg p-2 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"><ChevronDown className={`h-3.5 w-3.5 transition-transform ${orderNavIsExpanded ? 'rotate-180' : ''}`} /></button>
@@ -4668,9 +4710,10 @@ export const MerchantPortal: React.FC<{
               <button type="button" id="merchant-sidebar-growth-overview" onClick={() => { setGrowthSection('overview'); setActiveTab('growth'); }} className={settingsSubItemClass(activeTab === 'growth' && growthSection === 'overview')}><BarChart3 className="h-3.5 w-3.5" />{localizeCopy('增长概览', 'Panoramica')}</button>
               <button type="button" id="merchant-sidebar-growth-autopilot" onClick={() => { setGrowthSection('autopilot'); setActiveTab('growth'); }} className={settingsSubItemClass(activeTab === 'growth' && growthSection === 'autopilot')}><Sparkles className="h-3.5 w-3.5" />{localizeCopy('智能运营', 'Autopilot')}</button>
               <button type="button" id="merchant-sidebar-growth-campaigns" onClick={() => { setGrowthSection('campaigns'); setActiveTab('growth'); }} className={settingsSubItemClass(activeTab === 'growth' && growthSection === 'campaigns')}><Send className="h-3.5 w-3.5" />{localizeCopy('营销活动', 'Campagne')}</button>
+              <button type="button" id="merchant-sidebar-ad-planner" onClick={() => { setSidebarNavExpanded(null); setActiveTab('ad_planner'); }} className={settingsSubItemClass(activeTab === 'ad_planner')}><Clapperboard className="h-3.5 w-3.5" />{localizeCopy('广告策划', 'Piano ads')}</button>
             </div>}
           </div>
-          {modauiEnabled && <button type="button" id="merchant-sidebar-tab-modagpt" onClick={() => { setSidebarNavExpanded(null); setActiveTab('fashion_studio'); }} className={navItemClass(activeTab === 'fashion_studio' || activeTab === 'modagpt')}><Sparkles className="h-4 w-4" />{localizeCopy('创作空间', 'Studio ModaUI')}</button>}
+          {modauiEnabled && <button type="button" id="merchant-sidebar-tab-modagpt" onClick={() => { setSidebarNavExpanded(null); setActiveTab('fashion_studio'); }} className={navItemClass(activeTab === 'fashion_studio' || activeTab === 'modagpt')}><Sparkles className="h-4 w-4" />{localizeCopy('AI工作室', 'AI Studio · ModaUI')}</button>}
           <div>
             <div className="flex items-center gap-1">
               <button type="button" id="merchant-sidebar-tab-store-content" onClick={() => toggleSidebarNav('store')} className={`${navItemClass(storeNavIsActive)} flex-1`}><Store className="h-4 w-4" />{localizeCopy('店铺内容', 'Negozio e contenuti')}</button>
@@ -4716,9 +4759,11 @@ export const MerchantPortal: React.FC<{
             <button type="button" id="merchant-sidebar-tab-ai-chat-history" onClick={() => { setSidebarNavExpanded(null); setActiveTab('ai_chat_history'); }} className={`${navItemClass(activeTab === 'ai_chat_history')} mt-1`}><MessageCircle className="h-4 w-4" />{localizeCopy('AI 聊天记录', 'Cronologia AI')}</button>
             <button type="button" id="merchant-sidebar-tab-recent-activity" onClick={() => { setSidebarNavExpanded(null); setActiveTab('recent_activity'); }} className={navItemClass(activeTab === 'recent_activity')}><Clock className="h-4 w-4" />{localizeCopy('最近动态', 'Attività recenti')}</button>
           </div>
+            </>
+          )}
         </nav>
         <div className="mt-3 shrink-0 space-y-1 border-t border-neutral-200 pt-3">
-          <button type="button" id="merchant-sidebar-tab-ai-employees" onClick={() => { setSidebarNavExpanded(null); setActiveTab('ai_employees'); }} className={`${navItemClass(activeTab === 'ai_employees')} w-full`}><Bot className="h-4 w-4" />{localizeCopy('智能员工', 'Team AI')}</button>
+          {!restaurantWorkspaceAvailable && <button type="button" id="merchant-sidebar-tab-ai-employees" onClick={() => { setSidebarNavExpanded(null); setActiveTab('ai_employees'); }} className={`${navItemClass(activeTab === 'ai_employees')} w-full`}><Bot className="h-4 w-4" />{localizeCopy('智能员工', 'Team AI')}</button>}
           <button type="button" id="merchant-sidebar-tab-settings" onClick={openMerchantSettings} className={`${navItemClass(activeTab === 'settings')} w-full`}><SlidersHorizontal className="h-4 w-4" />{localizeCopy('系统设置', 'Impostazioni')}</button>
         </div>
       </aside>
@@ -4754,17 +4799,28 @@ export const MerchantPortal: React.FC<{
       {/* 2. SUB-NAVIGATION TABS */}
       <div className="merchant-web-horizontal-nav rounded-2xl border border-neutral-200/80 bg-white p-2 shadow-sm lg:hidden">
         <div className="flex flex-wrap items-center gap-1 rounded-xl bg-neutral-50/80 p-1">
+          {restaurantWorkspaceAvailable ? (
+            <>
+              <button id="merchant-tab-dashboard" type="button" onClick={openMerchantHome} className={navItemClass(activeTab === 'dashboard' && dashboardNavSection === 'home')}><Home className="h-3.5 w-3.5" />{localizeCopy('经营主页', 'Home')}</button>
+              {restaurantMenuAvailable && <button id="merchant-tab-restaurant-menu" type="button" onClick={() => setActiveTab('restaurant_menu')} className={navItemClass(activeTab === 'restaurant_menu')}><BookOpen className="h-3.5 w-3.5" />菜单管理</button>}
+              {restaurantTablesAvailable && <button id="merchant-tab-restaurant-tables" type="button" onClick={() => setActiveTab('restaurant_tables')} className={navItemClass(activeTab === 'restaurant_tables')}><Store className="h-3.5 w-3.5" />桌台管理</button>}
+            </>
+          ) : (
+            <>
           <button id="merchant-tab-dashboard" type="button" onClick={openMerchantHome} className={navItemClass(activeTab === 'dashboard' && dashboardNavSection === 'home')}><Home className="h-3.5 w-3.5" />{localizeCopy('经营主页', 'Home')}</button>
           <button id="merchant-tab-orders" type="button" onClick={() => setActiveTab('orders')} className={`${navItemClass(activeTab === 'orders')} relative`}><Truck className="h-3.5 w-3.5" />{localizeCopy('订单履约', 'Ordini')}{orderActionCount > 0 && <span className="min-w-4 rounded-full bg-neutral-200 px-1 text-center text-[10px] font-bold text-neutral-800">{orderActionCount > 99 ? '99+' : orderActionCount}</span>}</button>
-          {modauiEnabled && <button id="merchant-tab-modagpt" type="button" onClick={() => setActiveTab('fashion_studio')} className={navItemClass(activeTab === 'fashion_studio' || activeTab === 'modagpt')}><Sparkles className="h-3.5 w-3.5" />{localizeCopy('创作空间', 'Studio ModaUI')}</button>}
+          {modauiEnabled && <button id="merchant-tab-modagpt" type="button" onClick={() => setActiveTab('fashion_studio')} className={navItemClass(activeTab === 'fashion_studio' || activeTab === 'modagpt')}><Sparkles className="h-3.5 w-3.5" />{localizeCopy('AI工作室', 'AI Studio · ModaUI')}</button>}
+          <button id="merchant-tab-ad-planner" type="button" onClick={() => setActiveTab('ad_planner')} className={navItemClass(activeTab === 'ad_planner')}><Clapperboard className="h-3.5 w-3.5" />{localizeCopy('广告策划', 'Piano ads')}</button>
           <button id="merchant-tab-pos" type="button" onClick={() => setActiveTab('pos')} className={navItemClass(false)}><ShoppingCart className="h-3.5 w-3.5" />{localizeCopy('智能收银', 'Smart POS')}</button>
           <button id="merchant-tab-products" type="button" onClick={openProductCatalog} className={navItemClass(activeTab === 'products')}><Package className="h-3.5 w-3.5" />{localizeCopy('商品管理', 'Prodotti')}</button>
           <button id="merchant-tab-customers" type="button" onClick={() => setActiveTab('customers')} className={navItemClass(activeTab === 'customers')}><UserCheck className="h-3.5 w-3.5" />{localizeCopy('客户管理', 'Clienti')}</button>
           <button id="merchant-tab-growth" type="button" onClick={() => { setGrowthSection('overview'); setActiveTab('growth'); }} className={navItemClass(activeTab === 'growth')}><TrendingUp className="h-3.5 w-3.5" />{localizeCopy('营销增长', 'Crescita')}</button>
           <button id="merchant-tab-finance" type="button" onClick={() => setActiveTab('finance')} className={navItemClass(activeTab === 'finance')}><Receipt className="h-3.5 w-3.5" />{localizeCopy('财务结算', 'Finanza')}</button>
           <button id="merchant-tab-more" type="button" aria-expanded={moreNavIsExpanded} aria-controls="merchant-tab-more-menu" onClick={() => setMoreNavExpanded(expanded => !expanded)} className={navItemClass(moreNavIsExpanded)}><SlidersHorizontal className="h-3.5 w-3.5" />{localizeCopy('更多', 'Altro')}<ChevronDown className={`h-3 w-3 transition-transform ${moreNavIsExpanded ? 'rotate-180' : ''}`} /></button>
+            </>
+          )}
         </div>
-        {moreNavIsExpanded && <div id="merchant-tab-more-menu" className="mt-2 grid gap-3 rounded-xl border border-neutral-100 bg-white p-3 sm:grid-cols-2 xl:grid-cols-4">
+        {!restaurantWorkspaceAvailable && moreNavIsExpanded && <div id="merchant-tab-more-menu" className="mt-2 grid gap-3 rounded-xl border border-neutral-100 bg-white p-3 sm:grid-cols-2 xl:grid-cols-4">
           <section>
             <h2 className="px-2 text-[10px] font-bold uppercase tracking-wide text-neutral-400">{localizeCopy('商品库存', 'Prodotti e scorte')}</h2>
             <div className="mt-2 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -4877,9 +4933,24 @@ export const MerchantPortal: React.FC<{
       {activeTab === 'gallery' && <MerchantGallery onBack={() => setActiveTab('dashboard')} />}
       {activeTab === 'ai_employees' && <MerchantAiEmployees isIt={isIt} />}
       {activeTab === 'ai_tools' && <MerchantAiTools />}
+      {activeTab === 'ad_planner' && (
+        <Suspense fallback={<div className="rounded-xl border border-neutral-200 bg-white p-6 text-sm text-neutral-500">{localizeCopy('正在打开广告策划…', 'Apertura piano ads…')}</div>}>
+          <ModaUiAdPlanner />
+        </Suspense>
+      )}
       {/* ======================================================== */}
       {/* SUB-TAB 1: 仪表盘 (OVERVIEW) */}
       {/* ======================================================== */}
+      {activeTab === 'restaurant_menu' && restaurantMenuAvailable && (
+        <Suspense fallback={<div role="status" className="py-8 text-sm text-neutral-500">正在加载菜单管理…</div>}>
+          <RestaurantMenuWorkspace />
+        </Suspense>
+      )}
+      {activeTab === 'restaurant_tables' && restaurantTablesAvailable && (
+        <Suspense fallback={<div role="status" className="py-8 text-sm text-neutral-500">正在加载桌台管理…</div>}>
+          <RestaurantTableWorkspace />
+        </Suspense>
+      )}
       {activeTab === 'dashboard' && (
         <div id="merchant-dashboard-home" className={`space-y-4 ${dashboardNavSection === 'home' ? 'merchant-dashboard-home' : ''}`}>
           {dashboardNavSection === 'home' && (
@@ -5809,7 +5880,7 @@ export const MerchantPortal: React.FC<{
                 <label className="font-semibold text-neutral-700">物料名称<input required maxLength={200} value={materialForm.name} onChange={event => setMaterialForm(previous => ({ ...previous, name: event.target.value }))} placeholder="例如 220g 纯棉针织面料" className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 font-normal" /></label>
                 <label className="font-semibold text-neutral-700">物料分类<select value={materialForm.category} onChange={event => setMaterialForm(previous => ({ ...previous, category: event.target.value }))} className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 font-normal"><option value="fabric">面料</option><option value="lining">里料</option><option value="trim">辅料 / 配件</option><option value="label">标签 / 标牌</option><option value="packaging">包装材料</option><option value="other">其他</option></select></label>
                 <label className="font-semibold text-neutral-700">计量单位<select value={materialForm.unit} disabled={editingMaterialUnitLocked} onChange={event => setMaterialForm(previous => ({ ...previous, unit: event.target.value }))} className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 font-normal disabled:bg-neutral-100 disabled:text-neutral-500"><option value="meter">米</option><option value="piece">件 / 个</option><option value="kg">千克</option><option value="roll">卷</option></select>{editingMaterialUnitLocked && <span className="mt-1 block font-normal text-neutral-500">已关联 · 单位锁定</span>}</label>
-                <label className="font-semibold text-neutral-700">单位成本（€）<input type="number" min="0" step="0.0001" value={materialForm.unitCost} onChange={event => setMaterialForm(previous => ({ ...previous, unitCost: event.target.value }))} className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 font-normal" /></label>
+                {canViewMaterialCosts && <label className="font-semibold text-neutral-700">单位成本（€）<input type="number" min="0" step="0.0001" value={materialForm.unitCost} onChange={event => setMaterialForm(previous => ({ ...previous, unitCost: event.target.value }))} className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 font-normal" /></label>}
                 <label className="font-semibold text-neutral-700">安全库存（{({ meter: '米', piece: '件', kg: '千克', roll: '卷' } as Record<string, string>)[materialForm.unit] || materialForm.unit}）<input type="number" min="0" step="0.001" value={materialForm.reorderPoint} onChange={event => setMaterialForm(previous => ({ ...previous, reorderPoint: event.target.value }))} className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 font-normal" /></label>
                 <label className="font-semibold text-neutral-700">采购交期（天）<input type="number" min="0" step="1" value={materialForm.leadTimeDays} onChange={event => setMaterialForm(previous => ({ ...previous, leadTimeDays: event.target.value }))} className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 font-normal" /></label>
                 <label className="font-semibold text-neutral-700">物料状态<select value={materialForm.status} onChange={event => setMaterialForm(previous => ({ ...previous, status: event.target.value }))} className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 font-normal"><option value="active">启用</option><option value="suspended">停用</option></select></label>
@@ -5861,14 +5932,14 @@ export const MerchantPortal: React.FC<{
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="bg-neutral-50 text-neutral-600"><tr><th className="p-3">物料</th><th className="p-3">分类</th><th className="p-3">成本 / 交期</th><th className="p-3">可用 / 现有</th><th className="p-3">安全库存</th><th className="p-3">仓库明细</th><th className="p-3">状态 / 操作</th></tr></thead>
+                <thead className="bg-neutral-50 text-neutral-600"><tr><th className="p-3">物料</th><th className="p-3">分类</th><th className="p-3">{canViewMaterialCosts ? '成本 / 交期' : '交期'}</th><th className="p-3">可用 / 现有</th><th className="p-3">安全库存</th><th className="p-3">仓库明细</th><th className="p-3">状态 / 操作</th></tr></thead>
                 <tbody className="divide-y divide-neutral-200">
                   {materials.length === 0 ? <tr><td colSpan={7} className="p-6 text-center text-neutral-400">暂无物料档案</td></tr> : materials.map(material => {
                     const lowStock = material.availableQuantity <= material.reorderPoint;
                     return <tr key={material.id} className="hover:bg-neutral-50">
                       <td className="p-3 font-semibold text-neutral-900"><span className="font-mono text-neutral-500">{material.code}</span><span className="block">{material.name}</span></td>
                       <td className="p-3">{({ fabric: '面料', lining: '里料', trim: '辅料 / 配件', label: '标签 / 标牌', packaging: '包装材料', other: '其他' } as Record<string, string>)[material.category] || material.category} · {({ meter: '米', piece: '件 / 个', kg: '千克', roll: '卷' } as Record<string, string>)[material.unit] || material.unit}</td>
-                      <td className="p-3">€{material.unitCost.toFixed(4)} / {material.unit}<span className="block text-neutral-500">交期 {material.leadTimeDays} 天</span></td>
+                      <td className="p-3">{canViewMaterialCosts && material.unitCost !== undefined ? <>€{material.unitCost.toFixed(4)} / {material.unit}<span className="block text-neutral-500">交期 {material.leadTimeDays} 天</span></> : <>交期 {material.leadTimeDays} 天</>}</td>
                       <td className={`p-3 font-bold ${lowStock ? 'text-rose-700' : 'text-emerald-700'}`}>{material.availableQuantity.toFixed(3)} / {material.onHandQuantity.toFixed(3)}</td>
                       <td className="p-3">{material.reorderPoint.toFixed(3)}</td>
                       <td className="p-3 text-neutral-600">{material.balances.length ? material.balances.map(balance => `${balance.location.name}: ${balance.onHandQuantity.toFixed(3)}（预留 ${balance.reservedQuantity.toFixed(3)}）`).join(' · ') : '暂无库存'}</td>
@@ -8036,40 +8107,41 @@ export const MerchantPortal: React.FC<{
           <section className="space-y-3">
             <div>
               <h3 className="text-sm font-bold text-neutral-900">选择网店模板</h3>
-              <div className="mt-1 flex flex-wrap gap-2 text-xs text-neutral-600"><span>按当前行业提供三套结构</span><span>商品与订单不变</span></div>
+              <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-neutral-500"><span>仅更换网店外观</span><span>商品订单不变</span></div>
             </div>
             <div className="grid gap-3 md:grid-cols-3">
-              {storefrontTemplateOptions.map(template => {
+              {MERCHANT_STOREFRONT_TEMPLATES.map(template => {
                 const selected = storefrontForm.storefrontTemplate === template.id;
                 return (
                   <button
                     key={template.id}
                     type="button"
                     aria-pressed={selected}
-                    onClick={() => setStorefrontForm(previous => ({ ...previous, storefrontTemplate: template.id as MerchantStorefrontTemplate }))}
-                    className={`min-h-40 overflow-hidden rounded-[var(--radius-ruda-card)] border text-left transition-colors ${selected ? 'border-neutral-900 ring-1 ring-neutral-900/10' : 'border-neutral-200 hover:border-neutral-400'}`}
+                    onClick={() => setStorefrontForm(previous => ({ ...previous, storefrontTemplate: template.id }))}
+                    className={`overflow-hidden rounded-xl border text-left transition ${selected ? 'border-neutral-950 ring-2 ring-neutral-950/10' : 'border-neutral-200 hover:border-neutral-400'}`}
                   >
-                    <div className="flex h-24 items-end gap-2 border-b border-neutral-200 bg-neutral-50 p-3">
-                      <span className="h-12 w-1/3 border border-neutral-300 bg-white" />
-                      <span className="h-16 flex-1 border border-neutral-300 bg-white" />
-                      <span className="h-10 w-1/4 border border-neutral-300 bg-neutral-100" />
-                    </div>
-                    <div className="space-y-2 p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="text-sm font-semibold text-neutral-900">{template.name}</span>
-                        <span className={`shrink-0 text-xs font-medium ${selected ? 'text-neutral-900' : 'text-neutral-500'}`}>{selected ? '已选择' : '选择'}</span>
+                    <div className="h-24 p-2" style={{ backgroundColor: template.colors[0] }}>
+                      <div className="flex h-full flex-col overflow-hidden rounded border" style={{ borderColor: `${template.colors[1]}55`, backgroundColor: template.colors[0] }}>
+                        <div className="flex h-5 items-center justify-between px-2" style={{ backgroundColor: template.colors[1] }}>
+                          <span className="h-1 w-10 rounded-full bg-white/80" />
+                          <span className="h-1 w-5 rounded-full bg-white/50" />
+                        </div>
+                        <div className="flex flex-1 items-end gap-1 p-2">
+                          {[0, 1, 2].map(index => <span key={index} className="h-full flex-1 rounded-sm" style={{ backgroundColor: index === 1 ? template.colors[2] : `${template.colors[1]}30` }} />)}
+                        </div>
                       </div>
-                      <p className="text-xs leading-5 text-neutral-600">{template.positioning}</p>
+                    </div>
+                    <div className="flex items-start justify-between gap-2 p-3">
+                      <div>
+                        <span className="block text-xs font-bold text-neutral-900">{template.name}</span>
+                        <span className="mt-1 block text-[10px] leading-4 text-neutral-500">{template.description}</span>
+                      </div>
+                      <span className={`mt-0.5 shrink-0 rounded-full px-2 py-1 text-[9px] font-semibold ${selected ? 'bg-neutral-950 text-white' : 'bg-neutral-100 text-neutral-500'}`}>{selected ? '已选择' : '选择'}</span>
                     </div>
                   </button>
                 );
               })}
             </div>
-            {selectedLegacyStorefrontTemplate ? (
-              <p className="text-xs leading-5 text-neutral-600">
-                当前店铺仍使用兼容模板「{selectedLegacyStorefrontTemplate.name}」。选择本行业新模板并保存后才会切换；旧模板设置不会自动改写。
-              </p>
-            ) : null}
           </section>
 
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-3 text-xs">
@@ -9023,7 +9095,7 @@ export const MerchantPortal: React.FC<{
       </>
       )}
     </main>
-    {assistantPanelOpen && (
+    {assistantPanelOpen && currentMerchant.industryTemplate !== 'restaurant_ordering' && (
       <aside className={`merchant-web-assistant fixed inset-y-14 right-0 z-40 flex ${assistantPanelExpanded ? 'left-0 w-screen lg:left-[192px] lg:w-auto' : 'w-[min(360px,94vw)]'} flex-col border-l border-neutral-200 bg-white shadow-2xl ${assistantPanelExpanded ? 'lg:fixed lg:right-0 lg:top-14 lg:z-[60] lg:h-[calc(100vh-3.5rem)] lg:shadow-xl' : 'lg:sticky lg:top-14 lg:h-[calc(100vh-3.5rem)] lg:w-auto lg:shadow-none'}`}>
         <div className="relative flex h-14 shrink-0 items-center justify-between border-b border-neutral-200 px-3">
           <div className="relative min-w-0">

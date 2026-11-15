@@ -1,0 +1,150 @@
+.restaurant-tables-screen {
+  padding-bottom: calc(140rpx + env(safe-area-inset-bottom));
+}
+
+.restaurant-tables-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+}
+
+.restaurant-tables-heading > view {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.page-title {
+  color: var(--ink-primary);
+  font-size: 38rpx;
+  font-weight: 700;
+}
+
+.page-note,
+.item-meta {
+  margin-top: 8rpx;
+  color: var(--ink-tertiary);
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+}
+
+.refresh-button {
+  min-height: 64rpx;
+  flex: 0 0 auto;
+  line-height: 64rpx;
+}
+
+.store-picker,
+.table-form,
+.table-edit-form {
+  margin-bottom: var(--space-lg);
+}
+
+.field-label,
+.section-title {
+  display: block;
+  margin-bottom: var(--space-sm);
+  color: var(--ink-primary);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.picker-input,
+.input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 76rpx;
+  padding: 18rpx;
+  border: var(--border-fine);
+  border-radius: var(--radius-control);
+  background: var(--paper-primary);
+  color: var(--ink-primary);
+  font-size: var(--font-size-sm);
+}
+
+.table-form .input,
+.table-edit-form .input {
+  margin-top: var(--space-sm);
+}
+
+.table-actions {
+  margin-bottom: var(--space-md);
+}
+
+.form-button {
+  margin-top: var(--space-sm);
+}
+
+.table-row {
+  padding: var(--space-md) 0;
+  border-bottom: var(--border-fine);
+}
+
+.table-row-main,
+.table-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.table-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.item-title {
+  overflow: hidden;
+  color: var(--ink-primary);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table-row-actions {
+  flex: 0 0 auto;
+}
+
+.table-row-actions button {
+  min-height: 64rpx;
+  padding: 0 16rpx;
+  font-size: var(--font-size-xs);
+}
+
+.table-edit-form .table-row-actions {
+  justify-content: flex-end;
+  margin-top: var(--space-sm);
+}
+
+.empty-state {
+  padding: var(--space-lg) var(--space-sm);
+  color: var(--ink-tertiary);
+  font-size: var(--font-size-sm);
+  text-align: center;
+}
+
+.error-box,
+.notice-box {
+  margin-bottom: var(--space-md);
+  padding: var(--space-sm);
+  border: var(--border-fine);
+  border-radius: var(--radius-control);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+
+.error-box {
+  color: #8c3730;
+  background: #fbf3f1;
+}
+
+.notice-box {
+  color: var(--ink-secondary);
+  background: var(--paper-secondary);
+}

@@ -19,6 +19,7 @@ deploy=false
 skip_tests=false
 for arg in "$@"; do
   case "$arg" in
+    --) ;;
     --deploy) deploy=true ;;
     --skip-tests) skip_tests=true ;;
     *) echo "未知参数: $arg" >&2; exit 2 ;;
@@ -37,7 +38,7 @@ branch="$(git rev-parse --abbrev-ref HEAD)"
 remote_url="$(git remote get-url origin 2>/dev/null || true)"
 [[ "$remote_url" == *"rdmodasrl-spec/rudafashion-v2"* ]] || die "origin 不是 rudafashion-v2（当前：${remote_url:-未配置}）"
 
-log "1/6 拉取远端最新（不覆盖本地改动）"
+log "1/7 拉取远端最新（不覆盖本地改动）"
 git fetch origin --quiet
 if git rev-parse --verify --quiet origin/main >/dev/null; then
   if ! git merge-base --is-ancestor origin/main HEAD; then
@@ -46,23 +47,26 @@ if git rev-parse --verify --quiet origin/main >/dev/null; then
   fi
 fi
 
+log "2/7 生成 Prisma Client"
+npx prisma generate --schema prisma/schema.prisma
+
 if [[ "$skip_tests" == false ]]; then
-  log "2/6 类型检查 npx tsc --noEmit"
+  log "3/7 类型检查 npx tsc --noEmit"
   npx tsc --noEmit
-  log "3/6 单元测试 npm run test:unit"
+  log "4/7 单元测试 npm run test:unit"
   npm run test:unit 2>&1 | tail -8
 else
-  log "2-3/6 已跳过类型检查与测试（--skip-tests）"
+  log "2-4/7 已跳过类型检查与测试（--skip-tests）"
 fi
 
-log "4/6 构建 npm run build"
+log "5/7 构建 npm run build"
 npm run build >/tmp/ruda-sync-build.log 2>&1 || { tail -30 /tmp/ruda-sync-build.log >&2; die "构建失败"; }
 tail -3 /tmp/ruda-sync-build.log
 
 if [[ -z "$(git status --porcelain)" ]]; then
   log "没有需要提交的改动"
 else
-  log "5/6 提交改动"
+  log "6/7 提交改动"
   git add -A
   staged="$(git diff --cached --name-only)"
   if [[ -z "$staged" ]]; then
@@ -81,7 +85,7 @@ else
   fi
 fi
 
-log "6/6 推送到 origin/main"
+log "7/7 推送到 origin/main"
 git push origin HEAD:main
 git --no-pager log --oneline -1
 

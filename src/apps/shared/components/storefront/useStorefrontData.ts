@@ -145,12 +145,8 @@ export function resolveAngleFrames(product: Product): string[] {
   return unique.length >= 3 ? unique : [];
 }
 
-export function useStorefrontData(
-  merchantId?: string | null,
-  options: { embeddedInMerchantApp?: boolean } = {}
-) {
+export function useStorefrontData(merchantId?: string | null) {
   const context = useB2B() as any;
-  const embeddedInMerchantApp = options.embeddedInMerchantApp === true;
   const contextMerchants: Merchant[] = Array.isArray(context.merchants) ? context.merchants : [];
   const contextProducts: Product[] = Array.isArray(context.products) ? context.products : [];
 
@@ -160,15 +156,10 @@ export function useStorefrontData(
    * 生产环境 context 已有数据时不会触发任何请求。
    */
   const needsFallback = contextMerchants.length === 0 || contextProducts.length === 0;
-  const [fallback, setFallback] = useState<{
-    merchants: Merchant[];
-    products: Product[];
-    status: 'loading' | 'ready' | 'error';
-  }>({ merchants: [], products: [], status: 'loading' });
+  const [fallback, setFallback] = useState<{ merchants: Merchant[]; products: Product[] }>({ merchants: [], products: [] });
   useEffect(() => {
     if (!needsFallback) return undefined;
     let active = true;
-    setFallback(previous => ({ ...previous, status: 'loading' }));
     Promise.all([
       apiGet<{ merchants: Merchant[] }>('/api/merchants', 30000),
       apiGet<{ products: Product[] }>('/api/products', 30000)
@@ -176,13 +167,9 @@ export function useStorefrontData(
       if (!active) return;
       setFallback({
         merchants: Array.isArray(merchantResult?.merchants) ? merchantResult.merchants : [],
-        products: Array.isArray(productResult?.products) ? productResult.products : [],
-        status: 'ready'
+        products: Array.isArray(productResult?.products) ? productResult.products : []
       });
-    }).catch(() => {
-      if (!active) return;
-      setFallback(previous => ({ ...previous, status: 'error' }));
-    });
+    }).catch(() => undefined);
     return () => { active = false; };
   }, [needsFallback]);
 
@@ -194,10 +181,9 @@ export function useStorefrontData(
 
   // 授权来源必须与 MerchantStoreView / 公共 API 一致：context 只暴露 isRegisteredWholesale
   // （已认证且审核通过的采购账号），不存在 canViewWholesaleProducts 字段。
-  const canViewWholesale = embeddedInMerchantApp || Boolean(context.isRegisteredWholesale);
+  const canViewWholesale = Boolean(context.isRegisteredWholesale);
   const isVaultApproved = Boolean(
-    embeddedInMerchantApp
-    || context.authRole === 'merchant'
+    context.authRole === 'merchant'
     || (merchant && typeof context.hasVaultAccess === 'function' && context.hasVaultAccess(merchant.id))
   );
   const rawProducts: Product[] = contextProducts.length ? contextProducts : fallback.products;
@@ -206,7 +192,7 @@ export function useStorefrontData(
   const { products, hiddenWholesaleCount } = useMemo(() => {
     if (!merchant) return { products: [] as StorefrontProduct[], hiddenWholesaleCount: 0 };
     const visible = rawProducts.filter(product =>
-      isProductVisibleInStorefront(product, { canViewWholesale, isVaultApproved, embeddedInMerchantApp }, merchant.id)
+      isProductVisibleInStorefront(product, { canViewWholesale, isVaultApproved }, merchant.id)
     );
     const hidden = rawProducts.filter(product =>
       product.merchantId === merchant.id
@@ -219,7 +205,7 @@ export function useStorefrontData(
       return mapProductForStorefront(product, calculateCustomerPrice(product.wholesalePrice), tierPrice);
     });
     return { products: mapped, hiddenWholesaleCount: hidden };
-  }, [merchant, rawProducts, canViewWholesale, isVaultApproved, embeddedInMerchantApp, calculateCustomerPrice]);
+  }, [merchant, rawProducts, canViewWholesale, isVaultApproved, calculateCustomerPrice]);
 
   const categories = useMemo(() => {
     const map = new Map<string, number>();
@@ -252,10 +238,6 @@ export function useStorefrontData(
     merchant,
     contact,
     brandStory,
-    isLoading: needsFallback && fallback.status === 'loading',
-    loadError: needsFallback && fallback.status === 'error'
-      ? '店铺数据暂时无法加载，请检查网络后重试。'
-      : null,
     products,
     categories,
     materials,

@@ -12,7 +12,7 @@ export type ModaGptImageTaskResult = {
   success: true;
   status: 'completed';
   taskId: string;
-  task: 'imageGeneration' | 'tryOn';
+  task: 'imageGeneration' | 'imageEdit' | 'tryOn';
   garmentStorageKey?: string;
   imageDataUrl: string;
   expiresAt: string;

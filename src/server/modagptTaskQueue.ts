@@ -37,6 +37,7 @@ export function canTransitionModaGptTask(from: ModaGptTaskStatus, to: ModaGptTas
 export type ModaGptTask<TPayload = unknown> = {
   id: string;
   merchantId: string | null;
+  projectId: string | null;
   tenantId: string | null;
   actorId: string | null;
   traceId: string;
@@ -61,6 +62,7 @@ export type ModaGptTaskInput = {
   taskType: ModaGptTaskType;
   payload: unknown;
   merchantId?: string;
+  projectId?: string;
   tenantId?: string;
   actorId?: string;
   traceId?: string;
@@ -79,6 +81,7 @@ export type ModaGptTaskStore = {
     taskType: ModaGptTaskType;
     payload: string;
     merchantId: string | null;
+    projectId?: string | null;
     tenantId: string | null;
     actorId: string | null;
     traceId: string;
@@ -209,6 +212,11 @@ export class ModaGptTaskRuntime {
     if (input.merchantId && tenantId !== input.merchantId) {
       throw new Error('MODAGPT_TASK_TENANT_MISMATCH');
     }
+    if (input.projectId !== undefined
+      && (!input.merchantId
+        || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.projectId))) {
+      throw new Error('MODAGPT_TASK_PROJECT_INVALID');
+    }
     const actorId = input.actorId ?? null;
     if (actorId !== null && (!actorId.trim() || actorId.length > 160 || /[\u0000-\u001f\u007f]/.test(actorId))) {
       throw new Error('MODAGPT_TASK_ACTOR_INVALID');
@@ -254,6 +262,7 @@ export class ModaGptTaskRuntime {
       taskType: input.taskType,
       payload,
       merchantId: input.merchantId ?? null,
+      projectId: input.projectId ?? null,
       tenantId,
       actorId,
       traceId,

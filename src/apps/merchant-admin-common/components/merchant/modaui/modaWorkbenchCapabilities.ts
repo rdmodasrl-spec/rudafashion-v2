@@ -1,7 +1,7 @@
 /**
  * ModaUI 工作台能力注册表。
  *
- * 这里是“用户可选择的五项创作能力”在前端的唯一声明处：
+ * 这里是“六项 Apparel 创作能力”在前端的唯一声明处：
  * - 每项能力对应的真实执行方式（服务端文字生成 / 服务端试穿 / 本地像素换色 / 未接入）；
  * - 需要的素材槽位；
  * - 依据服务端 entitlements 计算结果可用性。
@@ -10,12 +10,13 @@
  * 没有真实引擎的能力（时装视频、图生图棚拍）必须返回 blocked，界面不得发起请求。
  */
 
-export const WORKBENCH_CAPABILITY_IDS = ['design', 'tryon', 'recolor', 'studio', 'video'] as const;
+export const WORKBENCH_CAPABILITY_IDS = ['tryon', 'design', 'studio', 'recolor', 'video', 'pattern'] as const;
 
 export type WorkbenchCapabilityId = (typeof WORKBENCH_CAPABILITY_IDS)[number];
 
 export type WorkbenchExecution =
   | 'server_image_generation'
+  | 'server_image_edit'
   | 'server_try_on'
   | 'client_recolor'
   | 'unavailable';
@@ -56,6 +57,15 @@ export const WORKBENCH_STUDIO_PLANS = ['pro', 'business', 'fashion_pro'] as cons
 
 export const WORKBENCH_CAPABILITIES: readonly WorkbenchCapability[] = [
   {
+    id: 'tryon',
+    labelZh: '真人 AI 虚拟试衣',
+    labelIt: 'Prova virtuale',
+    hintZh: '上传模特图和服装图',
+    hintIt: 'Persona e capo',
+    execution: 'server_try_on',
+    requires: ['person', 'garment']
+  },
+  {
     id: 'design',
     labelZh: 'AI 服装设计',
     labelIt: 'Design moda',
@@ -65,40 +75,40 @@ export const WORKBENCH_CAPABILITIES: readonly WorkbenchCapability[] = [
     requires: ['brief']
   },
   {
-    id: 'tryon',
-    labelZh: '虚拟试穿',
-    labelIt: 'Prova virtuale',
-    hintZh: '人物与服装两个素材',
-    hintIt: 'Persona e capo',
-    execution: 'server_try_on',
-    requires: ['person', 'garment']
-  },
-  {
-    id: 'recolor',
-    labelZh: '精准换色',
-    labelIt: 'Ricoloratura',
-    hintZh: '保留纹理与版型换色',
-    hintIt: 'Cambia colore, mantieni il capo',
-    execution: 'client_recolor',
-    requires: ['garment']
-  },
-  {
     id: 'studio',
-    labelZh: '商业棚拍',
-    labelIt: 'Servizio commerciale',
-    hintZh: '主图、模特图、细节图',
-    hintIt: 'Scatti commerciali',
+    labelZh: 'AI 模特棚拍',
+    labelIt: 'Shooting AI',
+    hintZh: '模特、姿势与影棚场景',
+    hintIt: 'Modella, posa e studio',
     execution: 'server_image_generation',
     requires: ['brief']
   },
   {
+    id: 'recolor',
+    labelZh: '高清精调色',
+    labelIt: 'Ricolorazione HD',
+    hintZh: '换色并保留纹理、褶皱与光影',
+    hintIt: 'Mantieni texture, pieghe e luce',
+    execution: 'client_recolor',
+    requires: ['garment']
+  },
+  {
     id: 'video',
-    labelZh: '时装视频',
-    labelIt: 'Video moda',
-    hintZh: '视频引擎未接入',
-    hintIt: 'Motore video non attivo',
+    labelZh: 'AI 走秀视频',
+    labelIt: 'Video di sfilata AI',
+    hintZh: '模特走秀视频生成',
+    hintIt: 'Generazione video di sfilata',
     execution: 'unavailable',
     requires: []
+  },
+  {
+    id: 'pattern',
+    labelZh: 'AI 专业智能打版',
+    labelIt: 'Modellistica AI professionale',
+    hintZh: '结构识别、二维纸样、放码与生产文件',
+    hintIt: 'Struttura, cartamodelli, taglie e file produzione',
+    execution: 'unavailable',
+    requires: ['garment']
   }
 ];
 

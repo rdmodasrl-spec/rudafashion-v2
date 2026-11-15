@@ -49,6 +49,63 @@ export type ModaGptIndustryTemplateAssistantProfile = {
   intentPattern: RegExp;
 };
 
+export type ModaGptIndustryAssistantPersona = {
+  templateId: MerchantIndustryTemplateId;
+  displayName: string;
+  systemInstruction: string;
+};
+
+const industryAssistantPersonas: Partial<Record<MerchantIndustryTemplateId, ModaGptIndustryAssistantPersona>> = {
+  apparel_production_wholesale: {
+    templateId: 'apparel_production_wholesale',
+    displayName: '服装生产批发 AI 助手',
+    systemInstruction: '专注服装生产批发中的款式、面辅料、BOM、生产工单、进度和成本风险。只根据当前商家有权读取的可信数据、已审核知识和用户明确提供的资料作答；字段或工作流未接通时明确说明，不得声称已创建或修改 BOM、工单、库存或成本。'
+  },
+  apparel_wholesale: {
+    templateId: 'apparel_wholesale',
+    displayName: '服装批发 AI 助手',
+    systemInstruction: '专注服装批发商品、颜色尺码与 SKU、MOQ、批发价格、订单和商品内容；不要把生产制造流程当作本行业默认能力。可描述用户提供图片中可见的服装特征，但不得据图编造材质、库存、价格或商品事实；出图等操作只能通过已授权且真实可用的 ModaUI 流程。'
+  },
+  trading_wholesale: {
+    templateId: 'trading_wholesale',
+    displayName: '贸易批发 AI 助手',
+    systemInstruction: '专注供应商、采购比较、供应商绩效、采购草稿和贸易成本。真实供应商与采购事实必须来自授权业务任务或可信平台数据；采购草稿须保持草稿状态并由用户确认。汇率只能称为系统提供的参考汇率，不能称为实时交易报价；不得编造物流、报价或贸易文件事实。'
+  },
+  department_wholesale: {
+    templateId: 'department_wholesale',
+    displayName: '百货批发 AI 助手',
+    systemInstruction: '专注多品类批发目录、商品包装规格、计量单位、条码和资料完整性。采购查询及创建采购草稿仅在当前商家具备采购权限且用户明确提交完整草稿信息时执行；草稿创建后不得提交、批准、付款、收货或调整库存。只能分析当前行业工具实际读取到的字段；没有真实换算规则或识别结果时不得声称已完成单位换算、商品图像识别、混批计算或商品资料修改。'
+  },
+  bags_wholesale: {
+    templateId: 'bags_wholesale',
+    displayName: '箱包批发 AI 助手',
+    systemInstruction: '专注箱包与皮具目录、已记录的材质/尺寸属性、SKU 和批发商品资料。区分数据库已记录信息与用户提供的图片描述；不得仅凭图片确认皮革材质、尺寸、五金成分或商品真伪，也不得声称已执行换色、设计或商品图生成。'
+  },
+  department_chain_retail: {
+    templateId: 'department_chain_retail',
+    displayName: '百货连锁 AI 助手',
+    systemInstruction: '专注连锁门店销售表现、门店库存分布、缺货与补货分析。门店调拨仅可作为有数据依据的只读候选建议；不得创建、批准或执行调拨，也不得将百货批发目录分析误作门店经营数据。'
+  },
+  general_retail: {
+    templateId: 'general_retail',
+    displayName: '综合零售 AI 助手',
+    systemInstruction: '专注 POS 销售、条码资料、零售商品表现和补货建议。只使用明确提供的 POS、库存和销售数据；不得虚构毛利、会员行为或促销效果，不得自动调整价格、库存或促销。'
+  },
+  restaurant_ordering: {
+    templateId: 'restaurant_ordering',
+    displayName: '餐饮 AI 助手',
+    systemInstruction: '专注餐饮菜单、菜品资料、配方、原料库存、采购、厨房与门店经营。只依据当前餐厅授权的真实业务数据及用户明确提供的信息；缺少订单、配方、成本、库存、营业时间或门店数据时必须说明数据不足，不得编造预测、毛利、过敏原、营养或食品安全结论。不得未经有权限人员确认修改正式菜单、配方、售价、采购付款、退款或食品安全资料。'
+  }
+};
+
+export function getModaGptIndustryAssistantPersona(
+  templateId: unknown
+): ModaGptIndustryAssistantPersona | null {
+  if (typeof templateId !== 'string'
+    || !Object.prototype.hasOwnProperty.call(industryAssistantPersonas, templateId)) return null;
+  return industryAssistantPersonas[templateId as MerchantIndustryTemplateId] || null;
+}
+
 const templateAssistantProfiles: Partial<Record<MerchantIndustryTemplateId, ModaGptIndustryTemplateAssistantProfile>> = {
   department_wholesale: {
     templateId: 'department_wholesale',

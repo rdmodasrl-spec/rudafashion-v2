@@ -20,6 +20,7 @@ import { loadMerchantAiToolAccess } from './aiToolRegistry';
 import { removeBlockedToolDefinitions } from './aiToolManifest';
 import { AI_TOOLS_USE_PERMISSION, createModauiAiTools } from './modauiAiTools';
 import {
+  isModaGptProcurementWorkflowAllowed,
   isExecutableModaGptMerchantWorkflow,
   type ModaGptCoreTaskRoute
 } from './modagptTaskSupervisor';
@@ -77,6 +78,10 @@ export async function executeModaGptMerchantTask(input: {
   ) => Promise<{ provider: string; providerMessageId: string }>;
 }): Promise<ModaGptMerchantTaskResult> {
   if (!isExecutableModaGptMerchantWorkflow(input.route.workflow) || input.route.execution !== 'ready') {
+    throw new Error('MODAGPT_MERCHANT_WORKFLOW_UNAVAILABLE');
+  }
+  if (input.route.workflow === 'procurement_management'
+    && !isModaGptProcurementWorkflowAllowed(input.route.industryTemplate, input.route.merchantIndustry)) {
     throw new Error('MODAGPT_MERCHANT_WORKFLOW_UNAVAILABLE');
   }
   const employee = input.route.workflow === 'product_publish'
@@ -917,9 +922,9 @@ async function executeModaGptProcurementWorkflow(input: {
       taskId: input.taskId,
       traceId: input.traceId,
       status: 'needs_input',
-      summary: '已查询本商家启用供应商；请提供 supplierId，以及每项商品的 productId、variantId、数量和单位成本。当前未创建采购单。',
+      summary: '已查询本商家启用供应商；请提供 supplierId，以及每项商品的 productId、variantId、数量和单位成本。当前未创建采购草稿。',
       employee: agentId,
-      steps: ['Supervisor 路由至贸易采购员工', '读取本商家启用供应商', '校验缺失的采购草稿输入'],
+      steps: ['Supervisor 路由至采购管理助手', '读取本商家启用供应商', '校验缺失的采购草稿输入'],
       toolCalls,
       artifacts: [],
       approvalRequired: false,
@@ -984,7 +989,7 @@ async function executeModaGptProcurementWorkflow(input: {
       summary: `已创建并回读验证采购草稿 ${result.purchaseOrderNo}，金额 ${result.totalAmount.toFixed(2)} ${draftInput.currency || 'EUR'}。状态仍为草稿，尚未提交或下单；请按现有采购审批流程处理。${currencySummary ? ` ${currencySummary}` : ''}`,
       employee: agentId,
       steps: [
-        'Supervisor 路由至贸易采购员工',
+        'Supervisor 路由至采购管理助手',
         '通过 Tool Runtime 查询租户内供应商',
         '校验供应商、商品、SKU、数量和成本',
         '创建采购草稿并从数据库回读核验租户、状态和金额'

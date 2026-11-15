@@ -22,6 +22,18 @@
   border: 2rpx solid #e5e5e5;
 }
 
+.ad-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.ad-entry-main {
+  flex: 1;
+  min-width: 0;
+}
+
 .card-head {
   display: flex;
   align-items: flex-start;

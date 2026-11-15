@@ -5,6 +5,9 @@ module.exports = {
   templateId: 'bags_wholesale',
   title: '箱包批发',
   summary: '材质、尺寸与箱包 SKU 库存',
+  modauiPrompts: [
+    { label: '检查箱包商品资料', prompt: '整理当前箱包商品的材质、尺寸与 SKU 资料，并列出缺失字段。' }
+  ],
   metrics: [
     { key: 'pendingOrders', label: '待确认订单', suffix: '单', emphasis: true },
     { key: 'pickingOrders', label: '待发货', suffix: '单' },

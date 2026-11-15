@@ -108,7 +108,12 @@ async function waitForTask(
   throw new Error(`TRADING_WHOLESALE_TASK_TIMEOUT:${taskId}:${logs()}`);
 }
 
-async function createMerchant(suffix: string, label: string): Promise<string> {
+async function createMerchant(
+  suffix: string,
+  label: string,
+  industry: 'TRADING_COMPANY' | 'DEPARTMENT_STORE' | 'RETAIL_STORE' = 'TRADING_COMPANY',
+  industryTemplate?: string
+): Promise<string> {
   const id = crypto.randomUUID();
   await prisma.merchant.create({
     data: {
@@ -131,7 +136,8 @@ async function createMerchant(suffix: string, label: string): Promise<string> {
       contactPhone: '+390000000000',
       contactEmail: `trading-${label}-${suffix}@example.test`,
       storeSlug: `trading-${label}-${suffix}`,
-      industry: 'TRADING_COMPANY'
+      industry,
+      ...(industryTemplate ? { industryTemplate } : {})
     }
   });
   return id;
@@ -150,12 +156,21 @@ test('ModaUI procurement HTTP workflow persists tenant-scoped drafts and returns
     merchantIds.push(merchantA);
     const merchantB = await createMerchant(suffix, 'B');
     merchantIds.push(merchantB);
+    const departmentMerchant = await createMerchant(suffix, 'Department', 'DEPARTMENT_STORE', 'department_wholesale');
+    merchantIds.push(departmentMerchant);
+    const retailMerchant = await createMerchant(suffix, 'Retail', 'RETAIL_STORE', 'general_retail');
+    merchantIds.push(retailMerchant);
 
-    await Promise.all([merchantA, merchantB].map((merchantId, index) =>
+    await Promise.all([
+      [merchantA, 'TRADING_COMPANY'],
+      [merchantB, 'TRADING_COMPANY'],
+      [departmentMerchant, 'DEPARTMENT_STORE'],
+      [retailMerchant, 'RETAIL_STORE']
+    ].map(([merchantId, industry], index) =>
       prisma.$transaction(tx => provisionModaGptIndustryTeam({
         tx,
-        merchantId,
-        industry: 'TRADING_COMPANY',
+        merchantId: merchantId as string,
+        industry: industry as 'TRADING_COMPANY' | 'DEPARTMENT_STORE' | 'RETAIL_STORE',
         idempotencyKey: `trading-wholesale-test:${suffix}:${index}`
       }))
     ));
@@ -498,6 +513,95 @@ test('ModaUI procurement HTTP workflow persists tenant-scoped drafts and returns
     assert.ok(['dead_letter', 'failed'].includes(failedResult.runtimeStatus));
     assert.ok(failedResult.errors.includes('MODAGPT_PRODUCT_UNAVAILABLE'));
     assert.equal(await prisma.merchantPurchaseOrder.count({ where: { merchantId: merchantA, status: 'draft' } }), 1);
+
+    const departmentSupplier = await prisma.supplier.create({
+      data: { merchantId: departmentMerchant, name: `Department Supplier ${suffix}`, status: 'active' }
+    });
+    const departmentProductId = `department-product-${suffix}`;
+    const departmentVariantId = `department-variant-${suffix}`;
+    await prisma.product.create({
+      data: {
+        id: departmentProductId,
+        merchantId: departmentMerchant,
+        styleNo: `DW-${suffix}`,
+        name: `Department Product ${suffix}`,
+        category: 'general',
+        subCategory: 'test',
+        brand: 'RUDA Test',
+        season: 'test',
+        images: '[]',
+        wholesalePrice: 10,
+        rrpPrice: 20,
+        status: 'new',
+        inventoryStatus: 'coming_soon',
+        origin: 'Italy',
+        fabric: 'test',
+        composition: 'test',
+        weight: 'test',
+        packaging: 'test',
+        washCare: 'test',
+        description: 'Isolated department wholesale procurement fixture.',
+        skus: JSON.stringify([{ sku: `DWSKU-${suffix}`, color: 'Black', size: 'One Size' }]),
+        lifecycleStatus: 'draft',
+        variants: {
+          create: [{ id: departmentVariantId, sku: `DWSKU-${suffix}`, color: 'Black', size: 'One Size' }]
+        }
+      }
+    });
+    const departmentOwner = merchantToken(departmentMerchant);
+    const departmentPreview = await request(baseUrl, '/api/merchant/modagpt/task/preview', {
+      method: 'POST',
+      token: departmentOwner,
+      body: { message: '请创建采购草稿' }
+    });
+    assert.equal(departmentPreview.status, 200, JSON.stringify(departmentPreview.body));
+    assert.equal(departmentPreview.body.workflow, 'procurement_management');
+    assert.ok(departmentPreview.body.tools.includes('create_procurement_draft'));
+    const departmentTask = await request(baseUrl, '/api/merchant/modagpt/task', {
+      method: 'POST',
+      token: departmentOwner,
+      idempotencyKey: `department-${suffix}-procurement`,
+      body: {
+        message: '请创建采购草稿',
+        inputs: {
+          create_procurement_draft: {
+            supplierId: departmentSupplier.id,
+            items: [{ productId: departmentProductId, variantId: departmentVariantId, quantity: 3, unitCost: 4.25 }],
+            currency: 'EUR'
+          }
+        }
+      }
+    });
+    assert.equal(departmentTask.status, 202, JSON.stringify(departmentTask.body));
+    taskIds.push(departmentTask.body.taskId);
+    const departmentResult = await waitForTask(baseUrl, departmentOwner, departmentTask.body.taskId, logs);
+    assert.equal(departmentResult.runtimeStatus, 'completed');
+    assert.equal(departmentResult.status, 'draft_created');
+    const departmentOrderId = departmentResult.artifacts.find((artifact: string) =>
+      artifact.startsWith('MerchantPurchaseOrder:')
+    )?.split(':')[1];
+    assert.ok(departmentOrderId);
+    const departmentOrder = await prisma.merchantPurchaseOrder.findFirst({
+      where: { id: departmentOrderId, merchantId: departmentMerchant },
+      include: { items: true }
+    });
+    assert.ok(departmentOrder);
+    assert.equal(departmentOrder.status, 'draft');
+    assert.equal(departmentOrder.supplierId, departmentSupplier.id);
+    assert.equal(departmentOrder.items[0].productId, departmentProductId);
+    assert.equal(await prisma.merchantPurchaseOrder.count({
+      where: { merchantId: departmentMerchant, status: 'draft' }
+    }), 1);
+
+    const blockedRetailPreview = await request(baseUrl, '/api/merchant/modagpt/task/preview', {
+      method: 'POST',
+      token: merchantToken(retailMerchant),
+      body: { message: '请创建采购草稿' }
+    });
+    assert.equal(blockedRetailPreview.status, 503);
+    assert.equal(blockedRetailPreview.body.error, 'MODAGPT_TASK_CAPABILITY_UNAVAILABLE');
+    assert.equal(await prisma.merchantPurchaseOrder.count({ where: { merchantId: retailMerchant } }), 0);
+
     console.log('TRADING_WHOLESALE_HTTP_E2E', JSON.stringify({
       supplierAnalysis: {
         taskId: analysis.taskId,
@@ -518,6 +622,14 @@ test('ModaUI procurement HTTP workflow persists tenant-scoped drafts and returns
       deniedEmployeeStatus: deniedEmployee.status,
       invalidInputStatus: failedResult.runtimeStatus,
       invalidInputError: failedResult.errors[0],
+      departmentWholesaleDraft: {
+        taskId: departmentResult.taskId,
+        runtimeStatus: departmentResult.runtimeStatus,
+        resultStatus: departmentResult.status,
+        purchaseOrderId: departmentOrderId,
+        persistedStatus: departmentOrder.status
+      },
+      retailProcurementPreviewStatus: blockedRetailPreview.status,
       crossTenantTaskReadStatus: 404
     }));
   } finally {

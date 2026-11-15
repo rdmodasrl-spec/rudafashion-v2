@@ -1075,25 +1075,26 @@ model InventoryMovement {
 }
 
 model Material {
-  id           String                      @id @default(uuid())
-  merchantId   String
-  supplierId   String?
-  code         String
-  name         String
-  category     String
-  unit         String                      @default("meter")
-  unitCost     Decimal                     @default(0) @db.Decimal(12, 4)
-  reorderPoint Decimal                     @default(0) @db.Decimal(14, 3)
-  leadTimeDays Int                         @default(0)
-  status       String                      @default("active")
-  notes        String?
-  createdAt    DateTime                    @default(now())
-  updatedAt    DateTime                    @updatedAt
-  merchant     Merchant                    @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  supplier     Supplier?                   @relation(fields: [supplierId], references: [id])
-  balances     MaterialInventoryBalance[]
-  movements    MaterialInventoryMovement[]
-  bomItems     ProductBomItem[]
+  id                   String                      @id @default(uuid())
+  merchantId           String
+  supplierId           String?
+  code                 String
+  name                 String
+  category             String
+  unit                 String                      @default("meter")
+  unitCost             Decimal                     @default(0) @db.Decimal(12, 4)
+  reorderPoint         Decimal                     @default(0) @db.Decimal(14, 3)
+  leadTimeDays         Int                         @default(0)
+  status               String                      @default("active")
+  notes                String?
+  createdAt            DateTime                    @default(now())
+  updatedAt            DateTime                    @updatedAt
+  merchant             Merchant                    @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  supplier             Supplier?                   @relation(fields: [supplierId], references: [id])
+  balances             MaterialInventoryBalance[]
+  movements            MaterialInventoryMovement[]
+  bomItems             ProductBomItem[]
+  restaurantIngredient RestaurantIngredient?
 
   @@unique([merchantId, code])
   @@index([merchantId, category, status])
@@ -1196,6 +1197,7 @@ model Merchant {
   storefrontAiActivatedAt        DateTime?
   storefrontAiActivatedBy        String?
   industry                       String                           @db.VarChar(32)
+  formalIndustryId               String?                          @db.VarChar(48)
   industrySource                 String                           @default("LEGACY_INFERENCE") @db.VarChar(32)
   industryTemplate               String?                          @db.VarChar(48)
   industryTemplateSource         String                           @default("LEGACY_PENDING_REVIEW") @db.VarChar(32)
@@ -1227,6 +1229,9 @@ model Merchant {
   merchantEmployee               MerchantEmployee[]
   merchantEmailDomain            MerchantEmailDomain[]
   merchantModaGptDesign          MerchantModaGptDesign[]
+  leatherStudioProjects          MerchantLeatherStudioProject[]
+  studioEntitlements             MerchantStudioEntitlement[]
+  studioProjects                 MerchantStudioProject[]
   merchantPayPalConfig           MerchantPayPalConfig?
   merchantPayout                 MerchantPayout[]
   merchantPosShift               MerchantPosShift[]
@@ -1234,6 +1239,14 @@ model Merchant {
   merchantStore                  MerchantStore[]
   merchantStoreStock             MerchantStoreStock[]
   merchantStoreTransfer          MerchantStoreTransfer[]
+  restaurantDishes               RestaurantDish[]
+  restaurantMenus                RestaurantMenu[]
+  restaurantMenuItems            RestaurantMenuItem[]
+  restaurantTables               RestaurantTable[]
+  restaurantIngredients          RestaurantIngredient[]
+  restaurantRecipes              RestaurantRecipe[]
+  restaurantPurchaseOrders       RestaurantPurchaseOrder[]
+  restaurantPurchaseReceipts     RestaurantPurchaseReceipt[]
   merchantPurchaseOrder          MerchantPurchaseOrder[]
   merchantSolanaConfig           MerchantSolanaConfig?
   storeCategories                MerchantStoreCategory[]
@@ -1273,6 +1286,7 @@ model Merchant {
   @@index([code])
   @@index([companyId])
   @@index([country])
+  @@index([formalIndustryId])
   @@index([industryTemplate])
   @@index([isVerified])
   @@index([merchantZone])
@@ -1302,6 +1316,9 @@ model MerchantAiEmployeeInstallation {
 model MerchantAiEmployeeMemory {
   id                 String    @id @default(uuid())
   merchantId         String
+  industryId         String    @default("") @db.VarChar(120)
+  studioId           String    @default("") @db.VarChar(120)
+  knowledgeNamespace String    @default("") @db.VarChar(120)
   category           String    @db.VarChar(24)
   content            String    @db.VarChar(500)
   createdBy          String?
@@ -1328,6 +1345,7 @@ model MerchantAiEmployeeMemory {
 
   @@index([merchantId, category, updatedAt])
   @@index([tenantId, merchantId, scope, status, updatedAt])
+  @@index([tenantId, industryId, studioId, knowledgeNamespace, merchantId, scope, status, updatedAt], map: "MerchantAiEmployeeMemory_namespace_scope_status_idx")
 }
 
 model MerchantAiOrderDraft {
@@ -1526,6 +1544,126 @@ model MerchantModaGptDesign {
   @@index([merchantId, createdAt])
 }
 
+model MerchantLeatherStudioProject {
+  id                 String                                @id @default(uuid())
+  merchantId         String
+  actorId            String
+  studioCode         String                                @default("leather_studio") @db.VarChar(32)
+  industryTemplate   String                                @default("bags_wholesale") @db.VarChar(48)
+  clientRequestId    String                                @db.VarChar(160)
+  requestPayloadHash String                                @db.VarChar(64)
+  title              String                                @db.VarChar(160)
+  status             String                                @default("draft") @db.VarChar(24)
+  revision           Int                                   @default(1)
+  payload            Json
+  createdAt          DateTime                              @default(now())
+  updatedAt          DateTime                              @updatedAt
+  merchant           Merchant                              @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  versions           MerchantLeatherStudioProjectVersion[]
+
+  @@unique([merchantId, clientRequestId])
+  @@index([merchantId, createdAt, id])
+  @@index([merchantId, status, updatedAt])
+}
+
+model MerchantLeatherStudioProjectVersion {
+  id        String                       @id @default(uuid())
+  projectId String
+  revision  Int
+  actorId   String
+  payload   Json
+  title     String                       @db.VarChar(160)
+  createdAt DateTime                     @default(now())
+  project   MerchantLeatherStudioProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, revision])
+  @@index([projectId, createdAt])
+}
+
+model MerchantStudioProject {
+  id                 String                       @id @default(uuid())
+  merchantId         String
+  actorId            String
+  studioCode         String                       @db.VarChar(32)
+  industryTemplate   String                       @db.VarChar(48)
+  clientRequestId    String                       @db.VarChar(160)
+  requestPayloadHash String                       @db.VarChar(64)
+  title              String                       @db.VarChar(160)
+  status             String                       @default("draft") @db.VarChar(24)
+  revision           Int                          @default(1)
+  payload            Json
+  createdAt          DateTime                     @default(now())
+  updatedAt          DateTime                     @updatedAt
+  merchant           Merchant                     @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  versions           MerchantStudioProjectVersion[]
+  files              MerchantStudioProjectFile[]
+  studioJobs         ModaGptTask[]
+
+  @@unique([merchantId, industryTemplate, studioCode, clientRequestId], map: "MerchantStudioProject_tenant_template_request_key")
+  @@unique([id, merchantId], map: "MerchantStudioProject_id_merchantId_key")
+  @@index([merchantId, studioCode, createdAt, id])
+  @@index([merchantId, studioCode, status, updatedAt], map: "MerchantStudioProject_status_updated_idx")
+}
+
+model MerchantStudioEntitlement {
+  id               String   @id @default(uuid())
+  merchantId       String
+  formalIndustryId String?  @db.VarChar(48)
+  industryCode     String   @db.VarChar(48)
+  industryTemplate String   @db.VarChar(48)
+  studioCode       String   @db.VarChar(32)
+  mode             String   @db.VarChar(16)
+  status           String   @default("pending") @db.VarChar(16)
+  capabilities     Json     @default("{}")
+  grantedBy        String?
+  grantedAt        DateTime @default(now())
+  revokedAt        DateTime?
+  source           String   @db.VarChar(32)
+  merchant         Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@unique([merchantId, industryCode, studioCode, mode])
+  @@unique([merchantId, formalIndustryId], map: "MerchantStudioEntitlement_merchant_formalIndustryId_key")
+  @@index([merchantId, status])
+  @@index([studioCode, industryCode, status])
+}
+
+model MerchantStudioProjectVersion {
+  id        String               @id @default(uuid())
+  projectId String
+  revision  Int
+  actorId   String
+  payload   Json
+  title     String               @db.VarChar(160)
+  createdAt DateTime             @default(now())
+  project   MerchantStudioProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, revision])
+  @@index([projectId, createdAt])
+}
+
+model MerchantStudioProjectFile {
+  id                 String               @id @default(uuid())
+  merchantId         String
+  projectId          String
+  actorId            String               @db.VarChar(160)
+  clientRequestId    String               @db.VarChar(160)
+  requestPayloadHash String               @db.VarChar(64)
+  storageBucket      String               @db.VarChar(128)
+  storageKey         String               @db.VarChar(512)
+  fileName           String               @db.VarChar(255)
+  contentType        String               @db.VarChar(120)
+  sizeBytes          Int
+  status             String               @default("pending_upload") @db.VarChar(24)
+  createdAt          DateTime             @default(now())
+  uploadedAt         DateTime?
+  deletedAt          DateTime?
+  project            MerchantStudioProject @relation(fields: [projectId, merchantId], references: [id, merchantId], onDelete: Cascade)
+
+  @@unique([merchantId, projectId, clientRequestId])
+  @@unique([merchantId, storageKey])
+  @@index([merchantId, projectId, status, createdAt])
+}
+
 model MerchantOnboardingApplication {
   id                       String    @id @default(uuid())
   applicationNo            String    @unique
@@ -1548,6 +1686,8 @@ model MerchantOnboardingApplication {
   websiteOrSocial          String?
   businessType             String
   merchantZone             String
+  formalIndustryId         String?   @db.VarChar(48)
+  industryCapabilityIds    Json?
   specialties              String[]  @default([])
   categories               String[]  @default([])
   yearsInBusiness          Int?
@@ -2178,6 +2318,9 @@ model ModaGptBrainChunk {
   id                 String               @id @default(uuid())
   tenantId           String
   merchantId         String?
+  industryId         String               @default("") @db.VarChar(120)
+  studioId           String               @default("") @db.VarChar(120)
+  knowledgeNamespace String               @default("") @db.VarChar(120)
   documentId         String
   chunkIndex         Int
   content            String
@@ -2202,6 +2345,7 @@ model ModaGptBrainChunk {
   @@unique([documentId, chunkIndex])
   @@index([tenantId, documentId])
   @@index([tenantId, merchantId, verificationStatus, createdAt])
+  @@index([tenantId, industryId, studioId, knowledgeNamespace, merchantId, verificationStatus, createdAt], map: "ModaGptBrainChunk_namespace_verification_idx")
 }
 
 model ModaGptAdminOperatorConfig {
@@ -2233,6 +2377,9 @@ model ModaGptBrainDocument {
   id             String              @id @default(uuid())
   tenantId       String
   merchantId     String?
+  industryId     String              @default("") @db.VarChar(120)
+  studioId       String              @default("") @db.VarChar(120)
+  knowledgeNamespace String          @default("") @db.VarChar(120)
   sourceType     String              @db.VarChar(32)
   sourceId       String?             @db.VarChar(160)
   sourceUrl      String?
@@ -2252,12 +2399,16 @@ model ModaGptBrainDocument {
 
   @@index([tenantId, merchantId, status, updatedAt])
   @@index([tenantId, sourceType, sourceId, version])
+  @@index([tenantId, industryId, studioId, knowledgeNamespace, merchantId, status, updatedAt], map: "ModaGptBrainDocument_namespace_status_idx")
 }
 
 model ModaGptBrainEntity {
   id                                                                    String             @id @default(uuid())
   tenantId                                                              String
   merchantId                                                            String?
+  industryId                                                            String             @default("") @db.VarChar(120)
+  studioId                                                              String             @default("") @db.VarChar(120)
+  knowledgeNamespace                                                   String             @default("") @db.VarChar(120)
   entityType                                                            String             @db.VarChar(40)
   canonicalKey                                                          String             @db.VarChar(200)
   displayName                                                           String             @db.VarChar(240)
@@ -2272,15 +2423,19 @@ model ModaGptBrainEntity {
   modaGptBrainFact_ModaGptBrainFact_objectEntityIdToModaGptBrainEntity  ModaGptBrainFact[] @relation("ModaGptBrainFact_objectEntityIdToModaGptBrainEntity")
   modaGptBrainFact_ModaGptBrainFact_subjectEntityIdToModaGptBrainEntity ModaGptBrainFact[] @relation("ModaGptBrainFact_subjectEntityIdToModaGptBrainEntity")
 
-  @@unique([tenantId, merchantId, entityType, canonicalKey])
+  @@unique([tenantId, industryId, studioId, knowledgeNamespace, merchantId, entityType, canonicalKey], map: "ModaGptBrainEntity_namespace_entity_key")
   @@index([tenantId, merchantId, entityType, status])
+  @@index([tenantId, industryId, studioId, knowledgeNamespace, merchantId, status], map: "ModaGptBrainEntity_namespace_status_idx")
 }
 
 model ModaGptBrainEvaluation {
   id                     String                 @id @default(uuid())
-  idempotencyKey         String?                @unique @db.VarChar(160)
+  idempotencyKey         String?                @db.VarChar(160)
   tenantId               String
   merchantId             String?
+  industryId             String                 @default("") @db.VarChar(120)
+  studioId               String                 @default("") @db.VarChar(120)
+  knowledgeNamespace     String                 @default("") @db.VarChar(120)
   experienceId           String
   evaluationType         String                 @db.VarChar(32)
   quality                Float?
@@ -2302,12 +2457,17 @@ model ModaGptBrainEvaluation {
 
   @@index([tenantId, experienceId, createdAt])
   @@index([tenantId, merchantId, evaluationType, createdAt])
+  @@unique([tenantId, industryId, studioId, knowledgeNamespace, idempotencyKey], map: "ModaGptBrainEvaluation_namespace_idempotency_key")
+  @@index([tenantId, industryId, studioId, knowledgeNamespace, merchantId, evaluationType, createdAt], map: "ModaGptBrainEvaluation_namespace_type_idx")
 }
 
 model ModaGptBrainEvent {
   id          String    @id @default(uuid())
   tenantId    String
   merchantId  String?
+  industryId  String    @default("") @db.VarChar(120)
+  studioId    String    @default("") @db.VarChar(120)
+  knowledgeNamespace String @default("") @db.VarChar(120)
   eventType   String    @db.VarChar(80)
   eventId     String    @db.VarChar(160)
   payload     String
@@ -2319,15 +2479,19 @@ model ModaGptBrainEvent {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  @@unique([tenantId, eventType, eventId])
+  @@unique([tenantId, industryId, studioId, knowledgeNamespace, eventType, eventId], map: "ModaGptBrainEvent_namespace_event_key")
   @@index([tenantId, merchantId, status, occurredAt])
+  @@index([tenantId, industryId, studioId, knowledgeNamespace, merchantId, status, occurredAt], map: "ModaGptBrainEvent_namespace_status_idx")
 }
 
 model ModaGptBrainExperience {
   id                         String                       @id @default(uuid())
-  idempotencyKey             String?                      @unique @db.VarChar(160)
+  idempotencyKey             String?                      @db.VarChar(160)
   tenantId                   String
   merchantId                 String?
+  industryId                 String                       @default("") @db.VarChar(120)
+  studioId                   String                       @default("") @db.VarChar(120)
+  knowledgeNamespace         String                       @default("") @db.VarChar(120)
   taskId                     String?                      @db.VarChar(160)
   agentSlug                  String                       @db.VarChar(80)
   goal                       String
@@ -2361,12 +2525,17 @@ model ModaGptBrainExperience {
   @@index([taskId])
   @@index([tenantId, merchantId, agentSlug, createdAt])
   @@index([tenantId, status, success, createdAt])
+  @@unique([tenantId, industryId, studioId, knowledgeNamespace, idempotencyKey], map: "ModaGptBrainExperience_namespace_idempotency_key")
+  @@index([tenantId, industryId, studioId, knowledgeNamespace, merchantId, status, success, createdAt], map: "ModaGptBrainExperience_namespace_status_idx")
 }
 
 model ModaGptBrainFact {
   id                   String              @id @default(uuid())
   tenantId             String
   merchantId           String?
+  industryId           String              @default("") @db.VarChar(120)
+  studioId             String              @default("") @db.VarChar(120)
+  knowledgeNamespace   String              @default("") @db.VarChar(120)
   subjectEntityId      String?
   predicate            String              @db.VarChar(80)
   objectEntityId       String?
@@ -2393,12 +2562,16 @@ model ModaGptBrainFact {
   @@index([tenantId, contradictionGroupId])
   @@index([tenantId, merchantId, status, predicate])
   @@index([tenantId, subjectEntityId, predicate, createdAt])
+  @@index([tenantId, industryId, studioId, knowledgeNamespace, merchantId, status, predicate], map: "ModaGptBrainFact_namespace_status_idx")
 }
 
 model ModaGptBrainFeedback {
   id                     String                  @id @default(uuid())
   tenantId               String
   merchantId             String?
+  industryId             String                  @default("") @db.VarChar(120)
+  studioId               String                  @default("") @db.VarChar(120)
+  knowledgeNamespace     String                  @default("") @db.VarChar(120)
   experienceId           String?
   messageId              String?                 @db.VarChar(160)
   actorId                String?                 @db.VarChar(160)
@@ -2410,15 +2583,19 @@ model ModaGptBrainFeedback {
   createdAt              DateTime                @default(now())
   modaGptBrainExperience ModaGptBrainExperience? @relation(fields: [experienceId], references: [id])
 
-  @@unique([tenantId, messageId])
+  @@unique([tenantId, industryId, studioId, knowledgeNamespace, messageId], map: "ModaGptBrainFeedback_namespace_message_key")
   @@index([messageId])
   @@index([tenantId, experienceId, createdAt])
   @@index([tenantId, merchantId, feedbackType, createdAt])
+  @@index([tenantId, industryId, studioId, knowledgeNamespace, merchantId, feedbackType, createdAt], map: "ModaGptBrainFeedback_namespace_type_idx")
 }
 
 model ModaGptBrainLearningRun {
   id            String    @id @default(uuid())
   tenantId      String?
+  industryId    String    @default("") @db.VarChar(120)
+  studioId      String    @default("") @db.VarChar(120)
+  knowledgeNamespace String @default("") @db.VarChar(120)
   runType       String    @db.VarChar(40)
   status        String    @default("pending") @db.VarChar(24)
   inputCount    Int       @default(0)
@@ -2431,12 +2608,16 @@ model ModaGptBrainLearningRun {
   createdAt     DateTime  @default(now())
 
   @@index([tenantId, status, createdAt])
+  @@index([tenantId, industryId, studioId, knowledgeNamespace, status, createdAt], map: "ModaGptBrainLearningRun_namespace_status_idx")
 }
 
 model ModaGptBrainLesson {
   id                 String                       @id @default(uuid())
   tenantId           String
   merchantId         String?
+  industryId         String                       @default("") @db.VarChar(120)
+  studioId           String                       @default("") @db.VarChar(120)
+  knowledgeNamespace String                       @default("") @db.VarChar(120)
   lessonType         String                       @db.VarChar(40)
   pattern            String
   condition          String
@@ -2460,8 +2641,9 @@ model ModaGptBrainLesson {
   updatedAt          DateTime                     @updatedAt
   evidence           ModaGptBrainLessonEvidence[]
 
-  @@unique([tenantId, merchantId, sourceRef])
+  @@unique([tenantId, industryId, studioId, knowledgeNamespace, merchantId, sourceRef], map: "ModaGptBrainLesson_namespace_source_key")
   @@index([tenantId, merchantId, status, lessonType, updatedAt])
+  @@index([tenantId, industryId, studioId, knowledgeNamespace, merchantId, status, lessonType, updatedAt], map: "ModaGptBrainLesson_namespace_status_idx")
 }
 
 model ModaGptBrainLessonEvidence {
@@ -2480,6 +2662,9 @@ model ModaGptBrainRetrievalLog {
   id               String   @id @default(uuid())
   tenantId         String
   merchantId       String?
+  industryId       String   @default("") @db.VarChar(120)
+  studioId         String   @default("") @db.VarChar(120)
+  knowledgeNamespace String @default("") @db.VarChar(120)
   actorId          String?
   queryHash        String   @db.VarChar(64)
   scopes           String   @default("[]")
@@ -2490,6 +2675,7 @@ model ModaGptBrainRetrievalLog {
   createdAt        DateTime @default(now())
 
   @@index([tenantId, merchantId, createdAt])
+  @@index([tenantId, industryId, studioId, knowledgeNamespace, merchantId, createdAt], map: "ModaGptBrainRetrievalLog_namespace_createdAt_idx")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -2535,6 +2721,7 @@ model ModaGptCreditReservation {
 model ModaGptTask {
   id             String    @id @default(uuid())
   merchantId     String?
+  projectId      String?
   taskType       String    @db.VarChar(80)
   status         String    @default("queued") @db.VarChar(24)
   payload        String
@@ -2561,8 +2748,10 @@ model ModaGptTask {
   plan           String?
   error          String?
   retryCount     Int       @default(0)
+  studioProject  MerchantStudioProject? @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
   @@index([merchantId, createdAt])
+  @@index([merchantId, projectId, createdAt])
   @@index([status, lockedUntil])
   @@index([taskType, status, createdAt])
   @@index([parentTaskId])
@@ -3113,6 +3302,7 @@ model Product {
   productReservationRequests    ProductReservationRequest[]
   fashionPostLinks              FashionCommunityPostProduct[]
   consumerWishlistItems         ConsumerWishlistItem[]
+  restaurantDishes              RestaurantDish[]
 
   @@index([brand])
   @@index([category])
@@ -3529,24 +3719,26 @@ model StockTransfer {
 }
 
 model MerchantStore {
-  id           String                  @id @default(uuid())
-  merchantId   String
-  code         String                  @db.VarChar(64)
-  name         String                  @db.VarChar(160)
-  address      String                  @default("")
-  city         String                  @default("")
-  country      String                  @default("")
-  phone        String                  @default("")
-  status       String                  @default("active") @db.VarChar(24)
-  createdAt    DateTime                @default(now())
-  updatedAt    DateTime                @updatedAt
-  merchant     Merchant                @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  stock        MerchantStoreStock[]
-  transferFrom MerchantStoreTransfer[] @relation("MerchantStoreTransferFrom")
-  transferTo   MerchantStoreTransfer[] @relation("MerchantStoreTransferTo")
-  posSale      MerchantPosSale[]
-  employees    MerchantEmployee[]       @relation("MerchantEmployeeStore")
-  posOrders    Order[]                  @relation("OrderStore")
+  id              String                  @id @default(uuid())
+  merchantId      String
+  code            String                  @db.VarChar(64)
+  name            String                  @db.VarChar(160)
+  address         String                  @default("")
+  city            String                  @default("")
+  country         String                  @default("")
+  phone           String                  @default("")
+  status          String                  @default("active") @db.VarChar(24)
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  merchant        Merchant                @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  stock           MerchantStoreStock[]
+  transferFrom    MerchantStoreTransfer[] @relation("MerchantStoreTransferFrom")
+  transferTo      MerchantStoreTransfer[] @relation("MerchantStoreTransferTo")
+  posSale         MerchantPosSale[]
+  employees       MerchantEmployee[]      @relation("MerchantEmployeeStore")
+  posOrders       Order[]                 @relation("OrderStore")
+  restaurantMenus RestaurantMenu[]
+  restaurantTables RestaurantTable[]
 
   @@unique([merchantId, code])
   @@index([merchantId, status])
@@ -3644,24 +3836,249 @@ model MerchantPosSaleItem {
   @@index([productId, sku])
 }
 
+model RestaurantDish {
+  id             String               @id @default(uuid())
+  merchantId     String
+  productId      String?
+  name           String               @db.VarChar(160)
+  nameZh         String?              @db.VarChar(160)
+  nameIt         String?              @db.VarChar(160)
+  category       String               @default("") @db.VarChar(96)
+  description    String               @default("") @db.Text
+  allergens      String[]             @default([])
+  status         String               @default("draft") @db.VarChar(24)
+  version        Int                  @default(1)
+  idempotencyKey String?              @db.VarChar(160)
+  requestHash    String?              @db.VarChar(64)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  merchant       Merchant             @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  product        Product?             @relation(fields: [productId], references: [id], onDelete: SetNull)
+  menuItems      RestaurantMenuItem[]
+  recipes        RestaurantRecipe[]
+
+  @@unique([merchantId, idempotencyKey])
+  @@index([merchantId, status, updatedAt])
+  @@index([productId])
+}
+
+model RestaurantMenu {
+  id             String               @id @default(uuid())
+  merchantId     String
+  storeId        String?
+  name           String               @db.VarChar(160)
+  description    String               @default("") @db.Text
+  currency       String               @default("EUR") @db.VarChar(3)
+  status         String               @default("draft") @db.VarChar(24)
+  version        Int                  @default(1)
+  idempotencyKey String?              @db.VarChar(160)
+  requestHash    String?              @db.VarChar(64)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  merchant       Merchant             @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  store          MerchantStore?       @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  items          RestaurantMenuItem[]
+
+  @@unique([merchantId, idempotencyKey])
+  @@index([merchantId, status, updatedAt])
+  @@index([storeId, status])
+}
+
+model RestaurantTable {
+  id             String        @id @default(uuid())
+  merchantId     String
+  storeId        String
+  code           String        @db.VarChar(32)
+  name           String        @db.VarChar(80)
+  capacity       Int
+  area           String        @default("") @db.VarChar(80)
+  status         String        @default("active") @db.VarChar(16)
+  version        Int           @default(1)
+  idempotencyKey String?       @db.VarChar(160)
+  requestHash    String?       @db.VarChar(64)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  merchant       Merchant      @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  store          MerchantStore @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([merchantId, storeId, code])
+  @@unique([merchantId, idempotencyKey])
+  @@index([merchantId, storeId, status, code])
+}
+
+model RestaurantMenuItem {
+  id         String         @id @default(uuid())
+  merchantId String
+  menuId     String
+  dishId     String
+  price      Decimal        @db.Decimal(12, 2)
+  status     String         @default("available") @db.VarChar(24)
+  sortOrder  Int            @default(0)
+  version    Int            @default(1)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  merchant   Merchant       @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  menu       RestaurantMenu @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  dish       RestaurantDish @relation(fields: [dishId], references: [id], onDelete: Cascade)
+
+  @@unique([menuId, dishId])
+  @@index([merchantId, menuId, status, sortOrder])
+  @@index([dishId])
+}
+
+model RestaurantIngredient {
+  id             String                        @id @default(uuid())
+  merchantId     String
+  materialId     String                        @unique
+  category       String                        @db.VarChar(24)
+  allergens      String[]                      @default([])
+  version        Int                           @default(1)
+  idempotencyKey String?                       @db.VarChar(160)
+  requestHash    String?                       @db.VarChar(64)
+  createdAt      DateTime                      @default(now())
+  updatedAt      DateTime                      @updatedAt
+  merchant       Merchant                      @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  material       Material                      @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  recipeItems    RestaurantRecipeItem[]
+  purchaseItems  RestaurantPurchaseOrderItem[]
+
+  @@unique([merchantId, idempotencyKey])
+  @@index([merchantId, category, updatedAt])
+}
+
+model RestaurantRecipe {
+  id             String                 @id @default(uuid())
+  merchantId     String
+  dishId         String
+  version        Int
+  status         String                 @default("draft") @db.VarChar(24)
+  yieldQuantity  Decimal                @db.Decimal(14, 3)
+  yieldUnit      String                 @db.VarChar(16)
+  notes          String                 @default("") @db.Text
+  idempotencyKey String?                @db.VarChar(160)
+  requestHash    String?                @db.VarChar(64)
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  merchant       Merchant               @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  dish           RestaurantDish         @relation(fields: [dishId], references: [id], onDelete: Cascade)
+  items          RestaurantRecipeItem[]
+
+  @@unique([dishId, version])
+  @@unique([merchantId, idempotencyKey])
+  @@index([merchantId, dishId, status])
+}
+
+model RestaurantRecipeItem {
+  id                     String               @id @default(uuid())
+  merchantId             String
+  recipeId               String
+  ingredientId           String
+  ingredientCodeSnapshot String               @db.VarChar(80)
+  ingredientNameSnapshot String               @db.VarChar(200)
+  unitSnapshot           String               @db.VarChar(16)
+  quantity               Decimal              @db.Decimal(14, 4)
+  wasteRate              Decimal              @default(0) @db.Decimal(5, 4)
+  createdAt              DateTime             @default(now())
+  recipe                 RestaurantRecipe     @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  ingredient             RestaurantIngredient @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+
+  @@unique([recipeId, ingredientId])
+  @@index([merchantId, ingredientId])
+}
+
+model RestaurantPurchaseOrder {
+  id             String                        @id @default(uuid())
+  merchantId     String
+  supplierId     String
+  status         String                        @default("draft") @db.VarChar(24)
+  currency       String                        @default("EUR") @db.VarChar(3)
+  version        Int                           @default(1)
+  notes          String                        @default("") @db.Text
+  idempotencyKey String                        @unique @db.VarChar(200)
+  requestHash    String                        @db.VarChar(64)
+  createdBy      String?
+  createdAt      DateTime                      @default(now())
+  updatedAt      DateTime                      @updatedAt
+  merchant       Merchant                      @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  supplier       Supplier                      @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  items          RestaurantPurchaseOrderItem[]
+  receipts       RestaurantPurchaseReceipt[]
+
+  @@index([merchantId, status, createdAt])
+  @@index([supplierId, createdAt])
+}
+
+model RestaurantPurchaseOrderItem {
+  id                     String                          @id @default(uuid())
+  purchaseOrderId        String
+  ingredientId           String
+  ingredientCodeSnapshot String                          @db.VarChar(80)
+  ingredientNameSnapshot String                          @db.VarChar(200)
+  unitSnapshot           String                          @db.VarChar(16)
+  orderedQuantity        Decimal                         @db.Decimal(14, 3)
+  receivedQuantity       Decimal                         @default(0) @db.Decimal(14, 3)
+  quotedUnitCost         Decimal                         @db.Decimal(12, 4)
+  createdAt              DateTime                        @default(now())
+  updatedAt              DateTime                        @updatedAt
+  purchaseOrder          RestaurantPurchaseOrder         @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  ingredient             RestaurantIngredient            @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+  receiptItems           RestaurantPurchaseReceiptItem[]
+
+  @@unique([purchaseOrderId, ingredientId])
+  @@index([ingredientId, createdAt])
+}
+
+model RestaurantPurchaseReceipt {
+  id              String                          @id @default(uuid())
+  merchantId      String
+  purchaseOrderId String
+  idempotencyKey  String                          @unique @db.VarChar(200)
+  payloadHash     String                          @db.VarChar(64)
+  note            String                          @default("") @db.Text
+  receivedBy      String?
+  receivedAt      DateTime                        @default(now())
+  merchant        Merchant                        @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  purchaseOrder   RestaurantPurchaseOrder         @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  items           RestaurantPurchaseReceiptItem[]
+
+  @@index([merchantId, receivedAt])
+  @@index([purchaseOrderId, receivedAt])
+}
+
+model RestaurantPurchaseReceiptItem {
+  id                  String                      @id @default(uuid())
+  receiptId           String
+  purchaseOrderItemId String
+  quantity            Decimal                     @db.Decimal(14, 3)
+  unitCost            Decimal                     @db.Decimal(12, 4)
+  currency            String                      @db.VarChar(3)
+  createdAt           DateTime                    @default(now())
+  receipt             RestaurantPurchaseReceipt   @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  purchaseOrderItem   RestaurantPurchaseOrderItem @relation(fields: [purchaseOrderItemId], references: [id], onDelete: Restrict)
+
+  @@unique([receiptId, purchaseOrderItemId])
+  @@index([purchaseOrderItemId, createdAt])
+}
+
 model Supplier {
-  id                    String                  @id @default(uuid())
-  merchantId            String
-  name                  String
-  contactName           String?
-  phone                 String?
-  email                 String?
-  country               String?
-  leadTimeDays          Int                     @default(0)
-  status                String                  @default("active")
-  counterpartyId        String?
-  notes                 String?
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @updatedAt
-  material              Material[]
-  merchantPurchaseOrder MerchantPurchaseOrder[]
-  counterparty          MerchantCounterparty?   @relation(fields: [counterpartyId, merchantId], references: [id, merchantId], onDelete: Restrict)
-  merchant              Merchant                @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  id                       String                    @id @default(uuid())
+  merchantId               String
+  name                     String
+  contactName              String?
+  phone                    String?
+  email                    String?
+  country                  String?
+  leadTimeDays             Int                       @default(0)
+  status                   String                    @default("active")
+  counterpartyId           String?
+  notes                    String?
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  material                 Material[]
+  merchantPurchaseOrder    MerchantPurchaseOrder[]
+  restaurantPurchaseOrders RestaurantPurchaseOrder[]
+  counterparty             MerchantCounterparty?     @relation(fields: [counterpartyId, merchantId], references: [id, merchantId], onDelete: Restrict)
+  merchant                 Merchant                  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
 
   @@unique([merchantId, name])
   @@unique([counterpartyId, merchantId])
@@ -4129,3 +4546,111 @@ model MerchantPromotionBenefit {
   @@index([subscriptionId])
 }
 
+/// MODAUI 广告策划器工程：一个商品对应一个广告项目，方案/分镜/版本独立成表。
+/// 只存策划与预算，不存生成结果；视频/音频产物将来统一走对象存储与任务队列。
+model AiAdProject {
+  id                String               @id @default(uuid())
+  merchantId        String
+  productId         String?
+  title             String               @db.VarChar(160)
+  /// draft | concept_selected | brief_changed | archived
+  status            String               @default("draft") @db.VarChar(24)
+  brief             Json
+  briefHash         String               @db.VarChar(64)
+  selectedConceptId String?
+  currentVersionNo  Int                  @default(0)
+  costEstimate      Json?
+  /// 商家补充的商品图片（P1 仅保存，生成阶段才会使用）；不写入商品主数据。
+  supplementImages  Json?
+  createdBy         String?
+  clientRequestId   String?              @db.VarChar(128)
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  concepts          AiAdConcept[]
+  versions          AiAdProjectVersion[]
+
+  @@unique([merchantId, clientRequestId])
+  @@index([merchantId, updatedAt])
+  @@index([merchantId, productId])
+}
+
+model AiAdConcept {
+  id             String      @id @default(uuid())
+  projectId      String
+  /// product | ugc | quick
+  conceptKey     String      @db.VarChar(32)
+  route          String      @db.VarChar(24)
+  goal           String      @db.VarChar(32)
+  title          String      @db.VarChar(160)
+  audience       String      @db.VarChar(400)
+  hook           String      @db.VarChar(400)
+  cta            String      @db.VarChar(200)
+  language       String      @db.VarChar(16)
+  aspectRatio    String      @db.VarChar(12)
+  durationMs     Int
+  hashtags       Json
+  script         Json
+  storyboard     Json
+  providerStatus Json
+  costEstimate   Json
+  createdAt      DateTime    @default(now())
+  project        AiAdProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, conceptKey])
+  @@index([projectId])
+}
+
+model AiAdProjectVersion {
+  id           String      @id @default(uuid())
+  projectId    String
+  versionNo    Int
+  contentHash  String      @db.VarChar(64)
+  conceptId    String
+  conceptKey   String      @db.VarChar(32)
+  script       Json
+  storyboard   Json
+  costEstimate Json
+  note         String?     @db.VarChar(400)
+  createdBy    String?
+  createdAt    DateTime    @default(now())
+  project      AiAdProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, versionNo])
+  @@unique([projectId, contentHash])
+  @@index([projectId, createdAt])
+}
+
+/// AI 服务商调用记录（平台级）：只记录真实发生的调用事实，用于费用统计与排障。
+/// 不是任务队列：状态由真实供应商响应驱动，禁止写入伪造的成功或进度。
+/// 归属见 docs/engineering/modules/modaui-ai-provider-console.md §7。
+model AiProviderCall {
+  id             String    @id @default(uuid())
+  providerId     String    @db.VarChar(32)
+  modelId        String    @db.VarChar(64)
+  /// image | image_edit | video | voice
+  taskType       String    @db.VarChar(24)
+  jobId          String?   @db.VarChar(128)
+  merchantId     String?
+  appId          String?   @db.VarChar(64)
+  /// pending | succeeded | failed | timeout | cancelled | rejected
+  status         String    @db.VarChar(16)
+  /// 供应商真实费用（分）；未知为 null，不用 0 冒充
+  costCents      Int?
+  /// provider | estimate | unknown
+  costSource     String?   @db.VarChar(16)
+  estimatedCents Int?
+  pricingVersion String?   @db.VarChar(32)
+  assetId        String?   @db.VarChar(128)
+  assetUrl       String?   @db.VarChar(1024)
+  errorCode      String?   @db.VarChar(48)
+  failureReason  String?   @db.VarChar(400)
+  durationMs     Int?
+  createdBy      String?   @db.VarChar(64)
+  createdAt      DateTime  @default(now())
+  finishedAt     DateTime?
+
+  @@index([providerId, createdAt])
+  @@index([merchantId, createdAt])
+  @@index([status, createdAt])
+  @@index([jobId])
+}

@@ -366,6 +366,45 @@ button.back-action {
   display: block;
 }
 
+.industry-load-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+  margin-top: 12rpx;
+  color: #5e594f;
+  font-size: 24rpx;
+  line-height: 1.5;
+}
+
+.industry-retry-button {
+  flex: none;
+  margin: 0;
+  padding: 8rpx 12rpx;
+  border: 1rpx solid #e9e6df;
+  border-radius: 6rpx;
+  background: #fff;
+  color: #201e1a;
+  font-size: 24rpx;
+}
+
+.capability-options {
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 22rpx;
+  border-top: 1rpx solid #e9e6df;
+}
+
+.capability-option {
+  display: flex;
+  min-height: 64rpx;
+  align-items: center;
+  gap: 8rpx;
+  border-bottom: 1rpx solid #e9e6df;
+  color: #302d27;
+  font-size: 24rpx;
+}
+
 .role-list {
   display: flex;
   flex-direction: column;

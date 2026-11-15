@@ -6,15 +6,15 @@ import {
 } from '../src/apps/merchant-admin-common/components/merchant/merchantMobileNavigation';
 import { UI_COPY_CATALOG } from '../src/i18n/uiCopyCatalog';
 
-test('merchant mobile navigation keeps five primary destinations with ModaUI in the center', () => {
+test('merchant mobile navigation keeps five primary destinations with AI Studio in the center', () => {
   assert.deepEqual(
     merchantMobilePrimaryTabs.map(tab => tab.id),
     ['dashboard', 'products', 'ai_home', 'orders', 'more']
   );
-  assert.deepEqual(merchantMobilePrimaryTabs.map(tab => tab.zh), ['首页', '商品', 'ModaUI', '订单', '更多']);
+  assert.deepEqual(merchantMobilePrimaryTabs.map(tab => tab.zh), ['首页', '商品', 'AI工作室', '订单', '更多']);
   assert.equal(merchantMobilePrimaryTabs[2]!.id, 'ai_home');
-  assert.equal(merchantMobilePrimaryTabs[2]!.zh, 'ModaUI');
-  assert.equal(merchantMobilePrimaryTabs[2]!.it, 'ModaUI');
+  assert.equal(merchantMobilePrimaryTabs[2]!.zh, 'AI工作室');
+  assert.equal(merchantMobilePrimaryTabs[2]!.it, 'AI Studio');
 });
 
 test('merchant mobile navigation uses consistent four-character titles and eight-character descriptions', () => {

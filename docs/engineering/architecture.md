@@ -1,6 +1,6 @@
 # RUDA 工程架构现状
 
-> 依据仓库源码与配置核查，更新日期：2026-10-23。本文记录已观察到的实现；未进行生产环境或全链路验证的内容明确标为待验证。
+> 依据仓库源码与配置核查，更新日期：2026-11-14。本文记录已观察到的实现；未进行生产环境或全链路验证的内容明确标为待验证。
 
 ## 1. 系统概览
 
@@ -8,7 +8,7 @@
 - 六个独立 Web 构建目标由 `src/apps/appTarget.ts` 定义：前台 Web/手机、商家后台 Web/手机、平台总后台 Web/手机。
 - 主要 API 服务入口为根目录 `server.ts`；大量业务路由和中间件仍注册在该组合入口，领域服务逐步位于 `src/server/`。
 - Prisma schema 位于 `prisma/schema.prisma`，迁移位于 `prisma/migrations/`。运行时也保留部分内存态/兼容路径，不能假定所有读写都已迁移为统一 Prisma 服务。
-- `fashion-ingestion/` 有独立 Python 依赖；`miniprogram/`、`merchant-miniprogram/` 和 `fu/` 是仓库内其他运行面。其部署、身份互通和完整数据流需按具体任务核验。
+- `fashion-ingestion/` 有独立 Python 依赖；`miniprogram/`、`merchant-miniprogram/` 和 `fu/` 是仓库内其他运行面。皮具 AI Studio 的独立 React/Vite + Express 原型基线位于 `legacy/leather-studio-v1/`，不是小程序或新增构建目标；集成必须复用 RUDA 商家身份、API 与持久层。各运行面的部署、身份互通和完整数据流需按具体任务核验。
 
 ## 2. Web 应用边界
 
@@ -42,7 +42,7 @@
 - 管理员 API 使用 `requireAdminAuth`；当前实现检查 Bearer token 或 `ruda_admin_jwt` Cookie，验证管理员 JWT，并校验管理员账户的凭证版本/更新时间。`requireAdminPermission` 执行管理员权限检查。
 - 商家、员工、消费者/买家等流程也有各自的角色和资源边界。`src/server/tenantAccess.ts`、`src/server/employeePermissions.ts` 及路由级中间件是相关核查入口；每次改动仍须沿真实 API 链验证租户与资源授权。
 - `prisma/schema.prisma` 中可见 `AccountIdentity`、`AuthAccount`、`Consumer`、`MerchantEmployee` 等身份/关系模型。各角色账户映射、Cookie 生命周期、刷新/撤销规则尚未在本文件中穷尽，需在认证任务中继续追踪。
-- 统一身份与商家入驻的新权威边界见 [`modules/identity-merchant-onboarding.md`](./modules/identity-merchant-onboarding.md)：普通客户注册只获得前台/采购身份；商家必须先生成 `MerchantOnboardingApplication`，由平台管理员审核通过后才创建或激活 `Merchant`、商家账号和 `apparel_production_wholesale` 工作区；平台管理员权限不能通过公开注册获得。
+- 统一身份与商家入驻边界见 [`modules/identity-merchant-onboarding.md`](./modules/identity-merchant-onboarding.md)：普通客户注册只获得前台/采购身份；当前正式商家注册路由可创建商家并进入后台，资质验证影响公开销售；`MerchantOnboardingApplication` 是历史/补充资料及例外复核流程，不是正式注册主流程的前置条件。平台管理员权限不能通过公开注册获得。
 - 不得因前端应用分开而新建独立认证后端、用户权威表或权限绕过路径。
 
 ## 5. 业务领域登记原则
@@ -52,6 +52,10 @@
 智能生产链是应用商店中的**可选安装业务应用**（`ruda-production-chain`），不是新的应用运行面：其商家页面仍由商家后台 Web/手机端承载，服务端路由为 `/api/production/*`，安装状态由 `AppInstallation` 控制。工厂协作使用独立主体会话与工厂归属校验，不进入商家后台菜单。规格见 [`modules/production-chain.md`](./modules/production-chain.md)。
 
 MODAUI AI 工具平台（App Store 独立应用 + 工具注册协议）目前处于**设计待评审**，尚未实现。设计文档为 [`architecture/MODaUI-AI-TOOLS-PLATFORM.md`](./architecture/MODaUI-AI-TOOLS-PLATFORM.md)，其中记录了一个关键现状：商店安装记录 `AppInstallation` 只在 `src/server/productionChain.ts:256` 被当作能力门禁（appId 写死），AI 工具链完全不读取安装记录；可安装性被硬编码在 `src/server/appStoreValidation.ts` 的两个 `appId` 白名单内。因此"安装某个应用"当前不等于"获得对应 AI 能力"。该文档给出 Tool Manifest v1 协议与解析链设计，实施前必须先评审。
+
+RUDA 八行业 AI Studio V2.0 唯一开发规格、当前状态、行业能力、公共底座、RUDA CORE、自主学习目标、三端/API 契约及验收阶段见 [`modules/modaui-industry-studios-v2.md`](./modules/modaui-industry-studios-v2.md)。该文档区分源码已实现、隔离测试通过、生产/真实端待验证和未实现事项；它不是上线声明。Apparel 与 Leather 能力、Restaurant OS、Trade/零售工具均在同一文档中维护，禁止另立重复的 Studio 开发计划。全商家三端通用矩阵与跨设备同步规则仍分别由 [`modules/merchant-three-end-matrix.md`](./modules/merchant-three-end-matrix.md) 与 [`modules/merchant-cross-device-sync.md`](./modules/merchant-cross-device-sync.md】维护；二者不重复定义 Studio 行业状态。
+
+商家注册事实须按当前路由与测试核对：`POST /api/auth/register/merchant` 当前创建商家并允许进入后台，资质验证影响公开销售；`POST /api/onboarding/merchant/submit` 是单独的待审核申请流程。RUDA 多行业 AI 工作室 V2.0 任务书提出的“审核通过后开通 Studio”可能改变该既有行为，实施前仍需产品明确审核门槛适用于后台访问、公开销售还是 Studio entitlement。
 
 
 开始改动一个领域时，应从真实页面/调用方追踪至 API、服务、数据库和权限，而非仅按组件名推断业务边界。创建可独立交付的新模块时，使用 `templates/module-spec-template.md` 先记录复用、契约、权限和验收。

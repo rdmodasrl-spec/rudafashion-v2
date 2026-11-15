@@ -104,6 +104,8 @@ export type SerializedMerchantOnboardingApplication = {
   documents: Record<string, unknown> | null;
   industryTemplate: string | null;
   industryTemplateSource: string;
+  formalIndustryId: string | null;
+  industryCapabilityIds: string[];
   registrationProfile: Record<string, unknown> | null;
   submittedByAuthAccountId: string | null;
   status: MerchantOnboardingStatus;
@@ -153,6 +155,10 @@ export function serializeMerchantOnboardingApplication(
     documents: parseJsonRecord(row.documentsJson),
     industryTemplate: row.industryTemplate ?? null,
     industryTemplateSource: String(row.industryTemplateSource || 'SELF_SELECTED'),
+    formalIndustryId: row.formalIndustryId ?? null,
+    industryCapabilityIds: Array.isArray(row.industryCapabilityIds)
+      ? row.industryCapabilityIds.filter((value: unknown): value is string => typeof value === 'string')
+      : [],
     registrationProfile: parseJsonRecord(row.registrationProfile),
     submittedByAuthAccountId: row.submittedByAuthAccountId ?? null,
     status: normalizeMerchantOnboardingStatus(row.status) || 'pending_review',

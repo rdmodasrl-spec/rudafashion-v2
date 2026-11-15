@@ -349,7 +349,12 @@ test('P0 HTTP routes, payment webhooks, CRM/Mission transactions, metrics and wo
     { path: '/api/admin/ai-employee-providers/test-deepseek', method: 'POST' },
     { path: '/api/admin/ai-employee-providers/test-openai', method: 'POST' },
     { path: '/api/admin/ai-employee-providers/test-gemini', method: 'POST' },
-    { path: '/api/admin/ai-employee-providers/test-fal', method: 'POST' }
+    { path: '/api/admin/ai-employee-providers/test-fal', method: 'POST' },
+    { path: '/api/admin/ai-providers/runpod' },
+    { path: '/api/admin/ai-providers/runpod/models/z-image-turbo', method: 'PATCH' },
+    { path: '/api/admin/ai-providers/runpod/test', method: 'POST' },
+    { path: '/api/admin/ai-providers/runpod/calls' },
+    { path: '/api/admin/ai-providers/runpod/calls/summary' }
   ];
   const marketingCampaignTag = `p0-${suffix}`;
 

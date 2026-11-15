@@ -315,7 +315,8 @@ test('Trading Wholesale: Supervisor routes procurement intent correctly', async 
     request: '我想分析一下供应商 Supplier One 的绩效并创建一个补货订单',
     assignedAgents: ['supply-chain-finance-manager', 'business-manager'],
     registeredWorkflows: ['procurement_management'],
-    registeredTools: ['get_suppliers', 'get_supplier_performance', 'create_procurement_draft']
+    registeredTools: ['get_suppliers', 'get_supplier_performance', 'create_procurement_draft'],
+    merchantIndustry: 'TRADING_COMPANY'
   });
 
   assert.ok(route);

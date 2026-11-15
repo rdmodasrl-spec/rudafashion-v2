@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  DEFAULT_FAL_IMAGE_EDIT_MODEL_ID,
   FAL_VIRTUAL_TRY_ON_MODEL_ID,
   generateAiEmployeeImage,
+  generateAiStudioImageEdit,
+  generateAiStudioImage,
+  generateAiStudioText,
+  generateAiStudioVisionText,
   generateAiEmployeeAdvancedText,
   generateAiEmployeeText,
   generateAiEmployeeVisionText,
@@ -10,6 +15,7 @@ import {
   generateGeminiVisionText,
   generateOpenAiText,
   getDefaultAiEmployeeProviderSettings,
+  getAiStudioImageEditModel,
   getAiProviderCircuitSnapshots,
   getAiEmployeeInferenceMetrics,
   getFalImageUrl,
@@ -22,6 +28,35 @@ import {
 
 test('virtual try-on is pinned to the dedicated FASHN model', () => {
   assert.equal(FAL_VIRTUAL_TRY_ON_MODEL_ID, 'fal-ai/fashn/tryon/v1.6');
+});
+
+test('Studio image editing uses the configured fal edit model and fails without fal credentials', async () => {
+  const originalModel = process.env.FAL_IMAGE_EDIT_MODEL;
+  const settings = getDefaultAiEmployeeProviderSettings();
+  settings.image.provider = 'fal';
+  settings.image.apiKey = '';
+  setAiEmployeeProviderSettings(settings);
+  try {
+    delete process.env.FAL_IMAGE_EDIT_MODEL;
+    assert.equal(getAiStudioImageEditModel(), DEFAULT_FAL_IMAGE_EDIT_MODEL_ID);
+    process.env.FAL_IMAGE_EDIT_MODEL = 'fal-ai/flux-2/flash/edit';
+    assert.equal(getAiStudioImageEditModel(), 'fal-ai/flux-2/flash/edit');
+    await assert.rejects(
+      generateAiStudioImageEdit('edit brief', Buffer.from([0x89, 0x50, 0x4e, 0x47])),
+      /AI_STUDIO_FAL_NOT_CONFIGURED/
+    );
+    settings.image.apiKey = 'test-key';
+    setAiEmployeeProviderSettings(settings);
+    process.env.FAL_IMAGE_EDIT_MODEL = '../invalid';
+    await assert.rejects(
+      generateAiStudioImageEdit('edit brief', Buffer.from([0x89, 0x50, 0x4e, 0x47])),
+      /AI_STUDIO_FAL_IMAGE_EDIT_MODEL_INVALID/
+    );
+  } finally {
+    if (originalModel === undefined) delete process.env.FAL_IMAGE_EDIT_MODEL;
+    else process.env.FAL_IMAGE_EDIT_MODEL = originalModel;
+    setAiEmployeeProviderSettings(getDefaultAiEmployeeProviderSettings());
+  }
 });
 
 test('default provider settings remain valid and keep local workflows', () => {
@@ -656,4 +691,87 @@ test('advanced planning falls back to the primary provider when OpenAI is not co
     else process.env.OLLAMA_BASE_URL = originalOllamaBaseUrl;
     setAiEmployeeProviderSettings(getDefaultAiEmployeeProviderSettings());
   }
+});
+
+test('Studio text prefers DeepSeek Flash and never falls back to local models', async () => {
+  const settings = getDefaultAiEmployeeProviderSettings();
+  settings.reasoning.provider = 'deepseek';
+  settings.reasoning.model = 'deepseek-v4-pro';
+  settings.reasoning.apiKey = 'studio-deepseek-test-key';
+  settings.reasoning.fallbackToLocal = true;
+  setAiEmployeeProviderSettings(settings);
+  const originalFetch = globalThis.fetch;
+  const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
+  globalThis.fetch = async (input, init) => {
+    requests.push({
+      url: String(input),
+      body: JSON.parse(String(init?.body)) as Record<string, unknown>
+    });
+    return new Response(JSON.stringify({ choices: [{ message: { content: '{"reply":"studio response"}' } }] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  };
+  try {
+    const result = await generateAiStudioText(
+      'question',
+      'industry instructions',
+      { type: 'object', properties: { reply: { type: 'string' } }, required: ['reply'], additionalProperties: false }
+    );
+    assert.equal(result, '{"reply":"studio response"}');
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].url, 'https://api.deepseek.com/chat/completions');
+    assert.equal(requests[0].body.model, 'deepseek-flash');
+  } finally {
+    globalThis.fetch = originalFetch;
+    setAiEmployeeProviderSettings(getDefaultAiEmployeeProviderSettings());
+  }
+});
+
+test('Studio image understanding routes to DeepSeek Flash even when text uses Pro', async () => {
+  const settings = getDefaultAiEmployeeProviderSettings();
+  settings.reasoning.provider = 'deepseek';
+  settings.reasoning.model = 'deepseek-v4-pro';
+  settings.reasoning.apiKey = 'studio-deepseek-test-key';
+  setAiEmployeeProviderSettings(settings);
+  const originalFetch = globalThis.fetch;
+  let requestBody: Record<string, unknown> = {};
+  globalThis.fetch = async (_input, init) => {
+    requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    return new Response(JSON.stringify({ choices: [{ message: { content: '{"description":"visible bag"}' } }] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  };
+  try {
+    const result = await generateAiStudioVisionText(
+      'Describe visible details.',
+      'Do not infer.',
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      { type: 'object', properties: { description: { type: 'string' } }, required: ['description'], additionalProperties: false }
+    );
+    assert.equal(result, '{"description":"visible bag"}');
+    assert.equal(requestBody.model, 'deepseek-flash');
+    const messages = requestBody.messages as Array<{ content: unknown }>;
+    assert.deepEqual(messages[1].content, [
+      { type: 'text', text: 'Describe visible details.' },
+      { type: 'image_url', image_url: { url: `data:image/png;base64,${Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).toString('base64')}` } }
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    setAiEmployeeProviderSettings(getDefaultAiEmployeeProviderSettings());
+  }
+});
+
+test('Studio provider calls fail explicitly rather than using local models', async () => {
+  setAiEmployeeProviderSettings(getDefaultAiEmployeeProviderSettings());
+  await assert.rejects(
+    generateAiStudioText(
+      'question',
+      'instructions',
+      { type: 'object', properties: {}, required: [], additionalProperties: false }
+    ),
+    /AI_STUDIO_DEEPSEEK_NOT_CONFIGURED/
+  );
+  await assert.rejects(generateAiStudioImage('product image'), /AI_STUDIO_FAL_NOT_CONFIGURED/);
 });

@@ -5,10 +5,11 @@ const PARTNER_URL = `${PUBLIC_SITE_URL}/partner`;
 const roleOptions = [
   { id: 'PRODUCER', label: '生产商', selected: false },
   { id: 'WHOLESALER', label: '批发商', selected: false },
-  { id: 'RETAILER', label: '零售商', selected: false }
+  { id: 'RETAILER', label: '零售商', selected: false },
+  { id: 'RESTAURANT_OPERATOR', label: '餐饮经营者', selected: false }
 ];
 
-const categoryOptions = [
+const categoryCatalog = [
   { id: 'WOMENSWEAR', label: '女装', selected: false },
   { id: 'MENSWEAR', label: '男装', selected: false },
   { id: 'KIDSWEAR', label: '童装', selected: false },
@@ -35,16 +36,19 @@ const categoryOptions = [
   { id: 'PET_PRODUCTS', label: '宠物用品', selected: false },
   { id: 'OTHER', label: '其他', selected: false }
 ];
-
-const industryOptions = [
-  { id: 'apparel_production_wholesale', label: '服装生产批发商' },
-  { id: 'apparel_wholesale', label: '服装批发商' },
-  { id: 'trading_wholesale', label: '贸易批发商' },
-  { id: 'department_wholesale', label: '百货批发商' },
-  { id: 'bags_wholesale', label: '箱包批发商' },
-  { id: 'department_chain_retail', label: '百货连锁店' },
-  { id: 'general_retail', label: '综合零售商' }
+const restaurantCategoryCatalog = [
+  { id: 'RESTAURANT', label: '餐厅', selected: false },
+  { id: 'CAFE', label: '咖啡馆', selected: false },
+  { id: 'TAKEAWAY', label: '外卖', selected: false },
+  { id: 'BAKERY', label: '烘焙', selected: false },
+  { id: 'CATERING', label: '餐饮服务', selected: false },
+  { id: 'OTHER', label: '其他', selected: false }
 ];
+
+const capabilityLabels = {
+  APPAREL_OWN_PRODUCTION: '启用自有服装生产',
+  LEATHER_OWN_PRODUCTION: '启用自有皮具生产'
+};
 
 const countryOptions = [
   'Albania', 'Austria', 'Belgium', 'Bosnia and Herzegovina', 'Bulgaria', 'Croatia', 'Cyprus', 'Czech Republic',
@@ -122,8 +126,12 @@ Page({
       contactName: '', website: '', acceptedTerms: false, acceptedPrivacy: false
     },
     roleOptions,
-    categoryOptions,
-    industryOptions,
+    categoryOptions: [],
+    industryOptions: [],
+    capabilityOptions: [],
+    capabilityIds: [],
+    industryLoading: false,
+    industryLoadError: '',
     role: '',
     roleLabel: '',
     industry: '',
@@ -154,6 +162,7 @@ Page({
     if (options && (options.portal === 'merchant-registration' || options.portal === 'merchant-onboarding')) {
       // 商家注册使用小程序原生两步表单，必须与 web 注册共用同一套企业注册 API。
       wx.setNavigationBarTitle({ title: '商家注册' });
+      this.loadIndustryOptions();
       return;
     }
     wx.setNavigationBarTitle({ title: '' });
@@ -161,6 +170,35 @@ Page({
 
   onUnload() {
     if (this._cooldownTimer) clearInterval(this._cooldownTimer);
+  },
+
+  async loadIndustryOptions() {
+    this.setData({ industryLoading: true, industryLoadError: '' });
+    try {
+      const response = await request('/api/merchant/industry-options', { auth: false });
+      const industries = Array.isArray(response.industries)
+        ? response.industries.filter(industry =>
+          industry
+          && typeof industry.id === 'string'
+          && typeof industry.label === 'string'
+          && (industry.businessModel === 'WHOLESALE' || industry.businessModel === 'RETAIL')
+          && Array.isArray(industry.capabilityIds)
+          && industry.capabilityIds.every(capability =>
+            typeof capability === 'string' && Object.prototype.hasOwnProperty.call(capabilityLabels, capability))
+          && Array.isArray(industry.categories)
+          && industry.categories.every(category => typeof category === 'string'))
+        : [];
+      if (industries.length === 0) throw new Error('暂时无法获取可注册行业，请稍后重试。');
+      this.setData({ industryOptions: industries });
+    } catch (error) {
+      console.error('[merchant-mini-program] industry options unavailable', error);
+      this.setData({
+        industryOptions: [],
+        industryLoadError: error.message || '暂时无法获取可注册行业，请稍后重试。'
+      });
+    } finally {
+      this.setData({ industryLoading: false });
+    }
   },
 
   onFormInput(event) {
@@ -310,10 +348,52 @@ Page({
     this.setData({ categoryOptions, selectedCategoryLabels, error: '' });
   },
 
+  onCapabilityChange(event) {
+    const capabilityIds = Array.isArray(event.detail.value) ? event.detail.value : [];
+    this.setData({
+      capabilityIds,
+      capabilityOptions: this.data.capabilityOptions.map(option => Object.assign({}, option, {
+        selected: capabilityIds.includes(option.id)
+      })),
+      error: ''
+    });
+  },
+
   onIndustryChange(event) {
     const industryIndex = Number(event.detail.value);
     const option = this.data.industryOptions[industryIndex];
-    this.setData({ industryIndex, industry: option ? option.id : '', industryLabel: option ? option.label : '', error: '' });
+    const industry = option ? option.id : '';
+    const isRestaurant = industry === 'RETAIL_RESTAURANT';
+    const selectedRole = isRestaurant ? 'RESTAURANT_OPERATOR' : '';
+    const nextRoleOptions = (isRestaurant
+      ? roleOptions.filter(item => item.id === 'RESTAURANT_OPERATOR')
+      : option?.businessModel === 'WHOLESALE'
+        ? roleOptions.filter(item => item.id === 'PRODUCER' || item.id === 'WHOLESALER')
+        : roleOptions.filter(item => item.id === 'RETAILER'))
+      .map(item => Object.assign({}, item, { selected: item.id === selectedRole }));
+    const categoryCatalogForIndustry = isRestaurant ? restaurantCategoryCatalog : categoryCatalog;
+    const nextCategoryOptions = (option?.categories || [])
+      .map(category => categoryCatalogForIndustry.find(item => item.id === category))
+      .filter(Boolean)
+      .map(item => Object.assign({}, item, { selected: false }));
+    const capabilityOptions = (option?.capabilityIds || []).map(id => ({
+      id,
+      label: capabilityLabels[id],
+      selected: false
+    }));
+    this.setData({
+      industryIndex,
+      industry,
+      industryLabel: option ? option.label : '',
+      role: selectedRole,
+      roleLabel: nextRoleOptions.find(item => item.id === selectedRole)?.label || '',
+      roleOptions: nextRoleOptions,
+      categoryOptions: nextCategoryOptions,
+      capabilityOptions,
+      capabilityIds: [],
+      selectedCategoryLabels: '',
+      error: ''
+    });
   },
 
   toggleOptionalFields() {
@@ -368,12 +448,12 @@ Page({
 
   async submitRegistration() {
     if (this.data.busy) return;
-    const { form, role, categoryOptions, industry, verificationToken } = this.data;
+    const { form, role, categoryOptions, industry, industryOptions, capabilityIds, verificationToken } = this.data;
     if (!form.displayName.trim() || !form.country.trim() || !form.city.trim()) {
       this.setData({ error: '请填写企业名称、国家和城市。' });
       return;
     }
-    if (!role || !categoryOptions.some(option => option.selected) || !industry) {
+    if (!role || !categoryOptions.some(option => option.selected) || !industryOptions.some(option => option.id === industry)) {
       this.setData({ error: '请选择业务类型、主营品类和所属行业。' });
       return;
     }
@@ -392,7 +472,8 @@ Page({
           legalName: form.legalName.trim() || form.displayName.trim(),
           roles: [role],
           categories: categoryOptions.filter(option => option.selected).map(option => option.id),
-          industryTemplate: industry,
+          formalIndustryId: industry,
+          capabilityIds,
           verificationToken
         })
       });

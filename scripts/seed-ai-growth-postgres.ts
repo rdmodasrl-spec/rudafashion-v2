@@ -30,6 +30,8 @@ async function main() {
         name: 'AI Growth Integration Merchant',
         companyLegalName: 'AI Growth Integration Merchant Ltd',
         industry: 'FASHION_COMPANY',
+        industryTemplate: 'apparel_production_wholesale',
+        industryTemplateSource: 'LEGACY_MIGRATED',
         code: `GROWTH-${suffix}`,
         country: 'Italy',
         city: 'Prato',

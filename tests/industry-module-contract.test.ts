@@ -12,10 +12,14 @@ import {
 } from '../src/constants/merchantIndustryCapabilities';
 import {
   getMerchantIndustryTemplate,
+  merchantIndustryTemplates,
+  openMerchantIndustryTemplates,
   merchantWorkspaceTemplates
 } from '../src/constants/merchantIndustryTemplates';
 
-const allTemplateIds = Object.keys(merchantIndustryCapabilities);
+const allTemplateIds = openMerchantIndustryTemplates
+  .filter(template => template.id !== 'restaurant_ordering')
+  .map(template => template.id);
 
 test('public product serialization is whitelist based and drops internal columns', () => {
   const row = {
@@ -69,6 +73,51 @@ test('every industry exposes team and message modules while keeping POS scoped',
   }
 });
 
+test('restaurant template exposes only its menu and table-directory capabilities', () => {
+  const template = getMerchantIndustryTemplate('restaurant_ordering');
+  const capability = getMerchantIndustryCapability('restaurant_ordering');
+  assert.equal(merchantIndustryTemplates.length, 8);
+  assert.equal(openMerchantIndustryTemplates.length, 8);
+  assert.equal(template?.status, 'open');
+  assert.equal(template?.industryCode, 'restaurant');
+  assert.equal(template?.studioCode, 'restaurant_studio');
+  assert.equal(template?.knowledgeNamespace, 'restaurant');
+  assert.deepEqual(capability?.modules, ['restaurant_menu', 'restaurant_tables']);
+  assert.equal(isMerchantIndustryModuleEnabled('restaurant_ordering', 'restaurant_menu'), true);
+  assert.equal(isMerchantIndustryModuleEnabled('restaurant_ordering', 'restaurant_tables'), true);
+  assert.equal(isMerchantIndustryModuleEnabled('restaurant_ordering', 'pos'), false);
+  assert.equal(isMerchantIndustryModuleEnabled('restaurant_ordering', 'products'), false);
+  assert.ok(capability && Object.values(capability.features).every(enabled => !enabled));
+  assert.deepEqual(capability?.productFields, []);
+});
+
+test('industry templates expose the fixed Studio and knowledge namespace mapping', () => {
+  const expected = {
+    apparel_production_wholesale: ['apparel_production_wholesale', 'apparel_studio', 'apparel'],
+    apparel_wholesale: ['apparel_wholesale', 'apparel_studio', 'apparel'],
+    trading_wholesale: ['trade_wholesale', 'trade_studio', 'trade'],
+    department_wholesale: ['department_wholesale', 'department_wholesale_studio', 'department_wholesale'],
+    bags_wholesale: ['leather_bag_wholesale', 'leather_studio', 'leather'],
+    department_chain_retail: ['department_store_chain', 'retail_chain_studio', 'retail_chain'],
+    general_retail: ['general_retail', 'retail_studio', 'retail'],
+    restaurant_ordering: ['restaurant', 'restaurant_studio', 'restaurant']
+  } as const;
+
+  const industryCodes = merchantIndustryTemplates.map(template => template.industryCode);
+  assert.ok(industryCodes.every(Boolean), 'every registered industry must have a stable industry code');
+  assert.equal(new Set(industryCodes).size, industryCodes.length, 'industry codes must be unique');
+
+  for (const [templateId, [industryCode, studioCode, knowledgeNamespace]] of Object.entries(expected)) {
+    const template = getMerchantIndustryTemplate(templateId);
+    assert.ok(template, `${templateId} must remain registered`);
+    assert.deepEqual(
+      [template!.industryCode, template!.studioCode, template!.knowledgeNamespace],
+      [industryCode, studioCode, knowledgeNamespace],
+      `${templateId} mapping must not drift`
+    );
+  }
+});
+
 test('POS and store modules stay unreachable for wholesale-only industries', () => {
   const wholesaleOnly = ['apparel_production_wholesale', 'apparel_wholesale', 'trading_wholesale', 'department_wholesale', 'bags_wholesale'];
   for (const templateId of wholesaleOnly) {
@@ -89,6 +138,10 @@ test('legacy workspace template modules stay aligned with industry capability', 
     assert.ok(capability && template);
     const workspace = template!.workspaceTemplateId ? merchantWorkspaceTemplates[template!.workspaceTemplateId] : null;
     assert.ok(workspace, `${templateId} must map to a workspace template`);
+    if (template!.status !== 'open') {
+      assert.deepEqual(workspace!.modules, [], `${templateId} closed workspace must expose no modules`);
+      continue;
+    }
     assert.equal(
       workspace!.modules.includes('pos'),
       capability!.features.pos,

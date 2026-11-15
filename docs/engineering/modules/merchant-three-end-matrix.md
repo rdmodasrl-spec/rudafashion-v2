@@ -1,6 +1,6 @@
 # 商家后台三端功能一致性矩阵
 
-- 日期：2026-10-27
+- 日期：2026-11-14
 - 强制规则：`AGENTS.md` 第 15 节
 - 对照端：商家 Web（`merchant-admin-web`）、商家手机 Web（`merchant-admin-mobile`）、商家小程序（`merchant-miniprogram`）
 - 状态口径：**一致**＝三端使用同一权威 API/规则且有本轮代码证据；**部分**＝存在但仍有字段/刷新/验收缺口；**缺失**＝某一端无入口或服务端无能力；**待验收**＝代码检查完成但无真实会话/设备证据。
@@ -23,6 +23,9 @@
 
 | 功能 | 商家 Web | 商家手机 Web | 商家小程序 | 一致性与验证 |
 |---|---|---|---|---|
+| 服装自有生产 API 授权 | 共享生产工单/物料与外发生产 API；成本 UI 按 `canViewCosts` 控制 | 同一商家 API；成本 UI 按 `canViewCosts` 控制；本地演示店主会话已实测「更多 → 面辅料库存」及生产工单 CTA | 材料工作区同一 API；创建成本输入按 `canViewCosts` 控制 | 正式 Apparel 必须具备 `APPAREL_OWN_PRODUCTION` entitlement 且员工有生产权限；物料目录需 `production.view`，成本字段仅店主或 `production.cost.view` 可读写；无权限新增只能为零成本，编辑省略成本保留原值，改成本返回 403。物料目录 API 返回 `canViewCosts` 供三端呈现；旧生产模板保留兼容，Leather 生产能力不复用 Apparel 路由。隔离 PostgreSQL HTTP 测试验证授权、越权拒绝、跨租户/行业隔离和成本读写过滤。手机 Web 390/820/1024/1440 无横向溢出、主按钮可见、12 个表单标签均关联控件；真实无成本员工会话、电脑端本轮截图及小程序开发者工具/真机仍待验收 |
+| 餐饮/服装共享物料流水查询 | 未接入专属页面 | 未接入专属页面 | 未接入专属页面 | 同一 `MaterialInventoryMovement` 查询 API 按行业过滤：Restaurant 仅读本商家餐饮原料流水且不可读同租户非餐饮流水，Apparel 仅读非餐饮物料且要求自有生产 entitlement；其他行业拒绝。`test:restaurant-catalog:integration`、`test:production-chain:integration` 隔离 PostgreSQL HTTP 测试通过；专属 UI 与三端真实操作均未验收 |
+| 正式行业注册与自有生产选择 | 共享 `RegistrationPortal` 使用正式行业 registry，提交 formal ID/能力到 company registration API；代码已接入，真实页面验收待完成 | 同一共享注册页与 API；真实页面验收待完成 | 原生注册页读取公开行业选项 API，并提交同一 formal ID/能力到 company registration API；代码已接入，开发者工具/真机待验收 | `/api/merchant/industry-options` 与企业注册 API、主行业/active entitlement 持久化、开放行业映射、能力选择和非法 capability 拒绝均由 `bash scripts/test-merchant-miniprogram-isolated.sh` 隔离 PostgreSQL HTTP 测试通过；真实注册视觉与端侧操作仍待验收 |
 | 商品列表 | 有 | 有 | 有 | 同一 `/api/merchant/products`；待真实交叉验收 |
 | 商品详情 | 有（列表/本地状态） | 有（复用上下文） | 有；此前依赖缺失 GET | 本轮新增 `GET /api/merchant/products/:id`；待验收 |
 | 新建商品 | 有 | 有 | 有 | 同一 POST，含 `creationRequestKey` |
@@ -35,7 +38,7 @@
 | 订单列表/详情 | 有 | 有 | 有 | 同一 `/api/merchant/orders`；页面停留刷新待验收 |
 | 订单状态推进/发货/退货 | 有 | 有 | 有 | 服务端事务；三端交叉待验收 |
 | 连锁门店在线订单库存 | 有 | 有 | 有（订单流程复用同一服务端 API） | 门店模式复用 `Order.storeId`、`StockReservation` 与 `MerchantStoreStock`；隔离库 E2E 验证买家并发、员工开单、报价转单、取消释放、A/B 门店隔离及 POS/调整/调拨库存保护；Serializable 冲突映射为 409；三端实机待验收 |
-| 七行业演示登录入口 | 共用旧版 `MerchantLogin`；`industryDemo=001..007` 直达固定行业 | 同 Web，沿用旧版手机登录布局 | 未新增演示入口 | Web/Mobile 使用共享编号映射与现有演示 API，自动登录固定 `demo-industry-*` 商家；不传密码/令牌/商家 ID。页面布局不变；直达 URL 的会话切换、七账号密码登录与正式/演示隔离待本轮隔离实测及生产核验 |
+| 行业演示登录入口 | 仅开发构建显示固定演示商家按钮；`industryDemo=001..008` 仅开发构建自动登录 | 同 Web，共享登录布局与入口 | 未新增演示入口 | Web/Mobile 使用统一编号映射与现有演示 API，固定登录 `demo-industry-*`；生产构建隐藏按钮并忽略直达参数，正式账号认证不变。演示登录仅在隔离测试环境验证，不开放生产演示认证 |
 | 小程序 POS 销售明细/退货/现金流水/历史班次 | Web 有 | Mobile 有 | 代码补齐，运行待验收 | 复用 `/api/merchant/pos/*` 现有接口，已有销售详情/复制小票/退货确认和退款/现金收支/班次历史及详情；退货库存和现金账由服务端事务核算。微信开发者工具实际运行和门店权限验收仍待完成 |
 | 客户列表/资料/备注 | 有 | 有 | 只读/部分 | 客户编辑未在全部端对等，标“部分” |
 | 生态应用商店 | 有（左侧主导航一级「应用商店」，位于「系统设置」上方；生产已上线 `ec9914d`） | 有（「更多」菜单「应用商店」，底部 Tab 不变；生产已上线） | 缺失（本次未改导航、未发布） | Web/手机共用 `MerchantAppStore` 与 `/api/merchant/apps*`；隔离环境验证安装→启用→停用闭环与平台后台计数一致；生产入口以构建产物核对为准（演示登录在生产关闭）；详见 [ecosystem-app-store.md](./ecosystem-app-store.md) |
@@ -54,7 +57,18 @@
 | 七行业首页一致性 | 共用原版 `MerchantPortal` 首页；生产登录态页面已重载核对 | 共用原版 `MerchantMobileApp` 首页；生产登录态页面已重载核对，390×844 隔离页 7/7 同结构 | 保留小程序自己的旧版首页与导航，未在本轮修改/验收 | 商家 Web `20261029201319473-5ab5440d`、手机 Web `20261029201330774-839824fd` 已发布；线上桌面/手机截图确认旧首页结构。小程序与七账号生产登录仍待验收 |
 | 七行业后台布局/AI 助手栏 | 六行业业务模块复用 `MerchantPortal` 顶栏、旧导航、响应式水平导航及上下文 GPTmoda | 六行业业务模块复用 `MerchantMobileApp` 底部导航/更多页及 ModaUI 入口 | 原生小程序按既有运行面保持，不套用 Web 构建布局 | 隔离预览仅抽验服装批发商：Web 881×485 旧水平导航与 GPTmoda 可用；手机 390×844 旧底部导航正常且无页面横向溢出。其余行业逐页视觉/AI 上下文和小程序仍待验收；发布仍阻塞，见 `merchant-industry-backends.md` 与 `merchant-seven-industry-acceptance.md` §2.6 |
 | ModaUI 单页创作工作台 | 有；`fashion_studio`/`modagpt` 直接进入单页工作台（左五项、中时间流、右检查器），无卡片落地页 | 有；`ai_home` 渲染同一个 `ModaUIWorkbench`（固定全屏 + 键盘内缩，旧拖柄导航已删） | 缺失（`pages/assistant` 仍是旧结构，无创作入口；审核期 AI 开关关闭） | 三端共用同一能力注册表、推理规划与 `/api/merchant/modagpt/*`；Web 已浏览器验收，手机 App 已代码接入并构建通过（真实登录态视觉待验收），小程序未接入（见 `modaui-workbench.md` §13） |
+| Apparel Studio 作品到商品草稿 | 共享 `ModaUIWorkbench`：保存 AI 结果后可填写商品必需资料，经既有商品媒体上传和 `/api/merchant/products` 创建草稿；不自动发布 | 与 Web 共用同一工作台、媒体 API、商品 API 与幂等请求 | 缺失：小程序无此工作台/结果转换入口；继续沿用已有商品创建功能 | 复用商家 JWT、`product.publish`/`store_manager`、媒体预签名上传和 Product Center 商品持久化；结果必须先保存、用户确认、只能生成 `draft`。上传或商品创建失败需明确反馈；此增量不表示六项专业能力或小程序 Studio 已完成 |
+| Apparel Studio V2.0 六项能力/统一项目 | 部分：复用 ModaUI 工作台、图像/试穿/换色 API、共享项目 API；六项能力及专业 CAD 均未完整 | 部分：共享工作台和项目 API；按当前商家行业自动进入，不显示行业选择器 | 部分：assistant 增加项目列表/简报读写；按当前商家行业自动进入，无 Studio 结果到商品草稿入口 | `/api/merchant/studio-projects` 使用服务端 entitlement/template 隔离；Project/Version API 已有，三端基础项目 UI 已接入代码；六项能力及专业 CAD 未完整，真实设备/端到端同步待验收；不得因单一草稿切片标记 Studio 完成 |
+| Studio 私有文件与 AI Job 项目关联（Apparel/Leather 基础面板） | Apparel/Leather 复用 `ModaUIProjects` 上传初始化/PUT/完成、文件列表/下载/版本引用、任务列表/详情与游标翻页；列表/创建/读取/版本更新显式传行业模板，服务端校验 entitlement；Apparel 任务带当前项目 ID | 与电脑端复用同一项目面板和 API | Apparel/Leather assistant 项目页复用同一私有文件、任务状态/详情 API 与游标翻页；列表/创建/读取/版本更新显式传行业模板；Apparel 从项目载入对话时带项目 ID，Leather 隐藏 Apparel 作品库及载入对话入口，避免跨行业素材/AI 上下文混用 | 后端 API 与 `ModaGptTask.projectId` 已接入并通过隔离 PostgreSQL 集成测试；客户端接入的仅为项目/文件/任务基础面板，不等于 Leather CAD/纸格/工程编辑或专属 AI 闭环完成。尚无真实对象存储凭证，Web CORS/小程序域名配置、电脑/手机真实浏览器、小程序设备验收未完成。离线只支持页面存续期间重试当前文件；关闭页面后需重新选择。不能称为真实上传/跨端同步完成 |
+| AI 工作室单一入口与行业自动路由 | 使用现有 AI 入口；进入后按当前行业自动打开对应 Studio | 共用同一 AI 入口和行业上下文，不增加行业菜单 | 使用现有助手入口；按服务端授权与当前行业自动进入 | 不改公共经营目录、不新增行业选择器；`GET /api/merchant/studios` 是授权事实来源，三端展示必须与当前模板匹配；未授权时拒绝进入 |
+| 多行业 Studio 授权与项目隔离 | 商家授权列表 API 可返回多个行业；项目 API 接受 `industryTemplate` 精确选择 | 共享同一授权与项目 API 契约 | 商家助手使用同一授权与项目 API | `MerchantStudioEntitlement` 服务端校验稳定 registry ID、状态和 capability；项目按 tenant + template + Studio 过滤。平台商家中心详情已接入管理员授权/撤销 UI；隔离 PostgreSQL/HTTP 验证了权限拒绝、旧主行业固化、幂等 grant/revoke、能力边界、其他行业保留及撤权后 Studio/项目 API 拒绝。自动路由 UI 与商家三端完整项目同步仍待验收 |
 | 采购/生产/财务 | 有 | 有（部分） | 有（部分） | 各自模块状态见模块文档 |
+
+### 新增行业规划与当前进度
+
+| 功能 | 商家 Web | 商家手机 Web | 商家小程序 | 一致性与验证 |
+|---|---|---|---|---|
+| 第八行业：RUDA Restaurant OS | 共用商家注册页开放 `restaurant_ordering`，只提交 `RESTAURANT_OPERATOR` 和餐饮模板品类；菜单/菜品/原料/配方版本/成本读取/菜单发布与撤回、桌台目录及采购单/实际收货共用既有目录 API | 共用商家注册及桌台/菜单目录分段入口；复用 `RestaurantMenuWorkspace` 与 `RestaurantTableWorkspace`，采购/收货嵌入既有菜单工作区，不增加一级入口；均要求精确 Restaurant 模板和服务端模块权限 | 企业注册页开放 Restaurant，提交相同餐饮身份/品类；原生菜单、配方、成本、确认发布、桌台以及采购/实际收货共用同一 API | 采购 → 实际收货 → 成本 → 配方 → 菜单发布：隔离 PostgreSQL API 集成已验证数据库持久化及租户/权限/幂等/版本规则；Web/手机 Web/小程序操作代码已接入，Web 共享组件用只读模拟 API 完成 1440/820/390 视觉检查。真实商家会话的三端交叉操作和小程序开发者工具/真机仍待验证。POS、支付、KDS、预约、外卖履约及 Restaurant AI Studio 真实模型闭环仍未开放。详见 [restaurant-ordering.md](./restaurant-ordering.md) 与 [identity-merchant-onboarding.md](./identity-merchant-onboarding.md) |
 
 ## 3. 本轮修改的逐端检查项
 
@@ -100,6 +114,7 @@
 | 2026-10-28 | 七种行业后台 + 演示账号 | 6 个新行业后台按 `workspace.templateId` 独立加载；服装生产批发商继续用现有门户；公开商家目录不再覆盖会话 `workspace`（否则回退旧门户） | 同一 `MerchantAdminApp` 按 `templateId` 加载同一注册表；iPhone 13 实测 4 个行业后台正常、横向溢出 0 | 小程序行业后台本轮未实现，仅商品分类同步；小程序登录仍走同一商家 JWT | 同一 `/api/merchant/*`、同一 `Merchant.industryTemplate` 守卫；门店/调拨/POS 仅在店态行业开放 | 7 个演示账号真实登录、门店 POS 扣减、调拨状态机、跨行业 403 隔离已验证；已发布 Web `20261028232135586-ca9d8424` 与手机端 `20261028232147637-cf200177` | 部分完成（Web/手机端已验收；小程序缺失） |
 | 2026-10-28 | 统一身份与商家入驻闭环 | 商家 Web 仍只接受已批准商家 JWT；申请态不得进入 `/merchant`；工作区模板继续来自 `merchant.workspace` | 同 Web，商家手机 Web 只接受已批准商家 JWT 与同一工作区模板 | 商家小程序登录沿用同一商家/员工 JWT；申请态无商家 token，不能调用 `/api/merchant/*` | 新商家来源变为 `MerchantOnboardingApplication` 审核通过事务；当前正式模板仅 `apparel_production_wholesale`；客户/采购身份保留且不自动升级为商家 | 本轮新增规格与服务端/测试；真实三端登录态与总后台 UI 待验收 | 部分完成（审核 API 已作为权威路径补齐；三端真实视觉和小程序真机待验收） |
 | 2026-10-28 | 七行业经营闭环 P0（员工/资料/POS/白名单） | 行业后台新增「团队权限」「消息中心」导航；设置页可编辑商家资料；POS 增加开班/交接班/现金收支/折扣/退货弹窗，销售记录显示已退金额 | 服装门户「用户与权限」改为同一 `MerchantTeamManagement`（删除本地重复 CRUD）；手机端员工管理保持原实现未改；小程序仍未实现行业后台 | 同一 `/api/merchant/employees`、`/api/merchant/settings`、`/api/merchant/pos/*`；新增 `Order.storeId`、`MerchantEmployee.storeId`（可空）；员工绑店后服务端只放行本店门店/库存/调拨/销售 | `tsc` 0；`industry-module-contract` 5/5；seed 幂等重跑 7/7 成功；`tests/e2e/industry-backends.e2e.ts` 已入库（隔离库待运行） | 部分完成（真实 POS/退货/交接班已复测；小程序、报表、打印未做） |
+| 2026-11-15 | 手机端服装物料台账入口与表单验收 | 本轮未改 | `MerchantMobileApp.tsx`：物料菜单与生产工单 CTA 共用 `openMoreItem('materials')`；切回首页时即使物料面板已展开仍会滚动定位；页面标题一致 | 本轮未改；小程序真机未验收 | 无 API/schema/权限变化；复用既有物料 API 与 `canViewCosts` | `merchant-mobile-material-navigation` + `merchant-mobile-home-quick-actions` 6/6；`npm run lint`、`git diff --check`、`npm run build:app:merchant-admin-mobile`（release `20261115113611612-ac8a8d21`）通过；本地演示店主 Playwright 截图见 [`merchant-mobile-material-ledger-2026-11-15`](../evidence/merchant-mobile-material-ledger-2026-11-15/)；外部演示图 `https://modaui.com/demo-products/model-01.jpg` 返回 `net::ERR_FAILED`；直接 URL 检测仍报告近期商品缩略图容器的 `nested-cards`，精确 `/merchant` 例外只验证了 live-ignore 解析器，未验证实际 Live overlay | 部分完成（员工无成本权限会话、电脑端和小程序实测待验收） |
 
 
 
@@ -232,6 +247,20 @@
 - 同步与错误：三端任务状态/结果来自同一个 `ModaGptTask` 服务端数据源；权限拒绝、租户冲突、数据库错误进入现有失败状态，不以空结果掩盖。
 - 规格：[`modaui-four-industry-ai.md`](./modaui-four-industry-ai.md)。四行业专属只读工具、真实 HTTP/隔离 PostgreSQL 验证已通过；百货/箱包输出商品资料待完善清单，连锁输出调拨候选，综合零售输出 POS+库存补货候选。三端真实登录态操作和视觉验收仍待完成；不等同于图片生成、商品写入、调拨执行或促销/采购业务闭环。
 
+## 五行业 ModaUI 聊天呈现（规格先行）
+
+| 运行面 | 目标入口与行为 | 权限/数据源 | 验收状态 |
+|---|---|---|---|
+| 商家 Web | 在现有 AI/ModaUI 版块中由 `ModaUIEntry` 路由到共享 `MerchantAiHome` 聊天组件；只显示对应行业提示，保留现有会话、任务预览/确认/轮询和结果，不新增独立 AI 入口 | 认证上下文仅作呈现；商家聊天/任务 API、Supervisor 和工具 Handler 是权威 | 代码接线完成；定向测试和 Web 构建通过；真实商家登录态及浏览器截图待验收 |
+| 手机 Web | 在现有 AI/ModaUI 版块中与 Web 共用 `MerchantAiHome`、任务 API 和采购草稿确认流程，不创建第二套聊天或入口 | 同一商家 JWT、行业 Pack、员工权限和租户查询 | 代码接线完成；定向测试和手机 Web 构建通过；真实手机浏览器截图待验收 |
+| 商家小程序 | 沿用现有 AI/ModaUI 原生页面与导航；使用认证会话加载服务端行业上下文，行业聊天/任务走受保护任务 API，不使用公共文本聊天执行商家业务 | 商家会话认证；服务端按商家、行业、Agent/员工权限校验 | 代码接线完成；小程序契约/WXML 测试通过；微信开发者工具/真机运行截图待验收 |
+| 历史服装生产模板、服装批发模板 | 保持现有创作工作台与入口不变；正式产品目标已合并为一个服装批发行业，自有生产为注册可选能力，迁移未实施 | 当前仍按历史模板配置/权限；新生产能力映射待实现，不能把两个旧模板当作两个正式行业 | 回归旧工作区；新行业/能力映射单独开发与验收 |
+
+- 快捷提示只填入输入框，不自动执行；贸易采购草稿仍要求供应商、商品、SKU、数量和成本确认。
+- 不新增 API、数据模型、工具或外部模型调用；错误、加载、重复提交和轮询状态沿用现有聊天/任务服务契约。
+- 2026-10-30 普通聊天行业角色由同一 `/api/merchant/assistant/query` 按数据库中的当前商家 `industryTemplate` 选择；不接受客户端行业身份，不改变工具/员工权限。七模板均有独立角色说明，百货批发与百货连锁明确分开。全量单测 1251/1251、类型检查和构建通过；隔离 PostgreSQL 行业任务与贸易 HTTP 集成测试各 1/1 通过。
+- 完整规格见 [`modaui-workbench.md`](./modaui-workbench.md) §14。三端代码接线与本轮定向自动化验证已完成；整体仍为“部分完成/待验证”，须取得真实商家登录态、桌面/手机浏览器和微信开发者工具/真机证据。服装行业回归由入口路由测试覆盖，未改动其业务配置或 UI。
+
 ## MODAUI AI Tools 工具中心（P1 + P2 首批，2026-10-30）
 
 | 能力 | 商家 Web | 手机 Web | 商家小程序 | 权威服务/数据 |
@@ -250,14 +279,80 @@
 - 端侧验收：桌面 Web、手机 Web、小程序真机/开发者工具视觉与交互**尚未截图验收**，状态为**部分完成（代码与构建完成，视觉待验收）**。
 - 未接通：图片/视频/语音/发布/分析五个中心在三端一致显示「未接通 + 原因」，不提供可点击入口。
 
-## 七行业私人网站模板与商品 3D（2026-11-01，执行中）
+## 2026-10-30 ModaUI 广告策划器 P1（商品简报 → 三套方案 → 分镜版本）
 
-| 能力 | 商家 Web | 手机 Web | 商家小程序 | 权威服务/数据 |
+| 项目 | 电脑网页端 | 手机网页端 | 商家小程序 | 服务端真值 |
 |---|---|---|---|---|
-| 21 套模板选择与持久化 | 已接入按行业筛选的选择器；真实账号保存/刷新待验 | 已接入按行业筛选的选择器；真实账号保存/刷新待验 | 已接入服务端返回的行业选项；小程序实机待验 | 复用 `settings.storefrontTemplate`；`GET /api/merchant/settings` 返回选项，`PUT /api/merchant/storefront` 仍按数据库行业校验；legacy 值不自动改写 |
-| 公开店铺正式渲染 | 结构型 ID 已接正式 `MerchantStoreView`；真实商家路由与截图待验 | 共用正式模板渲染与响应式布局；390/820/1440 待验 | 买家小程序模板/3D 行为待验 | 复用真实商品 API 与 `useStorefrontData` 授权过滤；目录、详情、加购/询价的跨端回归待验 |
-| 商品 GLB 上传与审核 | 上传组件代码存在，发布及真实商家操作待验 | 上传组件代码存在，发布及真实商家操作待验 | 当前未证实 GLB 上传/预览 | `ProductMedia`、模型审核凭证、既有 R2/S3 和管理员审核 API |
-| 买家商品模型呈现 | 箱包三模板有 3D 调用；其他六行业未接入 | 生产移动应用路由和性能待验 | WebGL/微信组件兼容性与安全降级待验 | 只有 `approved + 有效管理员审核凭证` 的真实模型可公开 |
+| 商品简报 | 未建入口 | 未建入口 | 未建入口 | `GET /api/merchant/ai-ad/products/:productId/brief` |
+| 三套广告方案 | 未建入口 | 未建入口 | 未建入口 | `POST /api/merchant/ai-ad/concepts`（一次文本调用，事实白名单校验） |
+| 工程与版本 | 未建入口 | 未建入口 | 未建入口 | `POST/GET /api/merchant/ai-ad/projects`、`PATCH /:id`、`GET /:id/versions` |
+| 生成预算 | 未建入口 | 未建入口 | 未建入口 | `POST /api/merchant/ai-ad/projects/:id/estimate`（只读目录单价，不调用供应商） |
 
-- 状态口径：上表是起始基线，不是验收结论。正式路由、选择器、小程序入口与各模型展示需要逐项更新；未完成的端标记“缺失/待验证”，不得标“一致”。
-- 业务结论：3D 只增强商品展示和媒体管理；不得改变订单、库存、RFQ、租户权限或商家后台导航/AI 助手栏。不能支持 3D 的端仍须提供安全且明确的真实图片回退。
+- 身份与租户：三条路由全部 `requireMerchantTenant` + `ai.tools.use`；所有查询 `where: { merchantId }`，`merchantId` 只取自会话，测试 `tests/modaui-ad-planner.test.ts` 已断言。
+- 数据一致性：简报、方案、分镜、版本、预算全部落在服务端（`AiAdProject` / `AiAdConcept` / `AiAdProjectVersion`），三端未来只读同一接口，不做本地状态权威。
+- 未接通：视频生成、TTS 配音、数字人、发布均无 Adapter，接口返回 `adapter_not_built` / `provider_not_configured`，不产生假视频、假音频或 0 成本记账。
+- 端侧验收：三端 **UI 尚未建立**，本轮只有服务端与机械测试，状态为**部分完成（后端完成，三端界面待建）**。
+
+### 2026-10-30 P1 商家端四屏（本轮）
+
+| 项目 | 电脑网页端 | 手机网页端 | 商家小程序 | 服务端真值 |
+|---|---|---|---|---|
+| 商品简报与缺失资料 | `MerchantPortal` → 广告策划（共享组件） | 同一组件 `compact` 布局 | `pages/ad-planner/index` | `GET /api/merchant/ai-ad/products/:productId/brief` |
+| 三套广告方案 | 三列并排卡片 | 纵向卡片 | 纵向卡片 | `POST /api/merchant/ai-ad/concepts` |
+| 预算确认 | 右侧预算面板 + 能力状态 | 独立步骤 | 独立步骤 | `concept.costEstimate`；建工程后 `POST /:id/estimate` |
+| 分镜与版本 | 折叠「高级设置」+ 版本面板 | 折叠面板 | 折叠面板 | `PATCH /api/merchant/ai-ad/projects/:id` + `GET /:id/versions` |
+| 补充商品图片 | 复用 `uploadMerchantMedia`，随工程保存 `supplementImages` | 同左 | **不支持**（如实提示到电脑端或手机网页端上传） | `POST /api/merchant/ai-ad/projects` 校验 HTTPS、最多 6 张 |
+| 视频/配音/数字人生成 | 禁用 + 「暂未接通」 | 禁用 + 「暂未接通」 | 禁用 + 「暂未接通」 | 无 Adapter，不产生费用 |
+
+- 入口：电脑端侧栏「营销增长 → 广告策划」与顶部「广告策划」；手机端「更多 → 智能工具 → 广告策划」；小程序「工具中心 → 广告策划」。
+- 普通商家界面只保留「选商品 / 选方案 / 确认预算 / 分镜与保存」；景别、机位、来源、模型、提示词只在「高级设置 · 逐镜头编辑」折叠区，默认收起。
+- 数据一致性：三端同接口、同字段；版本恢复=以历史分镜 PATCH 成新版本，历史不被覆盖；三端都不使用本地存储冒充数据库。
+- 机械证据：`tests/modaui-ad-planner-ui.test.ts` 6 项（接口、禁用态、缺失资料、三端挂载、小程序页面与 WXML 指令、文档先行）+ `tests/modaui-ad-planner.test.ts` 17 项通过。
+- 端侧验收：三端代码与构建已完成；**真实商家数据、桌面/手机/小程序截图验收尚未执行**（本机无商品库与文本 Provider Key），状态为**部分完成（代码完成，真实环境与视觉待验收）**。
+
+### 2026-10-30 P3 商家端收敛（本轮）
+
+| 项目 | 电脑网页端 | 手机网页端 | 商家小程序 | 服务端真值 |
+|---|---|---|---|---|
+| 广告用途 | 4 个用途按钮（数字人禁用 + 未接通） | 同左 | 同左（禁用样式 + 提示） | 映射为 `goal`，仍由服务端校验 |
+| 发布平台 | 7 个平台按钮 | 同左 | 同左 | 映射为 `aspectRatio`；发布能力未接通 |
+| 技术模式 | **已删除** | **已删除** | **已删除** | 无相关字段 |
+| 目标/语言/画幅/分辨率下拉 | **已删除** | **已删除** | **已删除** | 客户端不再提交可选值，使用平台默认 |
+| 镜头技术字段 | 「专业精修（可选）」默认折叠 | 同左 | `shotProOpen` 默认 false | `storyboard` 同一份数据 |
+| 自动保存 | 保留 1500ms 防抖 + 内容签名 | 同左 | 同左 | `PATCH /api/merchant/ai-ad/projects/:id` |
+
+- 机械证据：`tests/modaui-ad-planner-ui.test.ts` 新增 2 项（P3 商业选择、专业层可选）+ P3 文档先行；`node --check` 与 WXML 指令检查 0 问题；`tsc --noEmit` 0。
+- 未接通：视频生成、数字人、TTS、平台发布。用途与平台按钮不产生任何供应商调用，只决定请求字段与画幅。
+- 端侧验收：**待验证**（本轮只做代码与机械检查，未取得桌面/手机/小程序截图）。
+
+## RUDA 多行业 AI Studio V2.0（入口已接线，专业闭环待实施）
+
+本功能的三端架构/API contract 必须同批规划。电脑端专业能力优先，手机 Web 与小程序基础入口、同一项目读取/恢复/文件/任务状态及版本同步与共享后端同期建设；不得等电脑端完整才启动移动端基础能力。下表记录当前实现与缺口，不能据入口接线宣称专业业务闭环或三端已验收。
+
+| 能力 | 电脑网页端（merchant-admin-web） | 手机网页端（merchant-admin-mobile） | 商家小程序（merchant-miniprogram） | 共享权威契约/当前状态 |
+|---|---|---|---|---|
+| 登录/行业识别/Studio 匹配 | 复用商家后台登录；授权后按当前行业自动路由 | 复用手机端现有会话与授权校验 | 复用现有小程序商家登录与强制刷新后的授权校验 | 三端代码均使用服务端 entitlement 列表，稳定 Industry/Studio ID；单元及隔离 API 测试通过。当前本地数据库缺少 `MerchantStudioEntitlement` 表，浏览器 GET 返回 500，迁移未应用，端到端待验收 |
+| Studio 入口/专业工作流 | 首个完整专业工作站；CAD、模板、工程参数、质量检测、生产资料按行业授权 | 同一 Studio 的移动工作流，保留原导航，复杂 CAD 精细编辑不要求移动端 | 便捷入口与轻操作，不复制后台或手机 Web 布局 | 同一 Studio 能力和权限事实，布局/操作独立；目标规格见 [`modaui-industry-studios-v2.md`](./modaui-industry-studios-v2.md) |
+| AI 对话与任务 | 项目工作台发起任务时带当前 `projectId`，可读状态与详情 | 与电脑端共用任务上下文和读取 API | 从项目载入对话时带 `projectId`，可读状态与详情 | 后端与三端调用代码已接入现有 `ModaGptTask`；首批只支持项目模板与商家当前主行业 AI 上下文一致，其他行业返回 409。Provider 实际调用/费用、设备实测、任务失败后的人工重试闭环仍未验收 |
+| 项目/版本/CAD | 创建/编辑专业项目与 CAD；保存受版本条件保护 | 打开同一 Project ID、查看结构/纸格/3D（支持时）、基本尺寸编辑、版本历史 | 查看项目历史、结果及简单修改/确认 | Project/Version API 与 File/Job 数据关系已落库；隔离 PostgreSQL 全迁移、租户/行业/授权、版本/幂等相关集成测试通过。三端项目基础 UI 有代码，工作区数据库未执行迁移，CAD 专业闭环与真实同步仍待实施 |
+| 照片/文件 | Apparel/Leather 项目面板上传、列出和短时签名下载，支持游标翻页 | 与电脑端共用上传/列表/下载 API，支持游标翻页 | Apparel/Leather assistant 项目页相册/相机或文件选择上传；图片/PDF 预览，DXF/GLB 提示在电脑端打开，列表支持游标翻页 | 后端提供私有文件初始化、HeadObject 完成确认、项目列表、短期签名下载及引用保护删除；客户端代码已接线。依赖私有 S3/R2；无真实对象存储凭证验证，Web CORS 与小程序 request 域名配置、设备上传尚未验收 |
+| 权限/审批/通知 | 服务端员工/行业/Studio 授权；审批/生产状态 | 同一权限；审批与进度适配移动布局 | 同一权限；站内消息/任务通知入口 | 服务端逐请求校验；同一任务/项目状态，事件或受控刷新；端 UI 不构成授权 |
+| 电脑改动同步 | 写入并以服务端 revision 为准 | 收到事件/恢复后重新读取最新版本 | `onShow`/通知后读取服务端最新版本 | 不以 localStorage 作为 CAD/项目权威来源；幂等、事务和 expectedRevision 尚待建设/验证 |
+
+### V2 跨端项目验收计划
+
+| 编号 | 操作顺序 | 预期结果 | 状态 |
+|---|---|---|---|
+| 1 | 电脑上传照片 → 手机打开同项目 | 同一 Project/File ID、权限过滤正确、显示服务端文件 | 待实施/验收 |
+| 2 | 手机拍照上传 → 电脑打开项目 | 服务端文件持久化，电脑读到同一 File ID 和版本 | 待实施/验收 |
+| 3 | 手机提交 AI 自然语言修改 → 电脑查看 | 同一 AI Job ID、项目版本递增，电脑读到服务端最终结果 | 待实施/验收 |
+| 4 | 电脑修改 CAD → 手机查看 | 手机看到同一 Pattern Version；不能丢弃未知工程字段 | 待实施/验收 |
+| 5 | 小程序确认方案 → 电脑查看 | 同一确认状态/用户/项目版本，服务端记录确认结果 | 待实施/验收 |
+| 6 | 旧客户端以过期 revision 保存 | 返回冲突，保留新版本，提示用户重新载入/合并；不得静默覆盖 | 待实施/验收 |
+| 7 | 重复 AI 提交/部件操作 | 相同幂等键不重复生成任务/部件 | 待实施/验收 |
+| 8 | 上传/任务过程中断网再恢复 | 可通过原 File/AI Job ID 恢复或明确重试；不会重复扣费/生成 | 待实施/验收 |
+| 9 | 多人同时编辑一个工程项目 | 服务端事务/版本检查拒绝冲突写，提示冲突双方；无静默 last-write-wins | 待实施/验收 |
+
+UI 约束：电脑、手机 Web、小程序分别沿用自身原有 RUDA 布局、颜色、字体、间距、导航和交互；只统一业务字段、状态、权限及服务端版本。不得因本项目做界面重设计。视觉取值见 [`design-values.md`](../design-values.md) 与 [`mobile-design-system.md`](../mobile-design-system.md)；小程序继续使用自身 WXSS/rpx 规范。
+
+端侧状态：Leather/Apparel 共用 API、schema、migration 和租户/行业/权限/幂等/版本冲突集成测试已落代码，并在临时隔离 PostgreSQL 全量 migration 验证通过；本轮又通过同一隔离测试覆盖私有文件元数据与 Job 项目关联。三端基础 UI/API 调用已接线，但工作区数据库仍未执行 migration，授权路由可能因缺少 entitlement 表返回 500；生产迁移未应用。电脑/手机 Web 本轮未做真实登录后的 Studio 操作检查，小程序未做开发者工具/真机检查；真实对象存储和完整端到端同步、专业工作流仍为“待实施/验收”，不得标记一致或完成。

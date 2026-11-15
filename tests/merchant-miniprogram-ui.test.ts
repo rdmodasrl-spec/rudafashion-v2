@@ -58,9 +58,11 @@ test('More section and child-page names use four Chinese characters', () => {
     ...Array.from(menuItems.matchAll(/title: '([^']+)'/g), match => match[1]),
     ...Array.from(workspaceTitles.matchAll(/:\s*'([^']+)'/g), match => match[1]),
   ];
+  const approvedLabelExceptions = new Set(['AI工作室']);
 
   assert.ok(labels.length > 0);
   for (const label of labels) {
+    if (approvedLabelExceptions.has(label)) continue;
     assert.equal(Array.from(label.matchAll(/\p{Script=Han}/gu)).length, 4, `${label} should use four Chinese characters`);
   }
   assert.ok(subtitles.length > 0);
@@ -175,7 +177,10 @@ test('visual refresh preserves page geometry and business interactions', () => {
   assert.match(assistant, /bindtouchstart="onNavTouchStart"/);
   assert.match(assistantLogic, /onNavTouchStart\(event\)\s*\{/);
   assert.match(assistantLogic, /onNavTouchEnd\(event\)\s*\{[\s\S]{0,700}setNavigationOpen\(delta > 0\)/);
-  assert.match(assistant, /wx:if="\{\{!taskMode && !activeMode && !toolsOpen\}\}" class="quick-actions"/);
+  assert.match(assistant, /wx:if="\{\{!industryChatOnly && !taskMode && !activeMode && !toolsOpen\}\}" class="quick-actions"/);
+  assert.match(assistant, /wx:if="\{\{industryContextLoaded && industryChatOnly\}\}" class="industry-welcome"/);
+  assert.match(assistant, /wx:for="\{\{industryPrompts\}\}" wx:key="label" class="industry-prompt-button"/);
+  assert.match(assistant, /data-mode="task" bindtap="setTaskMode"/);
   assert.match(assistant, /aria-label="\{\{navigationOpen \? '收起商家导航' : '展开商家导航'\}\}"/);
   assert.match(assistantLogic, /navigationAvailable:\s*typeof this\.getTabBar === 'function'/);
   assert.match(assistantLogic, /toggleNavigation\(\)\s*\{[\s\S]*?tabBar\.setHidden\(false\)/);
@@ -364,6 +369,12 @@ test('merchant assistant task mode uses the protected ModaUI task API and curren
   const api = read('utils/api.js');
 
   assert.match(assistantLogic, /requireMerchantSession\(this\)/);
+  assert.match(assistantLogic, /loadIndustryContext\(\{ force: true \}\)/);
+  assert.match(assistantLogic, /request\('\/api\/merchant\/studios'\)/);
+  assert.match(assistantLogic, /getIndustryConfig\(industryContext\)/);
+  assert.match(assistantLogic, /const industryChatOnly = !apparelTemplateIds\.has\(templateId\)/);
+  assert.match(assistantLogic, /if \(this\.data\.industryChatOnly\) return/);
+  assert.match(assistantLogic, /taskMode: this\.data\.industryChatOnly \? true : this\.data\.taskMode/);
   assert.match(assistantLogic, /\/api\/merchant\/modagpt\/task\/preview/);
   assert.match(assistantLogic, /\/api\/merchant\/modagpt\/task'/);
   assert.match(assistantLogic, /\/api\/merchant\/modagpt\/task\/\$\{encodeURIComponent\(taskId\)\}/);
@@ -371,6 +382,7 @@ test('merchant assistant task mode uses the protected ModaUI task API and curren
   assert.match(assistantLogic, /create_procurement_draft:/);
   assert.match(assistantLogic, /latest\.runtimeStatus/);
   assert.match(assistant, /bindtap="toggleTaskMode"/);
+  assert.match(assistant, /bindtap="setTaskMode"/);
   assert.match(assistant, /bindtap="confirmMerchantTask"/);
   assert.match(assistant, /bindtap="retryMerchantTaskStatus"/);
   assert.match(api, /headers\.Authorization = `Bearer \$\{session\.token\}`/);

@@ -1,0 +1,343 @@
+<view class="page">
+  <view class="steps">
+    <view
+      wx:for="{{steps}}"
+      wx:key="id"
+      class="step {{item.id === step ? 'step-active' : ''}}"
+      data-step="{{item.id}}"
+      bindtap="goStep"
+    >
+      <text class="step-index">{{index + 1}}</text>
+      <text class="step-label">{{item.label}}</text>
+    </view>
+  </view>
+
+  <text class="mode-hint">选商品、选用途和平台即可开始；创意、分镜与费用由 MODAUI 自动完成。</text>
+
+  <block wx:if="{{step === 'product'}}">
+    <view class="card">
+      <input class="search" value="{{search}}" bindinput="onSearchInput" placeholder="搜索商品名称、款号或 SKU" confirm-type="search" />
+      <view wx:if="{{loadingProducts}}" class="hint">正在读取商品库…</view>
+      <view wx:elif="{{productsError}}" class="error">{{productsError}}</view>
+      <view wx:elif="{{products.length === 0}}" class="empty">
+        <text class="empty-title">没有可选商品</text>
+        <text class="empty-hint">先在「商品」里创建商品，广告方案只使用真实商品资料。</text>
+      </view>
+      <block wx:else>
+        <view
+          wx:for="{{products}}"
+          wx:key="id"
+          class="product {{item.id === selectedProductId ? 'product-active' : ''}}"
+          data-id="{{item.id}}"
+          bindtap="selectProduct"
+        >
+          <image wx:if="{{item.image}}" class="thumb" src="{{item.image}}" mode="aspectFill" />
+          <view wx:else class="thumb thumb-empty">无图</view>
+          <view class="product-main">
+            <text class="product-name">{{item.name}}</text>
+            <text class="product-meta">{{item.styleNo}} · {{item.skuCount}} 个 SKU</text>
+          </view>
+          <text class="product-price">{{item.priceLabel}}</text>
+        </view>
+      </block>
+    </view>
+
+    <view wx:if="{{selectedProductId}}" class="card">
+      <view wx:if="{{briefLoading}}" class="hint">正在读取商品资料…</view>
+      <view wx:elif="{{briefError}}" class="error">{{briefError}}</view>
+      <block wx:elif="{{briefView}}">
+        <text class="card-title">{{briefView.name}}</text>
+        <text class="card-meta">{{briefView.styleNo}}{{briefView.brand ? ' · ' + briefView.brand : ''}}</text>
+        <view class="facts">
+          <view class="fact">
+            <text class="fact-label">批发价</text>
+            <text class="fact-value">{{briefView.priceLabel}}</text>
+          </view>
+          <view class="fact">
+            <text class="fact-label">颜色 / 尺码</text>
+            <text class="fact-value">{{briefView.colorCount}} / {{briefView.sizeCount}}</text>
+          </view>
+        </view>
+        <scroll-view wx:if="{{briefView.images.length > 0}}" class="thumbs" scroll-x="true">
+          <image wx:for="{{briefView.images}}" wx:key="*this" class="thumb-sm" src="{{item}}" mode="aspectFill" />
+        </scroll-view>
+        <view class="missing">
+          <text class="missing-title">缺失资料</text>
+          <view wx:if="{{briefView.missing.length === 0}}" class="hint">广告需要的资料齐全</view>
+          <view wx:else class="chips">
+            <text wx:for="{{briefView.missing}}" wx:key="*this" class="chip">{{item}}</text>
+          </view>
+        </view>
+        <text class="hint">补充图片请在电脑端或手机网页端上传；小程序暂不支持上传。</text>
+      </block>
+    </view>
+
+    <view wx:if="{{briefView}}" class="card">
+      <text class="card-title">广告用途</text>
+      <view class="chips">
+        <text
+          wx:for="{{purposeOptions}}"
+          wx:key="id"
+          class="chip {{purpose === item.id ? 'chip-solid' : ''}} {{item.ready ? '' : 'chip-disabled'}}"
+          data-id="{{item.id}}"
+          bindtap="choosePurpose"
+        >{{item.label}}{{item.ready ? '' : ' · 未接通'}}</text>
+      </view>
+      <text class="card-title">发布平台</text>
+      <view class="chips">
+        <text
+          wx:for="{{platformOptions}}"
+          wx:key="id"
+          class="chip {{platform === item.id ? 'chip-solid' : ''}}"
+          data-id="{{item.id}}"
+          bindtap="choosePlatform"
+        >{{item.label}}</text>
+      </view>
+      <text class="hint">按 {{aspectRatio}} 输出；平台发布尚未接通，本次只生成工程与素材。</text>
+      <button class="btn btn-primary" bindtap="generateConcepts" loading="{{conceptsLoading}}" disabled="{{conceptsLoading}}">生成三套方案</button>
+    </view>
+  </block>
+
+  <block wx:elif="{{step === 'concepts'}}">
+    <view class="card">
+      <view class="card-head">
+        <text class="card-title">{{selectedProductName}}</text>
+        <button class="btn btn-ghost" size="mini" bindtap="generateConcepts" loading="{{conceptsLoading}}" disabled="{{conceptsLoading}}">重新生成</button>
+      </view>
+      <view wx:if="{{concepts.length > 0}}" class="card-head">
+        <text class="card-meta">{{concepts.length}} 套方案</text>
+        <button class="btn btn-ghost" size="mini" bindtap="toggleCompare">{{compareOpen ? '收起对比' : '对比方案'}}</button>
+      </view>
+      <view wx:if="{{compareOpen}}" class="compare">
+        <view wx:for="{{concepts}}" wx:key="conceptKey" class="compare-row">
+          <text class="compare-cell">{{item.routeName}}</text>
+          <text class="compare-cell">{{item.durationLabel}}</text>
+          <text class="compare-cell">{{item.shotCount}} 镜头</text>
+          <text class="compare-cell">{{item.cta}}</text>
+        </view>
+      </view>
+      <view wx:if="{{conceptsLoading}}" class="hint">正在用一次模型调用生成三套方案…</view>
+      <view wx:elif="{{conceptError}}" class="error">{{conceptError}}</view>
+      <view wx:elif="{{concepts.length === 0}}" class="empty">
+        <text class="empty-title">还没有生成方案</text>
+        <text class="empty-hint">点击「重新生成」，MODAUI 会基于商品资料一次给出三套方向。</text>
+      </view>
+    </view>
+
+    <view wx:for="{{concepts}}" wx:key="conceptKey" class="card concept {{item.conceptKey === selectedConceptKey ? 'concept-active' : ''}}">
+      <view class="card-head">
+        <view class="concept-head">
+          <text class="card-title">{{item.routeName}}</text>
+          <text class="card-meta">{{item.hint}}</text>
+        </view>
+        <text class="badge">{{item.durationLabel}} · {{item.shotCount}} 镜头</text>
+      </view>
+      <view wx:if="{{heroImage}}" class="concept-media">
+        <image class="concept-image" src="{{heroImage}}" mode="aspectFill" />
+        <text class="badge">商品实拍参考</text>
+      </view>
+      <text wx:else class="hint">该商品没有实拍图，方案只使用商品资料文字，不生成虚构商品画面。</text>
+      <text class="hook">“{{item.hook}}”</text>
+      <text class="card-meta">受众：{{item.audience}}</text>
+      <text class="section-label">镜头</text>
+      <view wx:for="{{item.shots}}" wx:for-item="shot" wx:key="id" class="line">
+        <text class="line-label">{{shot.label}}</text>
+        <text class="line-text">{{shot.visual}}</text>
+      </view>
+      <text class="section-label">配音文案</text>
+      <view wx:for="{{item.voices}}" wx:for-item="voice" wx:key="*this" class="line">
+        <text class="line-text">{{voice}}</text>
+      </view>
+      <view class="chips">
+        <text class="chip chip-solid">{{item.cta}}</text>
+        <text wx:for="{{item.hashtags}}" wx:for-item="tag" wx:key="*this" class="chip">{{tag}}</text>
+      </view>
+      <view class="status-row">
+        <text class="status {{item.videoReady ? 'status-ready' : ''}}">视频：{{item.videoStatus}}</text>
+        <text class="status {{item.voiceReady ? 'status-ready' : ''}}">配音：{{item.voiceStatus}}</text>
+      </view>
+      <button class="btn btn-primary" data-key="{{item.conceptKey}}" bindtap="chooseConcept">选择此方案</button>
+    </view>
+  </block>
+
+  <block wx:elif="{{step === 'budget'}}">
+    <view class="card">
+      <text class="card-title">生成能力</text>
+      <view class="facts">
+        <view wx:for="{{providerRows}}" wx:key="key" class="fact">
+          <text class="fact-label">{{item.label}}</text>
+          <text class="fact-value {{item.ready ? 'status-ready' : ''}}">{{item.statusLabel}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="card">
+      <text class="card-title">费用明细</text>
+      <view wx:if="{{!estimate || estimate.lines.length === 0}}" class="hint">没有需要付费的生成项</view>
+      <block wx:else>
+        <view wx:for="{{estimate.lines}}" wx:key="key" class="line line-row">
+          <view class="line-main">
+            <text class="line-label">{{item.label}}</text>
+            <text class="line-text">{{item.modelId}}{{item.statusLabel ? ' · ' + item.statusLabel : ''}}</text>
+          </view>
+          <text class="amount {{item.priced ? '' : 'amount-warn'}}">{{item.amountLabel}}</text>
+        </view>
+      </block>
+    </view>
+
+    <view class="card">
+      <text class="fact-label">预计总费用</text>
+      <text class="total {{estimate && estimate.totalLabel ? '' : 'amount-warn'}}">{{estimate && estimate.totalLabel ? estimate.totalLabel : '未配置价格'}}</text>
+      <text wx:if="{{estimate && estimate.status !== 'priced'}}" class="warn">{{estimate.status === 'price_not_configured' ? 'PRICE_NOT_CONFIGURED' : 'PROVIDER_NOT_CONFIGURED'}} · 拿到真实单价前不能开始生成</text>
+      <view class="quota">
+        <text class="fact-label">可用额度</text>
+        <text wx:if="{{quotaText}}" class="fact-value">{{quotaText}}</text>
+        <text wx:else class="hint">{{quotaMissing ? '未获取到额度' : '正在读取额度…'}}</text>
+      </view>
+      <button class="btn btn-primary" bindtap="createProject" loading="{{saving}}" disabled="{{saving || project}}">{{project ? '项目已保存' : '保存项目并进入分镜'}}</button>
+      <button class="btn btn-disabled" disabled="true">开始生成视频（暂未接通）</button>
+      <text class="hint">视频、配音与数字人供应商尚未接通，按钮保持禁用，不会扣费。</text>
+      <text wx:if="{{notice}}" class="hint">{{notice}}</text>
+      <text wx:if="{{saveError}}" class="error">{{saveError}}</text>
+    </view>
+  </block>
+
+  <block wx:elif="{{step === 'storyboard'}}">
+    <view wx:if="{{!project}}" class="card empty">
+      <text class="empty-title">还没有保存的项目</text>
+      <text class="empty-hint">回到「确认预算」，保存选中的方案后即可编辑分镜。</text>
+    </view>
+    <block wx:else>
+      <view class="card">
+        <view class="card-head">
+          <view class="concept-head">
+            <text class="card-title">{{project.title}}</text>
+            <text class="card-meta">{{project.routeName}} · {{shots.length}} 镜头 · v{{project.versionNo}}</text>
+          </view>
+          <button class="btn btn-primary" size="mini" bindtap="saveVersion" loading="{{saving}}" disabled="{{saving}}">保存新版本</button>
+        </view>
+        <text class="card-meta">自动保存：{{autoSaveLabel}} · 预算 {{project.budgetLabel}}</text>
+        <text wx:if="{{notice}}" class="hint">{{notice}}</text>
+        <text wx:if="{{saveError}}" class="error">{{saveError}}</text>
+      </view>
+
+      <view wx:for="{{shots}}" wx:for-item="shot" wx:key="shotId" class="card shot">
+        <view class="card-head">
+          <text class="fact-value">{{shot.index}} · {{shot.framingLabel}} · {{shot.durationText}}</text>
+          <text class="card-meta">{{shot.sourceLabel}}</text>
+        </view>
+        <text class="shot-visual">{{shot.visual}}</text>
+        <text class="card-meta">{{shot.cameraLabel}} · {{shot.transitionLabel}} · {{shot.cropLabel}} · {{shot.speedLabel}}</text>
+        <text wx:if="{{shot.directionNote}}" class="hint">已记录要求：{{shot.directionNote}}</text>
+        <text wx:if="{{shot.voiceover}}" class="card-meta">配音：{{shot.voiceover}}</text>
+        <text wx:if="{{shot.subtitle}}" class="card-meta">字幕：{{shot.subtitle}}</text>
+        <button class="btn btn-ghost" size="mini" data-id="{{shot.shotId}}" bindtap="openShotEdit">{{editOpenShotId === shot.shotId ? '收起修改' : '自然语言修改'}}</button>
+      </view>
+
+      <button class="btn btn-ghost" bindtap="toggleAdvanced">{{advancedOpen ? '收起高级设置' : '高级设置 · 逐镜头编辑'}}</button>
+
+      <block wx:if="{{advancedOpen}}">
+        <button class="btn btn-ghost" bindtap="toggleShotPro">{{shotProOpen ? '收起专业精修' : '专业精修（可选）'}}</button>
+        <view wx:for="{{shots}}" wx:for-item="shot" wx:for-index="shotIndex" wx:key="shotId" class="card shot">
+          <view class="card-head">
+            <text class="fact-value">镜头 {{shot.index}}</text>
+            <view class="shot-actions">
+              <input class="duration-input" type="digit" value="{{shot.durationSeconds}}" data-index="{{shotIndex}}" data-field="durationSeconds" bindinput="onShotInput" />
+              <button class="btn btn-ghost" size="mini" data-index="{{shotIndex}}" data-direction="-1" bindtap="moveShot">上移</button>
+              <button class="btn btn-ghost" size="mini" data-index="{{shotIndex}}" data-direction="1" bindtap="moveShot">下移</button>
+              <button class="btn btn-ghost" size="mini" data-index="{{shotIndex}}" bindtap="deleteShot">删除</button>
+            </view>
+          </view>
+          <textarea class="field" value="{{shot.visual}}" maxlength="300" data-index="{{shotIndex}}" data-field="visual" bindinput="onShotInput" placeholder="画面描述" />
+          <textarea class="field" value="{{shot.voiceover}}" maxlength="400" data-index="{{shotIndex}}" data-field="voiceover" bindinput="onShotInput" placeholder="配音（可留空）" />
+          <input class="field" value="{{shot.subtitle}}" maxlength="120" data-index="{{shotIndex}}" data-field="subtitle" bindinput="onShotInput" placeholder="字幕（可留空）" />
+          <view wx:if="{{shotProOpen}}" class="shot-pro">
+            <view class="field-row">
+              <text class="field-label">景别</text>
+              <picker mode="selector" range="{{framingLabels}}" value="{{shot.framingIndex}}" data-index="{{shotIndex}}" data-field="framing" bindchange="onShotPick">
+                <view class="picker">{{shot.framingLabel}}</view>
+              </picker>
+            </view>
+            <view class="field-row">
+              <text class="field-label">运镜</text>
+              <picker mode="selector" range="{{cameraLabels}}" value="{{shot.cameraIndex}}" data-index="{{shotIndex}}" data-field="camera" bindchange="onShotPick">
+                <view class="picker">{{shot.cameraLabel}}</view>
+              </picker>
+            </view>
+            <view class="field-row">
+              <text class="field-label">素材来源</text>
+              <picker mode="selector" range="{{sourceLabels}}" value="{{shot.sourceIndex}}" data-index="{{shotIndex}}" data-field="source" bindchange="onShotPick">
+                <view class="picker">{{shot.sourceLabel}}</view>
+              </picker>
+            </view>
+            <view class="field-row">
+              <text class="field-label">转场</text>
+              <picker mode="selector" range="{{transitionLabels}}" value="{{shot.transitionIndex}}" data-index="{{shotIndex}}" data-field="transition" bindchange="onShotPick">
+                <view class="picker">{{shot.transitionLabel}}</view>
+              </picker>
+            </view>
+            <view class="field-row">
+              <text class="field-label">裁切</text>
+              <picker mode="selector" range="{{cropLabels}}" value="{{shot.cropIndex}}" data-index="{{shotIndex}}" data-field="crop" bindchange="onShotPick">
+                <view class="picker">{{shot.cropLabel}}</view>
+              </picker>
+            </view>
+            <view class="field-row">
+              <text class="field-label">画面位置</text>
+              <picker mode="selector" range="{{positionLabels}}" value="{{shot.positionIndex}}" data-index="{{shotIndex}}" data-field="position" bindchange="onShotPick">
+                <view class="picker">{{shot.positionLabel}}</view>
+              </picker>
+            </view>
+            <view class="field-row">
+              <text class="field-label">速度</text>
+              <view class="chips">
+                <text class="chip {{shot.speedLabel === '0.5x' ? 'chip-solid' : ''}}" data-index="{{shotIndex}}" data-value="0.5" bindtap="onShotSpeed">0.5x</text>
+                <text class="chip {{shot.speedLabel === '1.0x' ? 'chip-solid' : ''}}" data-index="{{shotIndex}}" data-value="1" bindtap="onShotSpeed">1x</text>
+                <text class="chip {{shot.speedLabel === '1.5x' ? 'chip-solid' : ''}}" data-index="{{shotIndex}}" data-value="1.5" bindtap="onShotSpeed">1.5x</text>
+                <text class="chip {{shot.speedLabel === '2.0x' ? 'chip-solid' : ''}}" data-index="{{shotIndex}}" data-value="2" bindtap="onShotSpeed">2x</text>
+              </view>
+            </view>
+          </view>
+        </view>
+        <button class="btn btn-ghost" bindtap="addShot">添加镜头</button>
+      </block>
+
+      <view wx:if="{{editOpenShotId}}" class="card edit-sheet">
+        <text class="card-title">自然语言修改</text>
+        <text class="hint">预设只在本地改参数，不调用付费供应商；需要换画面的要求只记录为待生成。</text>
+        <view class="chips">
+          <text
+            wx:for="{{editPresets}}"
+            wx:key="id"
+            class="chip {{editPreset === item.id ? 'chip-solid' : ''}}"
+            data-preset="{{item.id}}"
+            bindtap="chooseShotPreset"
+          >{{item.label}}</text>
+        </view>
+        <textarea class="field" value="{{editInstruction}}" maxlength="200" bindinput="onEditInstruction" placeholder="例如：把背景换成纯色，让商品更清楚" />
+        <text wx:if="{{editError}}" class="error">{{editError}}</text>
+        <text wx:if="{{editNotice}}" class="hint">{{editNotice}}{{editGeneration ? ' · 需要真实画面生成后才能看到效果，本轮未调用供应商' : ''}}</text>
+        <button class="btn btn-primary" bindtap="applyShotEdit" loading="{{editBusy}}" disabled="{{editBusy}}">应用修改</button>
+        <button class="btn btn-disabled" disabled="true">重新生成画面（暂未接通）</button>
+      </view>
+
+      <view class="card">
+        <text class="card-title">版本</text>
+        <text class="hint">恢复历史版本会生成一个新版本，旧版本保留。</text>
+        <view wx:if="{{versions.length === 0}}" class="hint">还没有版本记录</view>
+        <view wx:for="{{versions}}" wx:key="id" class="line line-row">
+          <view class="line-main">
+            <text class="line-label">v{{item.versionNo}} · {{item.routeName}}</text>
+            <text class="line-text">{{item.timeLabel}}{{item.note ? ' · ' + item.note : ''}}</text>
+          </view>
+          <button class="btn btn-ghost" size="mini" data-version="{{item.versionNo}}" bindtap="restoreVersion">恢复</button>
+        </view>
+      </view>
+    </block>
+  </block>
+
+  <view class="sticky-bar">
+    <text class="sticky-meta">{{step === 'storyboard' ? autoSaveLabel : '第 ' + (stepIndex + 1) + ' / 4 步'}}</text>
+    <text wx:if="{{step === 'storyboard' && project}}" class="sticky-cost">{{project.budgetLabel}}</text>
+  </view>
+</view>

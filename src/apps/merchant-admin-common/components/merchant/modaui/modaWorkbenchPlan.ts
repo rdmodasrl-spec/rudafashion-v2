@@ -59,6 +59,7 @@ export type WorkbenchPlanInput = {
 const defaultRecolorConstraints = ['保留版型', '保留纹理与褶皱', '保留纽扣与缝线', '保留原有光影'];
 
 const intentPatterns = {
+  pattern: /打版|纸样|放码|裁片|(?:服装\s*)?CAD|DXF|tech[ -]?pack|garment pattern|pattern making/i,
   video: /视频|短片|走秀|动态展示|时装片|\bvideo\b|\bclip\b|\brunway\b|\bfilm\b/i,
   recolor: /换色|改色|改成[^，。；,.;]{0,10}色|换成[^，。；,.;]{0,10}色|颜色(?:改|换|变)|ricolor|recolou?r|cambia (?:il )?colore|change (?:the )?colou?r/i,
   tryon: /试穿|试衣|上身|穿(?:在|到)身上|try[ -]?on|prova virtuale|indossa/i,
@@ -73,6 +74,7 @@ const existingImagePattern = /这(?:件|张|款|个|条)|该(?:商品|图|款)|�
 
 export function detectWorkbenchCapability(text: string): WorkbenchCapabilityId {
   const value = typeof text === 'string' ? text : '';
+  if (intentPatterns.pattern.test(value)) return 'pattern';
   if (intentPatterns.video.test(value)) return 'video';
   if (intentPatterns.recolor.test(value)) return 'recolor';
   if (intentPatterns.tryon.test(value)) return 'tryon';
@@ -95,25 +97,25 @@ export function extractWorkbenchConstraints(text: string, capability: WorkbenchC
   return [...new Set(merged)].slice(0, 6);
 }
 
-function detectIntents(text: string): Record<'design' | 'tryon' | 'recolor' | 'studio' | 'video', boolean> {
+function detectIntents(text: string): Record<'design' | 'tryon' | 'recolor' | 'studio' | 'video' | 'pattern', boolean> {
   const value = typeof text === 'string' ? text : '';
   return {
     design: intentPatterns.design.test(value),
     tryon: intentPatterns.tryon.test(value),
     recolor: intentPatterns.recolor.test(value),
     studio: intentPatterns.studio.test(value),
-    video: intentPatterns.video.test(value)
+    video: intentPatterns.video.test(value),
+    pattern: intentPatterns.pattern.test(value)
   };
 }
 
 /**
- * 计划步骤顺序：设计 → 试穿 → 换色 → 棚拍 → 视频。
- * 只有设计、试穿、换色之间可以真实串联（试穿接受图片输入、换色在本地完成）；
- * 换色之后接棚拍、以及任何视频步骤都需要图生图/图生视频引擎，当前未接入。
+ * 计划步骤顺序：设计 → 试穿 → 换色 → 棚拍 → 视频 → 打版。
+ * 视频与服装打版尚未接入真实执行引擎。
  */
 function buildStepOrder(
   explicit: WorkbenchCapabilityId | null,
-  matched: Record<'design' | 'tryon' | 'recolor' | 'studio' | 'video', boolean>
+  matched: Record<'design' | 'tryon' | 'recolor' | 'studio' | 'video' | 'pattern', boolean>
 ): WorkbenchCapabilityId[] {
   if (explicit) return [explicit];
   if (matched.video) return ['video'];
@@ -122,6 +124,7 @@ function buildStepOrder(
   if (matched.tryon) order.push('tryon');
   if (matched.recolor) order.push('recolor');
   if (matched.studio) order.push('studio');
+  if (matched.pattern) order.push('pattern');
   if (!order.length) order.push('design');
   return [...new Set(order)].slice(0, 3);
 }
@@ -177,16 +180,16 @@ export function planModaWorkbenchTask(input: WorkbenchPlanInput): ModaWorkbenchP
     if (capability.execution === 'unavailable') {
       return { capability: capabilityId, execution: 'unavailable', status: 'blocked', reason: 'not_integrated' };
     }
-    if (capabilityId === 'studio' && isStudioInputBlocked(text, assets)) {
-      return { capability: capabilityId, execution: capability.execution, status: 'blocked', reason: 'not_integrated' };
-    }
+    const execution = capabilityId === 'studio' && isStudioInputBlocked(text, assets)
+      ? 'server_image_edit'
+      : capability.execution;
     const availability = resolveWorkbenchAvailability(capabilityId, input.entitlements);
     if (availability.available) {
-      return { capability: capabilityId, execution: capability.execution, status: 'ready' };
+      return { capability: capabilityId, execution, status: 'ready' };
     }
     return {
       capability: capabilityId,
-      execution: capability.execution,
+      execution,
       status: 'blocked',
       reason: availability.reason ?? 'engine_unavailable'
     };
@@ -232,13 +235,13 @@ function buildPlanFeedback(
     };
   }
 
-  if (first.capability === 'studio' && isStudioInputBlocked(text, assets)) {
+  if (first.capability === 'pattern') {
     return {
-      question: {
-        zh: '目前只能按文字描述生成棚拍图；以商品图为输入的棚拍引擎尚未接入。请改用文字描述要展示的款式与场景。',
-        it: 'Oggi possiamo generare scatti solo da una descrizione testuale: il motore che parte da una foto prodotto non è ancora collegato.'
-      },
-      notice: null
+      question: null,
+      notice: {
+        zh: '服装纸样、CAD、放码及生产导出引擎尚未接入；本次不会创建打版任务或生成生产文件。',
+        it: 'Il motore per cartamodelli, CAD, taglie e file di produzione non è collegato: non verranno creati attività o file.'
+      }
     };
   }
 
@@ -248,6 +251,26 @@ function buildPlanFeedback(
       notice: {
         zh: '商业棚拍需要专业套餐，当前套餐不可用。',
         it: 'Il servizio commerciale richiede un piano professionale.'
+      }
+    };
+  }
+
+  if (first.capability === 'studio' && isStudioInputBlocked(text, assets) && first.status === 'blocked') {
+    return {
+      question: {
+        zh: '目前只能按文字描述生成棚拍图；以商品图为输入的棚拍引擎尚未接入。请改用文字描述要展示的款式与场景。',
+        it: 'Oggi possiamo generare scatti solo da una descrizione testuale: il motore che parte da una foto prodotto non è ancora collegato.'
+      },
+      notice: null
+    };
+  }
+
+  if (first.capability === 'studio' && isStudioInputBlocked(text, assets)) {
+    return {
+      question: null,
+      notice: {
+        zh: '参考图将发送至 fal.ai 进行编辑；生成结果是 AI 创作，请审核后再用于商品资料。',
+        it: 'L’immagine di riferimento sarà inviata a fal.ai; verifica il risultato AI prima di usarlo nei dati prodotto.'
       }
     };
   }
@@ -268,15 +291,6 @@ function buildPlanFeedback(
       notice: {
         zh: '后续视频步骤需要视频引擎，当前未接入。',
         it: 'Il passaggio video richiede un motore video non ancora collegato.'
-      }
-    };
-  }
-  if (laterBlocked?.reason === 'not_integrated') {
-    return {
-      question: null,
-      notice: {
-        zh: '当前步骤可以完成；把它继续做成棚拍图需要图生图引擎，尚未接入。',
-        it: 'Questo passaggio è disponibile; lo scatto commerciale dal risultato richiede un motore image-to-image non ancora collegato.'
       }
     };
   }
@@ -323,4 +337,3 @@ export function describeWorkbenchStep(step: WorkbenchPlanStep): WorkbenchCopy {
   }
   return { zh: `${capability.labelZh}（引擎不可用）`, it: `${capability.labelIt} (motore non disponibile)` };
 }
-

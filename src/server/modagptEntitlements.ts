@@ -1,4 +1,5 @@
 import { maximumModaGptImagePromptLength } from '../shared/modagptImageContract';
+import { getMerchantIndustryTemplate } from '../constants/merchantIndustryTemplates';
 
 export type ModaGptPlan = 'free' | 'pro';
 export type ModaGptFeature = 'chat' | 'imageGeneration' | 'tryOn';
@@ -18,6 +19,12 @@ export type ModaGptEntitlements = {
   quotas: ModaGptUsage;
   usage: ModaGptUsage;
   remaining: ModaGptUsage;
+};
+
+export type ModaGptStudioImagePolicy = {
+  industryCode: string;
+  studioCode: string;
+  imageGuidance: string;
 };
 
 export const MODAGPT_PLAN_QUOTAS: Record<ModaGptPlan, ModaGptUsage> = {
@@ -166,8 +173,55 @@ export function serializeModaGptSettings(settingsJson: string, modagpt: ModaGptP
   return JSON.stringify({ ...(settings as Record<string, unknown>), modagpt });
 }
 
+export function resolveModaGptStudioImagePolicy(
+  templateId: unknown,
+  task: 'imageGeneration' | 'imageEdit' | 'tryOn'
+): ModaGptStudioImagePolicy | null {
+  const template = getMerchantIndustryTemplate(templateId);
+  if (
+    !template
+    || template.status !== 'open'
+    || !template.industryCode
+    || !template.studioCode
+    || !template.studioImageGuidance
+    || (task === 'tryOn' && template.id !== 'apparel_production_wholesale' && template.id !== 'apparel_wholesale')
+  ) return null;
+  return {
+    industryCode: template.industryCode,
+    studioCode: template.studioCode,
+    imageGuidance: template.studioImageGuidance
+  };
+}
+
+export function buildModaGptStudioImagePrompt(
+  policy: ModaGptStudioImagePolicy,
+  prompt: string
+): string {
+  return [
+    'Create an original commercial product concept image from the user brief.',
+    'Preserve the requested product identity and visible details; do not add text, logos, watermarks, unsupported product claims, or unrelated objects.',
+    `Industry ${policy.industryCode}; Studio ${policy.studioCode}.`,
+    policy.imageGuidance,
+    prompt
+  ].join('\n');
+}
+
+export function buildModaGptStudioImageEditPrompt(
+  policy: ModaGptStudioImagePolicy,
+  prompt: string
+): string {
+  return [
+    'Edit the supplied product image according to the user brief.',
+    'Preserve the product identity, construction, material texture, proportions and details unless the brief explicitly requests a change. Do not invent text, logos, watermarks, certifications or product claims.',
+    `Industry ${policy.industryCode}; Studio ${policy.studioCode}.`,
+    policy.imageGuidance,
+    prompt
+  ].join('\n');
+}
+
 export function parseModaGptImageRequest(input: unknown):
   | { task: 'imageGeneration'; prompt: string }
+  | { task: 'imageEdit'; prompt: string; referenceImage: string }
   | {
     task: 'tryOn';
     prompt: string;
@@ -190,6 +244,17 @@ export function parseModaGptImageRequest(input: unknown):
   if (task === 'imageGeneration') {
     if (Object.keys(body).some(key => !['task', 'prompt'].includes(key))) return null;
     return { task, prompt };
+  }
+  if (task === 'imageEdit') {
+    const referenceImage = body.referenceImage;
+    if (
+      Object.keys(body).some(key => !['task', 'prompt', 'referenceImage'].includes(key))
+      || typeof referenceImage !== 'string'
+      || referenceImage.length > 4_300_000
+    ) return null;
+    const match = /^data:image\/(?:jpeg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/.exec(referenceImage);
+    if (!match || Buffer.from(match[1], 'base64').toString('base64') !== match[1]) return null;
+    return { task, prompt, referenceImage };
   }
   if (
     task !== 'tryOn'

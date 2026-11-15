@@ -365,7 +365,7 @@ export const ModaGptGarmentRecolor: React.FC<ModaGptGarmentRecolorProps> = ({ on
   return (
     <div className="mx-auto w-full max-w-6xl py-4 sm:py-6">
       <button type="button" disabled={generating} onClick={onBack} className="mb-4 inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-neutral-600 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50">
-        <ArrowLeft className="h-4 w-4" />{localizeCopy('返回五项创作', 'Torna alle funzioni')}
+        <ArrowLeft className="h-4 w-4" />{localizeCopy('返回六项创作', 'Torna alle funzioni')}
       </button>
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
         <section className="min-w-0 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm sm:p-6">

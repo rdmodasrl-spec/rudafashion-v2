@@ -122,6 +122,7 @@
 - **代码改动一律提交并推送到 `rdmodasrl-spec/rudafashion-v2` 的 `main`**，不允许只留在本地。
 - **每次代码改好并通过 `tsc` + `test:unit` + `build` 后，直接部署上线**，不再逐次询问。
 - 一条命令完成「校验 → 提交 → 推送 → 上线」：`npm run sync -- "改了什么" -- --deploy`（`scripts/sync-release.sh`）。
+- 同步脚本先运行 `npx prisma generate`，再做类型检查，确保 schema 变更使用匹配的 Prisma Client。
 - 必须走 `bash scripts/deploy-release.sh --confirm`：备份 → `prisma generate` → `migrate deploy` → `build` → `pm2 startOrRestart --only ruda-fashion` → `smoke:post-deploy`。
 - 只重启 `ruda-fashion`。`ecosystem.config.cjs` 里的 `openmontage-backlot` 依赖一个不存在的 Python venv，属既有问题，不得因它中断发布。
 - 发布后必须核对：`pm2 status` 显示 online、`/api/products` 返回 200、目标接口返回预期状态码、`smoke:post-deploy` 通过。
@@ -131,7 +132,7 @@
 
 | 环节 | 命令 | 作用 |
 |---|---|---|
-| 一键同步 | `npm run sync -- "说明"` | 类型检查 → 单元测试 → 构建 → 提交 → 推送 `origin/main` |
+| 一键同步 | `npm run sync -- "说明"` | Prisma Client 生成 → 类型检查 → 单元测试 → 构建 → 提交 → 推送 `origin/main` |
 | 一键同步并上线 | `npm run sync -- "说明" -- --deploy` | 上面全部 + 生产目录自同步 + 迁移 + 重启 + 冒烟 |
 | 推送闸门 | `npm run hooks:install`（已启用） | `pre-push` 钩子跑 `tsc` + `test:unit`，失败则阻止推送 |
 | 发布自动回滚 | 内置 | 冒烟失败自动回到上一提交、重建、重启、再冒烟；仍失败则告警人工介入 |

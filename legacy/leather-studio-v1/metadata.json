@@ -1,0 +1,6 @@
+{
+  "name": "RUDA AI Leather Studio",
+  "description": "AI 智能皮具设计、结构拆解与自动打版 CAD 系统：通过照片上传与自然语言对话，实现皮具结构拆解、参数化二维纸格生成、缝份计算、几何校验与生产文件导出。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

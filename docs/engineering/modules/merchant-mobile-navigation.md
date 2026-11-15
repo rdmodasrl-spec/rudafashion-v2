@@ -44,13 +44,13 @@
 |---|---|---|---|---|---|
 | 1 | `dashboard` | 首页 | Home | Home | 原有 |
 | 2 | `products` | 商品 | Prodotti | Package | 原有 |
-| 3 | `ai_home` | ModaUI | ModaUI | Sparkles | 新增，位于正中，进入既有 AI 助手 |
+| 3 | `ai_home` | AI工作室 | AI Studio | Sparkles | 保留既有位置与路由，进入按行业自动适配的 ModaUI 工作室 |
 | 4 | `orders` | 订单 | Ordini | Truck | 原有，保留待处理徽标 |
 | 5 | `more` | 更多 | Altro | Ellipsis | 原有 |
 
 规则：
 
-- `ModaUI` 是产品规定的固定名称，属于“导航名称四个汉字”规则的**登记例外**（与小程序 ModaGPT 品牌一致），中/意两语均显示 `ModaUI`；`merchantMobileMoreGroups` 内的分组与条目仍保持四字规范。
+- `AI工作室` 是产品确认的固定导航名称，属于“四字导航规则”的**登记例外**；只替换既有 AI 入口名称，不改变 ID、位置、布局或路由。小程序与 Web 入口使用同一名称；`merchantMobileMoreGroups` 其余分组与条目仍保持四字规范。
 - `ai_home` 不再出现在“更多 → 智能工具”，避免同一功能出现两个入口；“智能员工”保留。
 - `MerchantAiHome` 仍在全屏层（`fixed`，`z-[60]`）内渲染；商家底部导航在 `ai_home` 时默认隐藏（`translate-y-full` + `pointer-events-none` + `aria-hidden`），由输入框下方 3px 细拖柄点击或上下拖动展开/收起，导航层级为 `z-[70]`。
 - 拖柄是唯一开关：`aria-expanded` 反映展开状态，`aria-controls="merchant-bottom-navigation"` 指向真实导航；输入框获得焦点时自动收起，避免键盘与导航叠加。展开时 AI 内容区底部让出导航高度，收起时让出 `visualViewport` 键盘 inset；安全区内边距统一用内联 `style={{ paddingBottom: 'max(...)' }}` 计算，不再使用 `pb-[max(...)]` 任意值类，避免构建后失效。
@@ -195,4 +195,3 @@
 - 商家小程序未上传发布：当前环境无微信上传密钥/CI；`pages/assistant` 仍受 `AI_FEATURES_ENABLED=false` 与 `app.json` 未注册 tab 限制，开发者工具/真机视觉与触控待验收。
 - 后端没有库存类 `NotificationEvent` 与 `resolve` 接口：界面不提供“标记已处理”，也不生成库存预警；如后端后续新增，现有分类与筛选可直接展示。
 - 首页右上角消息入口按需求只出现在首页（其他页签无顶部工具栏）；若后续需要在所有页签展示，应扩展页头而非再复制入口。
-

@@ -278,6 +278,7 @@ export class PrismaModaGptTaskStore implements ModaGptTaskStore {
     taskType: ModaGptTaskType;
     payload: string;
     merchantId: string | null;
+    projectId?: string | null;
     tenantId: string | null;
     actorId: string | null;
     traceId: string;
@@ -295,6 +296,7 @@ export class PrismaModaGptTaskStore implements ModaGptTaskStore {
       taskType: input.taskType,
       payload: input.payload,
       merchantId: input.merchantId,
+      projectId: input.projectId ?? null,
       tenantId: input.tenantId,
       actorId: input.actorId,
       traceId: input.traceId,
@@ -323,7 +325,7 @@ export class PrismaModaGptTaskStore implements ModaGptTaskStore {
         let existing = await this.prisma.modaGptTask.findUnique({
           where: { idempotencyKey: input.idempotencyKey },
           select: {
-            id: true, status: true, taskType: true, merchantId: true, tenantId: true,
+            id: true, status: true, taskType: true, merchantId: true, projectId: true, tenantId: true,
             actorId: true, traceId: true, parentTaskId: true, goal: true, priority: true,
             agentId: true, payload: true, context: true, plan: true
           }
@@ -333,7 +335,7 @@ export class PrismaModaGptTaskStore implements ModaGptTaskStore {
           existing = await this.prisma.modaGptTask.findUnique({
             where: { idempotencyKey: input.legacyIdempotencyKey },
             select: {
-              id: true, status: true, taskType: true, merchantId: true, tenantId: true,
+              id: true, status: true, taskType: true, merchantId: true, projectId: true, tenantId: true,
               actorId: true, traceId: true, parentTaskId: true, goal: true, priority: true,
               agentId: true, payload: true, context: true, plan: true
             }
@@ -344,6 +346,7 @@ export class PrismaModaGptTaskStore implements ModaGptTaskStore {
         if (
           existing.taskType !== input.taskType
           || existing.merchantId !== input.merchantId
+          || existing.projectId !== (input.projectId ?? null)
           || existing.tenantId !== input.tenantId
           || existing.payload !== input.payload
           || (!matchedLegacyKey && (
@@ -410,6 +413,7 @@ export class PrismaModaGptTaskStore implements ModaGptTaskStore {
       return {
         id: claimed.id,
         merchantId: claimed.merchantId,
+        projectId: claimed.projectId,
         tenantId: claimed.tenantId,
         actorId: claimed.actorId,
         traceId: claimed.traceId,

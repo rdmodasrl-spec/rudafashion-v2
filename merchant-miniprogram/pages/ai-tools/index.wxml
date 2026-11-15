@@ -26,6 +26,14 @@
       <text wx:if="{{notice}}" class="hint">{{notice}}</text>
     </view>
 
+    <view class="card ad-entry">
+      <view class="ad-entry-main">
+        <text class="card-title">广告策划</text>
+        <text class="hint">选商品 → 三套方案 → 预算 → 分镜</text>
+      </view>
+      <button class="btn btn-primary" size="mini" bindtap="openAdPlanner">进入</button>
+    </view>
+
     <view class="card">
       <text class="section-title">工作中心</text>
       <view class="centers">

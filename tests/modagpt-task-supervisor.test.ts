@@ -114,3 +114,37 @@ test('supervisor does not route unsupported intents or grant unassigned agent ca
     registeredTools: []
   }), /MODAGPT_SUPERVISOR_AGENT_INVALID/);
 });
+
+test('procurement workflow is available to Trade and Department Wholesale only', () => {
+  const registeredTools = [
+    'get_suppliers',
+    'get_supplier_performance',
+    'create_procurement_draft',
+    'get_products',
+    'currency_convert'
+  ];
+  const routeFor = (industryTemplate: string | null, merchantIndustry?: string) => superviseModaGptCoreTask({
+    request: '为这些商品创建采购草稿',
+    assignedAgents: allAgents,
+    registeredWorkflows: ['procurement_management'],
+    registeredTools,
+    industryTemplate,
+    merchantIndustry
+  });
+
+  assert.equal(routeFor('trading_wholesale')?.execution, 'ready');
+  assert.equal(routeFor('department_wholesale')?.execution, 'ready');
+  assert.equal(routeFor(null, 'TRADING_COMPANY')?.execution, 'ready');
+  assert.equal(routeFor(null, 'RETAIL_STORE')?.execution, 'workflow_unavailable');
+  assert.equal(routeFor(null)?.execution, 'workflow_unavailable');
+
+  for (const template of [
+    'department_chain_retail',
+    'general_retail',
+    'bags_wholesale',
+    'apparel_production_wholesale',
+    'restaurant_ordering'
+  ]) {
+    assert.equal(routeFor(template)?.execution, 'workflow_unavailable', template);
+  }
+});

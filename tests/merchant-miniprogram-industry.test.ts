@@ -18,7 +18,7 @@ const templateIds = merchantIndustryTemplates
   .map(template => template.id);
 
 test('every open industry template ships its own mini-program config module', () => {
-  assert.equal(templateIds.length, 7, 'seven open industry templates are expected');
+  assert.equal(templateIds.length, 8, 'eight open industry templates are expected');
   assert.deepEqual(
     Object.keys(industry.INDUSTRY_CONFIGS).sort(),
     [...templateIds].sort(),
@@ -42,13 +42,16 @@ test('industry config actions and metrics stay inside the server capability', ()
     const moduleSet = new Set<string>(capability.modules as readonly string[]);
     const fieldKeys = new Set<string>(capability.productFields.map(field => field.key));
 
-    assert.ok(config.metrics.length >= 3, `${templateId} needs at least three workbench metrics`);
+    const restaurantTemplate = templateId === 'restaurant_ordering';
+    assert.ok(restaurantTemplate ? config.metrics.length === 0 : config.metrics.length >= 3,
+      `${templateId} metrics must reflect supported real industry data`);
     for (const metric of config.metrics) {
       assert.ok(String(metric.key || '').length > 0, `${templateId} metric needs a key`);
       assert.ok(String(metric.label || '').length > 0, `${templateId} metric needs a label`);
     }
 
-    assert.ok(config.actions.length >= 3, `${templateId} needs at least three workbench actions`);
+    assert.ok(restaurantTemplate ? config.actions.length === 2 : config.actions.length >= 3,
+      `${templateId} actions must reflect its actual module capability`);
     const actionIds = new Set<string>();
     for (const action of config.actions) {
       assert.ok(String(action.id || '').length > 0, `${templateId} action needs an id`);
@@ -69,6 +72,32 @@ test('industry config actions and metrics stay inside the server capability', ()
       assert.ok(fieldKeys.has(key), `${templateId} productFieldKeys entry ${key} is not part of the capability`);
     }
   }
+});
+
+test('Restaurant mini-program action is exact-template and server-module gated', () => {
+  const config = industry.INDUSTRY_CONFIGS.restaurant_ordering;
+  const restaurantContext = {
+    templateId: 'restaurant_ordering',
+    modules: ['restaurant_menu'],
+    employeeId: null,
+    permissions: []
+  };
+  assert.equal(industry.getIndustryConfig(restaurantContext), config);
+  assert.equal(industry.availableActions(config, restaurantContext)[0].id, 'restaurant-menu');
+  assert.deepEqual(industry.availableActions(config, { ...restaurantContext, modules: [] }), []);
+
+  const unauthorizedEmployee = { ...restaurantContext, employeeId: 'employee-1', permissions: [] };
+  assert.deepEqual(industry.availableActions(config, unauthorizedEmployee), []);
+  const authorizedEmployee = {
+    ...unauthorizedEmployee,
+    permissions: ['product.import.draft']
+  };
+  assert.equal(industry.availableActions(config, authorizedEmployee)[0].id, 'restaurant-menu');
+  assert.equal(
+    industry.getIndustryConfig({ ...restaurantContext, templateId: 'general_retail' })?.templateId,
+    'general_retail',
+    'a Restaurant action must not appear through another industry config'
+  );
 });
 
 

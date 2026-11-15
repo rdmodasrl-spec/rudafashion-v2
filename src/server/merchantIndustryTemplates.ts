@@ -8,9 +8,13 @@
 import {
   DEFAULT_MERCHANT_INDUSTRY_TEMPLATE_ID,
   findOpenMerchantIndustryTemplateByIndustry,
+  merchantFormalIndustries,
+  resolveFormalMerchantIndustry,
   getMerchantIndustryTemplate,
   getMerchantWorkspaceTemplate,
   merchantIndustryTemplates,
+  type MerchantFormalIndustryId,
+  type MerchantIndustryCapabilityId,
   type MerchantIndustryTemplate,
   type MerchantIndustryTemplateId,
   type MerchantIndustryTemplateSource,
@@ -22,11 +26,45 @@ import {
 export type MerchantRegistrationTemplateErrorCode =
   | 'REQUIRE_INDUSTRY_TEMPLATE'
   | 'INVALID_INDUSTRY_TEMPLATE'
-  | 'INDUSTRY_TEMPLATE_NOT_OPEN';
+  | 'INDUSTRY_TEMPLATE_NOT_OPEN'
+  | 'INVALID_FORMAL_INDUSTRY_ID'
+  | 'FORMAL_INDUSTRY_NOT_OPEN'
+  | 'INVALID_INDUSTRY_CAPABILITY';
 
 export type MerchantRegistrationTemplateResolution =
-  | { ok: true; template: MerchantIndustryTemplate; source: MerchantIndustryTemplateSource }
+  | {
+    ok: true;
+    template: MerchantIndustryTemplate;
+    source: MerchantIndustryTemplateSource;
+    formalIndustryId?: MerchantFormalIndustryId;
+    capabilityIds?: MerchantIndustryCapabilityId[];
+  }
   | { ok: false; error: MerchantRegistrationTemplateErrorCode };
+
+export type MerchantIndustryRegistrationOption = {
+  id: MerchantFormalIndustryId;
+  label: string;
+  businessModel: 'WHOLESALE' | 'RETAIL';
+  capabilityIds: MerchantIndustryCapabilityId[];
+  categories: string[];
+};
+
+export function getMerchantIndustryRegistrationOptions(): MerchantIndustryRegistrationOption[] {
+  return merchantFormalIndustries.flatMap(industry => {
+    if (industry.registrationStatus !== 'open') return [];
+    const template = industry.workspaceAdapterTemplateIds
+      .map(getMerchantIndustryTemplate)
+      .find(candidate => candidate?.status === 'open');
+    if (!template) return [];
+    return [{
+      id: industry.id,
+      label: industry.zh,
+      businessModel: industry.businessModel,
+      capabilityIds: [...industry.capabilityIds],
+      categories: [...template.categories]
+    }];
+  });
+}
 
 /**
  * 注册时的模板解析：
@@ -35,8 +73,28 @@ export type MerchantRegistrationTemplateResolution =
  * 3. 都没有 → 拒绝。
  */
 export function resolveMerchantRegistrationTemplate(
-  input: { industryTemplate?: unknown; industry?: unknown } | null | undefined
+  input: {
+    formalIndustryId?: unknown;
+    capabilityIds?: unknown;
+    industryTemplate?: unknown;
+    industry?: unknown;
+  } | null | undefined
 ): MerchantRegistrationTemplateResolution {
+  const formalIndustryValue = typeof input?.formalIndustryId === 'string'
+    ? input.formalIndustryId.trim()
+    : '';
+  if (formalIndustryValue) {
+    const formalResolution = resolveFormalMerchantIndustry(input);
+    if (formalResolution.ok === false) return { ok: false, error: formalResolution.error };
+    return {
+      ok: true,
+      template: formalResolution.template,
+      source: 'SELF_SELECTED',
+      formalIndustryId: formalResolution.industry.id,
+      capabilityIds: formalResolution.capabilityIds
+    };
+  }
+
   const rawTemplate = input?.industryTemplate;
   const hasTemplateInput = typeof rawTemplate === 'string' && rawTemplate.trim().length > 0;
   if (hasTemplateInput) {
@@ -73,6 +131,7 @@ export function resolveAdminMerchantTemplateAssignment(
 }
 
 const merchantRoleValues = ['PRODUCER', 'WHOLESALER', 'RETAILER'] as const;
+const restaurantRoleValues = ['RESTAURANT_OPERATOR'] as const;
 const operatingModelValues: MerchantOperatingModel[] = ['production', 'wholesale', 'both'];
 
 function normalizeStringList(value: unknown, allowed?: readonly string[]): string[] {
@@ -114,7 +173,10 @@ export function resolveMerchantRegistrationProfile(
     ...(hasProductionCapacity !== undefined ? { hasProductionCapacity } : {}),
     ...(carriesMaterials !== undefined ? { carriesMaterials } : {}),
     categories: normalizeStringList(input.categories, template.categories),
-    roles: normalizeStringList(input.roles, merchantRoleValues)
+    roles: normalizeStringList(
+      input.roles,
+      template.id === 'restaurant_ordering' ? restaurantRoleValues : merchantRoleValues
+    )
   };
 }
 

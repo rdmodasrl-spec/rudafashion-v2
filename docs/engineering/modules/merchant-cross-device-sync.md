@@ -3,7 +3,7 @@
 - Module ID：`merchant-cross-device-sync`
 - 模块状态：部分完成
 - 文档阶段：开发中
-- 日期：2026-10-26
+- 日期：2026-11-14
 - 对应负责人/团队（如适用）：RUDA 商家端与平台工程
 
 ## 1. 背景与问题
@@ -18,6 +18,8 @@
 
 - 三端只使用现有 RUDA 服务端与 PostgreSQL/Prisma 作为商家业务数据唯一权威来源。
 - 同一商家的三端使用同一认证体系、同一 `merchantId` 来源、同一员工权限与服务端租户校验。
+- AI Studio 项目、照片/文件、AI Job、CAD/版型及其版本必须共用同一服务端 ID 与权威版本；电脑、手机 Web 和小程序必须可继续同一项目。
+- Studio 项目 API contract 与三端调用矩阵须在架构阶段同步定义；电脑端专业功能优先，手机 Web/小程序基础入口和项目同步并行建设。
 - 商品、库存、订单、客户、店铺设置、媒体和发布状态的实际写入必须持久化，并在其他端通过事件或受控刷新获得服务端最终结果。
 - 修复已确认的 API 缺失、字段静默丢弃、缓存跨请求复用、整批失败和并发覆盖问题。
 - 对库存和商品编辑提供明确的并发冲突结果，不静默覆盖。
@@ -83,8 +85,24 @@
 | 客户 | `Customer` + `MerchantCustomerLink` | 列表/编辑表单状态 | 写响应 + SSE |
 | 店铺设置 | `Merchant` + `settings` JSON | 表单状态；移动偏好 localStorage 仅界面偏好 | GET/PUT + SSE |
 | 工作区草稿 | `MerchantWorkspaceDraft.revision` | 本地表单 | 乐观并发 `expectedRevision` |
+| AI Studio 项目 / CAD / Pattern Version | V2 阶段 0 审计后确定的唯一服务端项目与工程数据所有者 | 本地只允许未提交草稿/视图缓存，不得作为生产版型权威 | 同一 `projectId` + `expectedRevision`/等价版本条件写入；冲突返回当前 revision，客户端重新读取/由用户决定合并 |
+| Restaurant OS 订单、菜单、桌台、厨房任务 | 现有 RUDA Order/Product/门店及经阶段 0 审计确定的餐饮扩展 | Web、手机、小程序和厨房屏仅作界面投影；顾客端购物车可暂存但不代表已下单 | POS、QR、顾客入口和授权渠道调用同一服务端契约；订单/菜单版本以响应与事件后重读为准，KDS 任务按 Event ID/幂等键消费 |
+| Restaurant Studio Project / File / AI Job / Recipe Version / Forecast | RUDA 项目/文件/AI CORE 与经审计确定的餐饮权威数据源 | 未提交编辑仅本地暂存；缓存不得跨 Tenant/Outlet/Studio 复用 | 三端共用服务器生成 ID；更新用 revision/expectedVersion，网络恢复按原 Job/幂等键查询，版本冲突明确提示而不覆盖；Recipe Version 不改写历史订单成本/消耗 |
+| Restaurant Purchase Order / Receipt / Ingredient Stock | 已实现受限 API：复用 `Supplier`、`RestaurantIngredient`、共享 `MaterialInventoryBalance`/`MaterialInventoryMovement`；不可变实际收货价归属于餐饮收货行 | 只允许非权威草稿/视图缓存；不得本地确认收货或显示库存已增加 | 服务端生成 purchaseOrderId/receiptId；电脑、手机 Web、小程序未来共用同一 API、幂等键及版本；成功必须以服务端收货事务响应和重读库存为准，不能修改共享 `Material.unitCost`；端侧尚未接入 |
+| Restaurant Recipe Cost Estimate | 已实现只读 API：服务端从唯一实际收货事实聚合成本，复用同一 active recipe 与采购历史，不写入 `Material.unitCost` | 只允许短时、非权威展示缓存；新收货/配方版本后须重新读取服务端结果，不得端侧自行复算或缓存为成本事实 | 电脑、手机 Web、小程序后续共用 `GET /api/merchant/restaurant/dishes/:dishId/cost`；`purchase.manage` 权限和 Tenant 校验；当前门店范围员工因门店仓映射未配置而拒绝，三端页面尚未接入 |
+| Restaurant Menu Publish / Public Read | 已实现受限 API：商家以 `expectedVersion` 发布/撤回；公开读取校验已公开 Restaurant 门店和全局已发布菜单 | 尚无菜单管理或顾客点单页面；同一 HTTP 契约待接入 | 小程序尚无接入；后续复用同一公开/商家 API，不建立专属菜单源 | 发布检查 `employees.manage`、Restaurant 模块、非空菜单及每道菜 active recipe；公开读取字段白名单、`no-store`，按 IP+店铺每分钟 60 次限流；撤回后读取立即不可见。公开注册/商家入口改造正在开发；端侧和顾客下单仍未实现 |
+| Restaurant Table Directory | API 已验证；MerchantPortal 菜单/桌台入口和商家可开通正在开发，开发完成后以服务端门店/桌台响应为准 | 独立手机后台目标未接入；不得以本地数据作为桌台事实 | 无桌台页面；后续使用相同 API 和 ID | 同商家+门店桌号唯一，服务端校验 Restaurant 身份、`employees.manage` 和员工门店范围；`table-stores` 仅返回员工可见 active 门店；不含占用、预约、订单、支付。该切片仅将同一契约接入桌面端，不代表三端同步完成 |
 
 客户端 localStorage 仅用于界面偏好、POS 暂存购物车等非权威数据；不得作为正式商品、库存、订单、客户或设置数据源。小程序 POS 的销售、退货、退款、现金流水、班次历史均重新读取 `/api/merchant/pos/*` 服务端结果；客户端显示和小票文本不是订单/退款/库存/现金账的权威来源。开发环境的 `ruda_products` 等写入受 `import.meta.env.DEV` 限制，生产不启用。
+
+### 4.1 Restaurant OS 多端要求（行业映射及 2A–2F、3A 受限 API 已验证；端侧同步未实现）
+
+- 电脑 Web、手机 Web、小程序、厨房显示端和顾客点单端可采用不同 RUDA 既有布局，但必须共用同一商家/门店身份、Restaurant Studio/Industry 授权、菜单版本、正式订单 ID、支付状态、厨房任务来源、项目/文件/AI Job ID 和服务端最终结果。
+- POS、顾客 QR/Storefront、已授权第三方渠道都通过 RUDA 服务端创建权威订单；小程序或断网设备的本地草稿不能显示成正式成功订单。服务端幂等、事务和允许状态转换保护写操作，重试复用同一幂等键/Job ID。
+- AI Job/自动化/经营分析故障不能阻断 POS、支付、订单、KDS 或库存；恢复后只重取/处理同一任务，不重复出票、扣库或生成项目部件。
+- Restaurant Studio 的食谱版本、库存/批次、业务报告和 AI 预测按 Tenant/Outlet/员工权限隔离；预测值与实际记录分开存取，不得跨端缓存或跨门店/Tenant 串用。
+- 餐饮三端互操作必须覆盖：电脑订单→手机/小程序/厨房屏读取；手机照片→电脑项目读取；手机 AI 命令→各端读取同一 Job 结果；电脑菜单/配方版本→移动端更新；小程序确认→电脑端审核记录；并发 revision 冲突、重复提交幂等、断网恢复和多人权限。Restaurant 专项验收 C01–C09 统一见 [`modaui-industry-studios-v2.md`](./modaui-industry-studios-v2.md) §2.9。
+- 行业模板映射/关闭行为已通过定向测试和 TypeScript 检查；2A–2D 已通过隔离 PostgreSQL HTTP 集成测试，覆盖持久化、租户/行业/员工权限、幂等、版本、库存保护、真实收货价及库存流水；2E 验证真实收货加权成本、菜单币种、权限和只读无副作用；2F 验证发布前置条件、版本冲突、租户与员工权限、公开字段隔离、发布/撤回即时生效及公共读取限流。Restaurant 端侧页面、门店仓库映射、订单/POS/KDS API、SSE/Outbox 接线及真实设备端到端验收仍未完成。本段定义后续共用契约，不表示餐饮跨端流程已经可用。
 
 ## 5. 用户流程与状态
 
@@ -104,6 +122,9 @@
 | 商品同时编辑 | 请求可带 `expectedUpdatedAt`；服务端以 `updatedAt` 条件更新，不匹配返回 409 `PRODUCT_VERSION_CONFLICT` | 回滚乐观状态，提示“已在其他端更新”，立即重新读取 |
 | 库存调整 | 必须携带当前 `version`；不匹配返回 409 `INVENTORY_VERSION_CONFLICT` | 保留错误，刷新余额后重试 |
 | 工作区草稿 | `expectedRevision` 条件更新 | 409 后重新加载最新草稿 |
+| AI Studio 项目/CAD/版型版本 | 每次保存提交当前服务端 revision；在事务内校验并创建下一不可变版本；旧 revision 返回冲突，不能 last-write-wins | 保留本地未提交编辑并提示冲突；重新读取最新版本后由用户选择继续/合并，不自动覆盖 |
+| AI Job 与部件创建 | 相同操作使用服务端幂等键/唯一约束；重试先恢复原任务结果 | 网络结果不确定时用原 Job ID/幂等键恢复，禁止产生第二任务或重复部件 |
+| 多人协作 | 服务端校验项目租户、Studio、参与者权限和 revision；事务失败不写半份 CAD 数据 | 展示冲突状态与最新版本信息，不能静默显示本地“保存成功” |
 | 订单状态推进 | 服务端事务与允许状态转换；非法状态拒绝 | 显示真实服务端错误并刷新 |
 
 ### 5.3 异常
@@ -231,3 +252,56 @@
 - 截图/验收证据：尚无真实三端会话截图。
 - 未完成项：真实三端登录态交叉验收（§8.2 测试 A–F）、微信开发者工具/真机验收待执行；SSE 多实例风险与小程序生产 API 基址风险未改变。
 - 2026-10-26 ModaUI 聊天布局补充：仅调整共享 `MerchantAiHome`、手机 Web 导航收起/键盘 inset 与小程序 `pages/assistant` 菜单/拖柄，不新增或修改任何商家数据读写路径、缓存键、事件或权限；跨端数据一致性口径不变。
+- 2026-10-30 ModaUI 行业角色补充：三端普通商家聊天共用 `/api/merchant/assistant/query`，服务端按 PostgreSQL `Merchant.industryTemplate` 选择角色说明；客户端模板只用于呈现。未修改会话数据模型、缓存、任务存储或同步机制，实际登录态跨端验收仍待完成。
+
+## 12. RUDA 多行业 AI Studio 项目同步（契约与首个服务端切片）
+
+### 12.1 共同实施边界
+
+- 电脑 Web、手机 Web、小程序在阶段 0 同时完成 API/资源契约与调用矩阵；共享后端和项目同步与电脑端专业能力、手机/小程序基础入口并行建设。
+- 电脑端负责完整专业工作站能力；手机端按移动布局支持照片、对话、轻编辑、确认、历史、审批/进度和文件；复杂 CAD 精细编辑以电脑端为主；小程序按原生导航提供便捷操作。
+- 三端各自保留 RUDA 现有布局、颜色、字体、间距、导航和交互习惯。统一的是业务语义、授权、服务端数据和版本，不统一屏幕布局；不在跨端同步项目中做视觉重设计。
+- 对现有 API/数据库/文件服务完成审计后，才确定路径与 schema。此节的逻辑资源名不代表当前 API 或模型已实现，也不要求机械新增同名表。
+
+### 12.2 规范资源与写入条件
+
+| 资源 | 规范标识 | 服务端验证/规则 |
+|---|---|---|
+| 用户/商家/员工 | `userId`、`tenantId` | 从已验证会话解析；不能信任客户端指定租户 |
+| 行业/工作室 | `industryId`、`studioId` | 以稳定 ID 查注册与 entitlement；每次 API 检查所属关系和员工能力 |
+| 项目 | `projectId` | 电脑、手机、小程序读写同一服务端项目；不得端侧另建项目副本 |
+| 文件 | `fileId` | 对象、项目与 tenant/studio 关联校验；访问需服务端签名/授权 |
+| AI 任务 | `aiJobId` | 可查询/恢复既有任务；相同幂等请求不可重复扣费、生成或创建部件 |
+| 工程修订 | `patternVersion` / `projectRevision` | 版本归属唯一项目；写入需 `expectedRevision` 或等价条件；事务成功后版本单调前进 |
+
+CAD/Pattern payload 使用对应 Studio 的已审查 schema 与服务端版本。只读客户端遇到未知字段必须保留/不写回，不得把部分投影内容序列化覆盖原始工程数据。版本冲突返回当前 revision 与可恢复错误；客户端提示用户刷新/决定合并，不自动以最后写入者覆盖。
+
+### 12.3 必需跨端 E2E 用例
+
+| 用例 | 操作 | 验收 |
+|---|---|---|
+| A | 电脑上传照片，手机打开同项目 | 同 `projectId/fileId`，服务端确认的文件和权限一致 |
+| B | 手机拍摄并上传，电脑打开项目 | 同一文件记录、真实持久化；不是只存在手机缓存 |
+| C | 手机发出 AI 自然语言修改，电脑继续查看 | 同一 `aiJobId`，完成后读取服务端最新 project revision |
+| D | 电脑修改 CAD，手机查看 | 手机看到同一 `patternVersion`；无 schema 字段丢失 |
+| E | 小程序确认方案，电脑继续操作 | 同一项目的确认状态、操作者与版本可从服务端读取 |
+| F | 过期 revision 写入 | 明确冲突；较新版本未改变；用户可以重新加载/手动合并 |
+| G | 重复任务/部件操作 | 幂等键或唯一约束阻止重复任务、重复扣费和重复部件 |
+| H | 上传或 AI 任务期间断网 | 恢复后按 File/Job ID 查询原结果，或明确安全重试；不会伪报成功 |
+| I | 多人同时编辑同一项目 | 权限、事务与版本冲突生效；参与者看到明确冲突，不发生静默覆盖 |
+
+真实验收须使用同一测试商家、同一行业/Studio、同一 Project ID，在电脑浏览器、手机 Web 视口和微信开发者工具/真机间实际操作。仅各端独立打开页面、单测或 API 契约测试不能替代以上互操作验收。
+
+### 12.4 当前状态
+
+- Studio project/version 首片采用统一 merchant Studio project/version 存储与 `/api/merchant/studio-projects` API；Leather 现有 `/api/merchant/leather-studio/projects` 保持兼容并写入同一权威存储。新增 `MerchantStudioEntitlement`；服务端先校验持久授权与稳定 registry 映射，无任何授权记录的旧商家才按原模板兼容推导。
+- 项目 API 允许按 `industryTemplate` 请求参数精确选择工作室上下文，但仍由服务端 entitlement 决定是否有权；项目列表、详情、版本和写入均按 merchant + template + studio 过滤。未传模板时只回落到商家现有主模板，不从其他授权中任意挑选。创建幂等约束也区分模板，避免 Apparel Production/Wholesale 冲突。
+- 迁移以新增共享表及从 Leather 项目表回填为兼容策略，不删除旧表；项目模板隔离迁移只调整幂等唯一索引。隔离 PostgreSQL 已验证所有 migration 和 API；生产 migration 尚未应用。
+- Apparel 允许的当前行业模板为 `apparel_production_wholesale`、`apparel_wholesale`；二者映射同一个 Apparel Studio，专业版型权限仍需单独 entitlement，不因能访问项目 API 而自动开放。
+- `npm run test:merchant-studio-projects:integration` 已在临时 PostgreSQL 验证全部 migration、Leather 旧路径兼容、多 Studio entitlement 返回、无效/待授权记录过滤、Apparel 两种模板分离、跨租户拒绝、员工权限、幂等和版本冲突；此证据不代表生产 migration 已应用或三端多 Studio 选择已接入。
+- 当前接入切片限定同步 `projectId`、`revision`、标题与设计简报字段；作品图片仍留在现有素材库，AI Job、文件 ID、版型/CAD 与本地未提交编辑不属于该切片，界面必须明确状态，不得冒充已同步。
+- 商家电脑/手机 Web 和小程序已有项目简报接线，但只使用商家当前主模板；多 Studio 选择/切换 UI、AI Job、文件 ID/媒体关联、CAD 编辑 UI、跨设备事件/断网恢复与完整 E2E 仍未实现。共享 API 代码和单端主模板读写不等于多 Studio 三端同步完成。
+- 现有商品/库存跨端同步能力仍按本规格前文执行；不能据此推断 Studio 项目/Pattern Version 已具备同等级同步。
+- 端侧风格基线：[`design-values.md`](../design-values.md)、[`mobile-design-system.md`](../mobile-design-system.md)；小程序沿用其自身 WXSS/rpx 与既有组件/导航，不引入 Web CSS。
+- 具体模块阶段与行业能力见 [`modaui-industry-studios-v2.md`](./modaui-industry-studios-v2.md)，三端功能/状态追踪见 [`merchant-three-end-matrix.md`](./merchant-three-end-matrix.md)。
+- 八行业 Studio 专业工作流、三端能力状态与 Apparel/Leather/Restaurant 验收统一见 [`modaui-industry-studios-v2.md`](./modaui-industry-studios-v2.md)。现有素材、通用 AI Job 和管理员视频时间线不自动等同于商家 Studio 项目；各端真实互操作未验证前不得宣称项目已同步完成。

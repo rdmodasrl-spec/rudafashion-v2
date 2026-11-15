@@ -31,6 +31,8 @@
     "test:modagpt:integration": "bash scripts/test-ai-growth-p0-isolated.sh modagpt",
     "test:modagpt:industries:integration": "bash scripts/test-ai-growth-p0-isolated.sh modagpt-industries",
     "test:modagpt:brain:integration": "bash scripts/test-ai-growth-p0-isolated.sh modagpt-brain",
+    "test:restaurant-catalog:integration": "bash scripts/test-restaurant-catalog-isolated.sh",
+    "test:merchant-studio-projects:integration": "bash scripts/test-merchant-studio-projects-isolated.sh",
     "test:trading-wholesale:integration": "bash scripts/test-ai-growth-p0-isolated.sh trading-wholesale",
     "test:p0:integration": "bash scripts/test-ai-growth-p0-isolated.sh p0",
     "test:e2e": "bash scripts/test-pos-e2e-isolated.sh",

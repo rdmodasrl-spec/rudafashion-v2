@@ -5,6 +5,10 @@ module.exports = {
   templateId: 'trading_wholesale',
   title: '贸易批发',
   summary: '多品牌多品类采购与批发分销',
+  modauiPrompts: [
+    { label: '分析供应商供货表现', prompt: '分析当前商家的供应商供货表现，包括历史采购和到货数据；没有数据时请明确说明。' },
+    { label: '准备采购草稿', prompt: '帮我创建一张采购草稿。' }
+  ],
   metrics: [
     { key: 'pendingOrders', label: '待确认订单', suffix: '单', emphasis: true },
     { key: 'pendingVaultRequests', label: '授权申请', suffix: '条' },

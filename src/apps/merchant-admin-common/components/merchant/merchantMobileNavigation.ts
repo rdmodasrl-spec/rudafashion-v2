@@ -1,7 +1,7 @@
 export const merchantMobilePrimaryTabs = [
   { id: 'dashboard', zh: '首页', it: 'Home' },
   { id: 'products', zh: '商品', it: 'Prodotti' },
-  { id: 'ai_home', zh: 'ModaUI', it: 'ModaUI' },
+  { id: 'ai_home', zh: 'AI工作室', it: 'AI Studio' },
   { id: 'orders', zh: '订单', it: 'Ordini' },
   { id: 'more', zh: '更多', it: 'Altro' }
 ] as const;
@@ -65,7 +65,8 @@ export const merchantMobileMoreGroups = [
     zh: '智能工具',
     it: 'Strumenti smart',
     items: [
-      { id: 'ai_employees', zh: '智能员工', it: 'Team AI', descriptionZh: '管理智能员工', descriptionIt: 'Assistenti aziendali', icon: 'ai' }
+      { id: 'ai_employees', zh: '智能员工', it: 'Team AI', descriptionZh: '管理智能员工', descriptionIt: 'Assistenti aziendali', icon: 'ai' },
+      { id: 'ad_planner', zh: '广告策划', it: 'Piano ads', descriptionZh: '选商品出广告方案', descriptionIt: 'Piano ads dal prodotto', icon: 'ads' }
     ]
   },
   {

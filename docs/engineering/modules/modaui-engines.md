@@ -6,7 +6,7 @@
 
 ## 1. 问题与目标
 
-ModaUI 工作台已有五项创作能力入口，但“界面上有入口”不等于“服务端有引擎”。本文是唯一的引擎事实清单：**哪些能力有真实引擎、引擎如何调用、当前环境是否可用、缺失能力怎么接**。任何“已支持/即将支持”的说法必须以本文为准，不得凭 UI 入口推断能力存在。
+ModaUI 工作台按 Apparel 验收清单定义六项创作能力；“界面上有入口”不等于“服务端有引擎”。本文是引擎事实清单：**哪些能力有真实引擎、引擎如何调用、当前环境是否可用、缺失能力怎么接**。任何“已支持/即将支持”的说法必须以真实执行路径和验收证据为准，不得凭 UI 入口推断能力存在。
 
 非目标：
 
@@ -34,6 +34,7 @@ ModaUI 工作台已有五项创作能力入口，但“界面上有入口”不�
 | 精准换色 `recolor` | 浏览器 canvas 像素级换色（保留纹理与版型） | 可用（无服务端调用） | 不扣额度 | 前端校验：仅 jpeg/png/webp，≤8MB |
 | 商业棚拍 `studio` | 目前是**文字棚拍方向 + 文生图**，不是图生图 | 不可用（同文生图） | 1 × `imageGeneration` | 同文生图；套餐不足时 `plan_required` |
 | 时装视频 `video` | 无 | 未接入（UI 只读提示） | 不扣额度 | 前端直接阻止 |
+| AI 专业智能打版 `pattern` | 无 Apparel 纸样/CAD/放码/生产导出服务 | 未接入（UI 只读提示） | 不扣额度 | 前端直接阻止 |
 
 ### 3.1 文生图（`design` / `studio` 共用）
 
@@ -98,8 +99,32 @@ ModaUI 工作台已有五项创作能力入口，但“界面上有入口”不�
 | 幂等 | 订阅商家必须带 `Idempotency-Key`（8–80 位 `[A-Za-z0-9._-]`），重复键返回 `MODAGPT_CREDIT_RESERVATION_ALREADY_SETTLED` 而不是重复扣费 |
 | 真实出图 | 需要可用 provider（本地 SD WebUI + `LOCAL_IMAGE_GENERATION_URL`，或 fal key）后才能验收，当前环境无法执行 |
 
+## 8. 确定性图片引擎（MODAUI Image Engine，2026-10-30）
+
+`src/server/aiImageEngine.ts`：纯 Sharp 像素算法的图片引擎，**不调用任何付费生成 API**，用于商家每天都在跑的图片加工（白底主图、抠图、质检、换色、去重、多画幅）。
+
+| 能力 | 实现 | 拒绝/降级语义 |
+|---|---|---|
+| 商品分割 | 边缘中位色 + Lab 距离洪泛填充（`segmentAiImageSubject`） | 背景不均匀（`borderUniformity < 0.55`）返回 `background_not_uniform`，不输出歪掉的主体 |
+| 抠图 | 遮罩双三次还原到原分辨率，`ensureAlpha` 后取 min 合成 | 分割失败时不返回任何图 |
+| 白底主图 | 抠图 → bbox 收紧 → 等比缩放 → 居中留白 → 椭圆接触阴影（`composeAiProductShot`） | 同上，失败只回原因 |
+| 像素质检 | 拉普拉斯方差、分辨率、阴影/高光剪切、Lab 色偏、主体占比（`assessAiImageQuality`） | 无法判定（如灰度图偏色）标 `unknown`，不伪造通过 |
+| 主色 | Lab 空间确定性 k-means（首心取最大彩度样本）+ 占比降序 | 样本不足或分割失败返回 `ok:false` |
+| 颜色变体 | 只改命中源色的主体像素，保留亮度比例与纹理（`generateAiColorVariants`） | 分割失败不出图 |
+| 感知哈希/去重 | dHash + aHash 128 bit，汉明距离 ≤8 判重，并查集聚类 | 单批上限 500，超限抛参数错误 |
+| 多画幅裁切 | EXIF 归一化 → 主体锚定裁切 → 不放大原图（`reframeAiImageToAspect`） | 分割失败回退 `center` 并标 `anchorUsed`；主体被切标 `subjectClipped` |
+
+硬约束：
+
+- 遮罩缩放必须 `toColourspace('b-w')` 并按 `info.channels` 取 stride，否则 sharp 会把单通道升成 sRGB 三通道，索引错位导致 alpha 全 0（已在 `resizeMask` 统一收口）。
+- 导出格式显式指定：抠图默认 `png`（保留透明），主图与裁切默认 `jpeg`，工具层显式传 `format: 'png'` 以对齐返回的 `mimeType`。
+- 不放大：目标宽度大于源尺寸时按源尺寸输出，避免用插值伪造清晰度。
+
+验证：`tests/ai-image-engine.test.ts`（13 项，真实像素）、`tests/ai-tools-image-tools.test.ts`（4 项，走真实 handler）。
+
 ## 变更记录
 
 | 日期 | 变更 | 验证 |
 |---|---|---|
 | 2026-10-27 | 建立引擎事实矩阵与缺失能力接入方案；完成本机真实接口取证 | 真实会话 200/403 证据、额度与资产前后对比、端口与 env 键名核查 |
+| 2026-10-30 | 新增确定性图片引擎与三个图片类工具；修正遮罩单通道错位缺陷 | `tests/ai-image-engine.test.ts` 13/13、`tests/ai-tools-image-tools.test.ts` 4/4、`npm run test:unit` 无新增失败 |

@@ -72,6 +72,10 @@ function merchantToken(merchantId: string): string {
   return jwt.sign({ id: merchantId, merchantId, role: 'merchant' }, merchantSecret, { expiresIn: '30m' });
 }
 
+function employeeToken(merchantId: string, employeeId: string): string {
+  return jwt.sign({ id: `employee-${employeeId}`, merchantId, role: 'employee', employeeId }, merchantSecret, { expiresIn: '30m' });
+}
+
 async function waitForReady(baseUrl: string, child: ChildProcess, logs: () => string): Promise<void> {
   const deadline = Date.now() + 90_000;
   while (Date.now() < deadline) {
@@ -86,7 +90,10 @@ async function waitForReady(baseUrl: string, child: ChildProcess, logs: () => st
   throw new Error(`PRODUCTION_CHAIN_SERVER_START_TIMEOUT:${logs()}`);
 }
 
-async function createMerchant(suffix: string, label: string): Promise<string> {
+async function createMerchant(suffix: string, label: string, options: {
+  industryTemplate?: string;
+  formalIndustryId?: string;
+} = {}): Promise<string> {
   const id = crypto.randomUUID();
   await prisma.merchant.create({
     data: {
@@ -105,6 +112,8 @@ async function createMerchant(suffix: string, label: string): Promise<string> {
       description: 'Test-only merchant fixture.',
       specialties: '[]',
       foundedYear: 2020,
+      industryTemplate: options.industryTemplate || 'apparel_production_wholesale',
+      ...(options.formalIndustryId ? { formalIndustryId: options.formalIndustryId } : {}),
       contactPerson: 'Integration Test',
       contactPhone: '+390000000000',
       contactEmail: `prodchain-${label}-${suffix}@example.test`,
@@ -113,6 +122,28 @@ async function createMerchant(suffix: string, label: string): Promise<string> {
     }
   });
   return id;
+}
+
+async function grantApparelStudio(merchantId: string, options: {
+  industryTemplate: 'apparel_production_wholesale' | 'apparel_wholesale';
+  ownsProduction: boolean;
+}): Promise<void> {
+  const productionTemplate = options.industryTemplate === 'apparel_production_wholesale';
+  await prisma.merchantStudioEntitlement.create({
+    data: {
+      merchantId,
+      formalIndustryId: 'WHOLESALE_APPAREL',
+      industryCode: options.industryTemplate,
+      industryTemplate: options.industryTemplate,
+      studioCode: 'apparel_studio',
+      mode: productionTemplate ? 'production' : 'wholesale',
+      status: 'active',
+      capabilities: options.ownsProduction
+        ? { APPAREL_OWN_PRODUCTION: true, apparelPatternEngineering: true }
+        : {},
+      source: 'SELF_SELECTED'
+    }
+  });
 }
 
 async function createProductFixture(merchantId: string, suffix: string) {
@@ -153,9 +184,74 @@ async function createProductFixture(merchantId: string, suffix: string) {
 
 test('production chain covers install gate, factory workspace, pickups, inspection, monthly statement and payments', async () => {
   const suffix = crypto.randomUUID().replaceAll('-', '').slice(0, 12);
-  const merchantId = await createMerchant(suffix, 'A');
+  const merchantId = await createMerchant(suffix, 'A', {
+    industryTemplate: 'apparel_production_wholesale',
+    formalIndustryId: 'WHOLESALE_APPAREL'
+  });
+  await grantApparelStudio(merchantId, {
+    industryTemplate: 'apparel_production_wholesale',
+    ownsProduction: true
+  });
+  await prisma.merchant.update({
+    where: { id: merchantId },
+    data: { settings: JSON.stringify({ productEditingEnabled: true }) }
+  });
   const otherMerchantId = await createMerchant(suffix, 'B');
+  const legacyFixtures = await createProductFixture(otherMerchantId, `${suffix}-legacy`);
+  const wholesaleOnlyMerchantId = await createMerchant(suffix, 'WHOLESALE_ONLY', {
+    industryTemplate: 'apparel_wholesale',
+    formalIndustryId: 'WHOLESALE_APPAREL'
+  });
+  const productionViewerId = crypto.randomUUID();
+  const productionCostViewerId = crypto.randomUUID();
+  const productionDeniedId = crypto.randomUUID();
+  await prisma.merchantEmployee.createMany({
+    data: [
+      {
+        id: productionViewerId,
+        merchantId,
+        email: `production-viewer-${suffix}@example.test`,
+        name: 'Production viewer',
+        passwordHash: 'not-used-by-this-api-test',
+        role: 'production',
+        permissions: '["production.view","production.report","product.publish"]'
+      },
+      {
+        id: productionCostViewerId,
+        merchantId,
+        email: `production-cost-viewer-${suffix}@example.test`,
+        name: 'Production cost viewer',
+        passwordHash: 'not-used-by-this-api-test',
+        role: 'production',
+        permissions: '["production.view","production.cost.view"]'
+      },
+      {
+        id: productionDeniedId,
+        merchantId,
+        email: `production-denied-${suffix}@example.test`,
+        name: 'Sales employee without production access',
+        passwordHash: 'not-used-by-this-api-test',
+        role: 'sales',
+        permissions: '[]'
+      }
+    ]
+  });
+  await grantApparelStudio(wholesaleOnlyMerchantId, {
+    industryTemplate: 'apparel_wholesale',
+    ownsProduction: false
+  });
   const fixtures = await createProductFixture(merchantId, suffix);
+  const wholesaleFixtures = await createProductFixture(wholesaleOnlyMerchantId, `${suffix}-wholesale`);
+  const productionMaterial = await prisma.material.create({
+    data: {
+      merchantId,
+      code: `PC-MAT-${suffix}`,
+      name: 'Production chain test fabric',
+      category: 'fabric',
+      unit: 'meter',
+      unitCost: 12.5
+    }
+  });
   const periodMonth = new Date().toISOString().slice(0, 7);
 
   const port = await getFreePort();
@@ -190,6 +286,7 @@ test('production chain covers install gate, factory workspace, pickups, inspecti
 
   const owner = merchantToken(merchantId);
   const otherOwner = merchantToken(otherMerchantId);
+  const wholesaleOnlyOwner = merchantToken(wholesaleOnlyMerchantId);
 
   try {
     await waitForReady(baseUrl, server, logs);
@@ -206,10 +303,205 @@ test('production chain covers install gate, factory workspace, pickups, inspecti
       method: 'POST', token: owner, body: {}
     });
     assert.equal(enable.status, 200);
+    const productionEnabled = await request(baseUrl, '/api/production/summary', { token: owner });
+    assert.equal(productionEnabled.status, 200, logs());
+    const deniedEmployeeMaterialAvailability = await request(
+      baseUrl,
+      `/api/merchant/products/${fixtures.productId}/material-availability?quantity=1`,
+      { token: employeeToken(merchantId, productionDeniedId) }
+    );
+    assert.equal(deniedEmployeeMaterialAvailability.status, 403);
+    assert.equal(errorCode(deniedEmployeeMaterialAvailability.body), 'EMPLOYEE_PERMISSION_REQUIRED');
+    const apparelBomUpdate = await request(baseUrl, `/api/merchant/products/${fixtures.productId}/bom`, {
+      method: 'PUT',
+      token: owner,
+      body: { items: [{ materialId: productionMaterial.id, quantityPerUnit: 1.25, wasteRate: 0.05 }] }
+    });
+    assert.equal(apparelBomUpdate.status, 200, logs());
+    assert.equal(apparelBomUpdate.body.bom?.length, 1);
+    const apparelMaterialAvailability = await request(
+      baseUrl,
+      `/api/merchant/products/${fixtures.productId}/material-availability?quantity=1`,
+      { token: owner }
+    );
+    assert.equal(apparelMaterialAvailability.status, 200, logs());
+    assert.equal(apparelMaterialAvailability.body.materials?.length, 1);
+    assert.equal(typeof apparelMaterialAvailability.body.materials[0].estimatedCost, 'number');
+    assert.equal(typeof apparelMaterialAvailability.body.estimatedMaterialCost, 'number');
+    const apparelMaterials = await request(baseUrl, '/api/merchant/materials', { token: owner });
+    assert.equal(apparelMaterials.status, 200, logs());
+    assert.equal(apparelMaterials.body.canViewCosts, true);
+    assert.equal(apparelMaterials.body.materials.find((material: { id: string }) => material.id === productionMaterial.id)?.unitCost, 12.5);
+    const employeeMaterials = await request(baseUrl, '/api/merchant/materials', {
+      token: employeeToken(merchantId, productionViewerId)
+    });
+    assert.equal(employeeMaterials.status, 200, logs());
+    assert.equal(employeeMaterials.body.canViewCosts, false);
+    assert.equal('unitCost' in employeeMaterials.body.materials.find((material: { id: string }) => material.id === productionMaterial.id), false);
+    const employeeCostMaterials = await request(baseUrl, '/api/merchant/materials', {
+      token: employeeToken(merchantId, productionCostViewerId)
+    });
+    assert.equal(employeeCostMaterials.status, 200, logs());
+    assert.equal(employeeCostMaterials.body.canViewCosts, true);
+    assert.equal(employeeCostMaterials.body.materials.find((material: { id: string }) => material.id === productionMaterial.id)?.unitCost, 12.5);
+    const deniedEmployeeMaterials = await request(baseUrl, '/api/merchant/materials', {
+      token: employeeToken(merchantId, productionDeniedId)
+    });
+    assert.equal(deniedEmployeeMaterials.status, 403);
+    assert.equal(errorCode(deniedEmployeeMaterials.body), 'EMPLOYEE_PERMISSION_REQUIRED');
+    const employeeMaterialUpdate = await request(baseUrl, `/api/merchant/materials/${productionMaterial.id}`, {
+      method: 'PUT',
+      token: employeeToken(merchantId, productionViewerId),
+      body: {
+        code: productionMaterial.code,
+        name: productionMaterial.name,
+        category: 'fabric',
+        unit: 'meter',
+        reorderPoint: 0,
+        leadTimeDays: 0
+      }
+    });
+    assert.equal(employeeMaterialUpdate.status, 200, logs());
+    assert.equal('unitCost' in employeeMaterialUpdate.body.material, false);
+    assert.equal(Number((await prisma.material.findUniqueOrThrow({ where: { id: productionMaterial.id } })).unitCost), 12.5);
+    const employeeCostUpdateDenied = await request(baseUrl, `/api/merchant/materials/${productionMaterial.id}`, {
+      method: 'PUT',
+      token: employeeToken(merchantId, productionViewerId),
+      body: {
+        code: productionMaterial.code,
+        name: productionMaterial.name,
+        category: 'fabric',
+        unit: 'meter',
+        unitCost: 15,
+        reorderPoint: 0,
+        leadTimeDays: 0
+      }
+    });
+    assert.equal(employeeCostUpdateDenied.status, 403);
+    assert.equal(errorCode(employeeCostUpdateDenied.body), 'MATERIAL_COST_PERMISSION_REQUIRED');
+    const employeeCostCreateDenied = await request(baseUrl, '/api/merchant/materials', {
+      method: 'POST',
+      token: employeeToken(merchantId, productionViewerId),
+      body: { code: `NO-COST-${suffix}`, name: 'No-cost permission material', category: 'fabric', unit: 'meter', unitCost: 5 }
+    });
+    assert.equal(employeeCostCreateDenied.status, 403);
+    assert.equal(errorCode(employeeCostCreateDenied.body), 'MATERIAL_COST_PERMISSION_REQUIRED');
+    const employeeZeroCostMaterial = await request(baseUrl, '/api/merchant/materials', {
+      method: 'POST',
+      token: employeeToken(merchantId, productionViewerId),
+      body: { code: `ZERO-COST-${suffix}`, name: 'Zero-cost permission material', category: 'fabric', unit: 'meter' }
+    });
+    assert.equal(employeeZeroCostMaterial.status, 201, logs());
+    assert.equal('unitCost' in employeeZeroCostMaterial.body.material, false);
+    const storedZeroCostMaterial = await prisma.material.findUnique({ where: { id: employeeZeroCostMaterial.body.material.id } });
+    assert.ok(storedZeroCostMaterial, JSON.stringify(employeeZeroCostMaterial.body));
+    assert.equal(Number(storedZeroCostMaterial.unitCost), 0);
+    const employeeMaterialAvailability = await request(
+      baseUrl,
+      `/api/merchant/products/${fixtures.productId}/material-availability?quantity=1`,
+      { token: employeeToken(merchantId, productionViewerId) }
+    );
+    assert.equal(employeeMaterialAvailability.status, 200, logs());
+    assert.equal(employeeMaterialAvailability.body.materials?.length, 1);
+    assert.equal('estimatedCost' in employeeMaterialAvailability.body.materials[0], false);
+    assert.equal('estimatedMaterialCost' in employeeMaterialAvailability.body, false);
+    const employeeBomUpdate = await request(baseUrl, `/api/merchant/products/${fixtures.productId}/bom`, {
+      method: 'PUT',
+      token: employeeToken(merchantId, productionViewerId),
+      body: { items: [{ materialId: productionMaterial.id, quantityPerUnit: 1.25, wasteRate: 0.05 }] }
+    });
+    assert.equal(employeeBomUpdate.status, 200, logs());
+    assert.equal('unitCost' in employeeBomUpdate.body.bom[0].material, false);
+    const employeeCostMaterialAvailability = await request(
+      baseUrl,
+      `/api/merchant/products/${fixtures.productId}/material-availability?quantity=1`,
+      { token: employeeToken(merchantId, productionCostViewerId) }
+    );
+    assert.equal(employeeCostMaterialAvailability.status, 200, logs());
+    assert.equal(typeof employeeCostMaterialAvailability.body.materials[0].estimatedCost, 'number');
+    assert.equal(typeof employeeCostMaterialAvailability.body.estimatedMaterialCost, 'number');
+    const apparelMovements = await request(baseUrl, '/api/merchant/material-movements', { token: owner });
+    assert.equal(apparelMovements.status, 200, logs());
+    assert.ok(Array.isArray(apparelMovements.body.movements));
 
     const otherBeforeInstall = await request(baseUrl, '/api/production/summary', { token: otherOwner });
     assert.equal(otherBeforeInstall.status, 403);
+    const legacyInstall = await request(baseUrl, '/api/app-store/installations', {
+      method: 'POST', token: otherOwner, body: { appId }
+    });
+    assert.equal(legacyInstall.status, 201);
+    const legacyEnable = await request(baseUrl, `/api/app-store/installations/${appId}/enable`, {
+      method: 'POST', token: otherOwner, body: {}
+    });
+    assert.equal(legacyEnable.status, 200);
+    const legacyProductionEnabled = await request(baseUrl, '/api/production/summary', { token: otherOwner });
+    assert.equal(legacyProductionEnabled.status, 200, logs());
+    const legacyMaterialAvailability = await request(
+      baseUrl,
+      `/api/merchant/products/${legacyFixtures.productId}/material-availability?quantity=1`,
+      { token: otherOwner }
+    );
+    assert.equal(legacyMaterialAvailability.status, 200, logs());
 
+    const wholesaleInstall = await request(baseUrl, '/api/app-store/installations', {
+      method: 'POST', token: wholesaleOnlyOwner, body: { appId }
+    });
+    assert.equal(wholesaleInstall.status, 201);
+    const wholesaleEnable = await request(baseUrl, `/api/app-store/installations/${appId}/enable`, {
+      method: 'POST', token: wholesaleOnlyOwner, body: {}
+    });
+    assert.equal(wholesaleEnable.status, 200);
+    const workOrdersBeforeDeniedRequest = await prisma.productionOrder.count({
+      where: { merchantId: wholesaleOnlyMerchantId }
+    });
+    const productionSummaryDenied = await request(baseUrl, '/api/production/summary', { token: wholesaleOnlyOwner });
+    assert.equal(productionSummaryDenied.status, 403);
+    assert.equal(errorCode(productionSummaryDenied.body), 'APPAREL_OWN_PRODUCTION_REQUIRED');
+    const workOrderListDenied = await request(baseUrl, '/api/merchant/production/work-orders', {
+      token: wholesaleOnlyOwner
+    });
+    assert.equal(workOrderListDenied.status, 403);
+    assert.equal(errorCode(workOrderListDenied.body), 'APPAREL_OWN_PRODUCTION_REQUIRED');
+    const materialsDenied = await request(baseUrl, '/api/merchant/materials', {
+      token: wholesaleOnlyOwner
+    });
+    assert.equal(materialsDenied.status, 403);
+    assert.equal(errorCode(materialsDenied.body), 'APPAREL_OWN_PRODUCTION_REQUIRED');
+    const wholesaleMovementsDenied = await request(baseUrl, '/api/merchant/material-movements', {
+      token: wholesaleOnlyOwner
+    });
+    assert.equal(wholesaleMovementsDenied.status, 403);
+    assert.equal(errorCode(wholesaleMovementsDenied.body), 'APPAREL_OWN_PRODUCTION_REQUIRED');
+    const bomCountBeforeDeniedRequests = await prisma.productBomItem.count({
+      where: { productId: wholesaleFixtures.productId }
+    });
+    const wholesaleMaterialAvailabilityDenied = await request(
+      baseUrl,
+      `/api/merchant/products/${wholesaleFixtures.productId}/material-availability?quantity=1`,
+      { token: wholesaleOnlyOwner }
+    );
+    assert.equal(wholesaleMaterialAvailabilityDenied.status, 403);
+    assert.equal(errorCode(wholesaleMaterialAvailabilityDenied.body), 'APPAREL_OWN_PRODUCTION_REQUIRED');
+    const wholesaleBomUpdateDenied = await request(baseUrl, `/api/merchant/products/${wholesaleFixtures.productId}/bom`, {
+      method: 'PUT',
+      token: wholesaleOnlyOwner,
+      body: { items: [] }
+    });
+    assert.equal(wholesaleBomUpdateDenied.status, 403);
+    assert.equal(errorCode(wholesaleBomUpdateDenied.body), 'APPAREL_OWN_PRODUCTION_REQUIRED');
+    assert.equal(await prisma.productBomItem.count({
+      where: { productId: wholesaleFixtures.productId }
+    }), bomCountBeforeDeniedRequests);
+    const productionCreateDenied = await request(baseUrl, '/api/production/orders', {
+      method: 'POST',
+      token: wholesaleOnlyOwner,
+      body: { productId: fixtures.productId, factoryId: crypto.randomUUID(), items: [] }
+    });
+    assert.equal(productionCreateDenied.status, 403);
+    assert.equal(errorCode(productionCreateDenied.body), 'APPAREL_OWN_PRODUCTION_REQUIRED');
+    assert.equal(await prisma.productionOrder.count({
+      where: { merchantId: wholesaleOnlyMerchantId }
+    }), workOrdersBeforeDeniedRequest);
 
     const factoryResponse = await request(baseUrl, '/api/production/factories', {
       method: 'POST',
@@ -489,9 +781,9 @@ test('production chain covers install gate, factory workspace, pickups, inspecti
     assert.equal(crossFactoryStatement.status, 404);
 
     const crossTenantOrder = await request(baseUrl, `/api/production/orders/${orderId}`, { token: otherOwner });
-    assert.equal(crossTenantOrder.status, 403);
+    assert.equal(crossTenantOrder.status, 404);
     const crossTenantStatement = await request(baseUrl, `/api/production/statements/${statementId}`, { token: otherOwner });
-    assert.equal(crossTenantStatement.status, 403);
+    assert.equal(crossTenantStatement.status, 404);
 
     const summary = await request(baseUrl, '/api/production/summary', { token: owner });
     assert.equal(summary.status, 200);
@@ -529,11 +821,14 @@ test('production chain covers install gate, factory workspace, pickups, inspecti
     await prisma.productionOrder.deleteMany({ where: { merchantId } }).catch(() => undefined);
     await prisma.productionFactoryMember.deleteMany({ where: { factory: { merchantId } } }).catch(() => undefined);
     await prisma.productionFactory.deleteMany({ where: { merchantId } }).catch(() => undefined);
-    await prisma.appInstallation.deleteMany({ where: { merchantId } }).catch(() => undefined);
+    await prisma.appInstallation.deleteMany({
+      where: { merchantId: { in: [merchantId, otherMerchantId, wholesaleOnlyMerchantId] } }
+    }).catch(() => undefined);
     await prisma.productVariant.deleteMany({ where: { productId: fixtures.productId } }).catch(() => undefined);
     await prisma.product.deleteMany({ where: { id: fixtures.productId } }).catch(() => undefined);
-    await prisma.merchant.deleteMany({ where: { id: { in: [merchantId, otherMerchantId] } } }).catch(() => undefined);
+    await prisma.merchant.deleteMany({
+      where: { id: { in: [merchantId, otherMerchantId, wholesaleOnlyMerchantId] } }
+    }).catch(() => undefined);
     await prisma.$disconnect();
   }
 });
-

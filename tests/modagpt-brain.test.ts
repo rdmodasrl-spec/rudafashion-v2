@@ -15,6 +15,9 @@ const now = new Date('2026-10-01T00:00:00.000Z');
 const context: ModaGptBrainAccessContext = {
   tenantId: 'merchant-a',
   merchantId: 'merchant-a',
+  industryId: 'apparel_production_wholesale',
+  studioId: 'apparel_studio',
+  knowledgeNamespace: 'apparel',
   actorId: 'employee-a',
   permissions: ['brain.read', 'product.catalog.read'],
   scopes: ['MERCHANT', 'BRAND', 'PRODUCT', 'AGENT']
@@ -41,6 +44,9 @@ function candidate(overrides: Partial<ModaGptBrainCandidate> = {}): ModaGptBrain
     id: 'memory-1',
     tenantId: 'merchant-a',
     merchantId: 'merchant-a',
+    industryId: 'apparel_production_wholesale',
+    studioId: 'apparel_studio',
+    knowledgeNamespace: 'apparel',
     kind: 'memory',
     scope: 'MERCHANT',
     content: 'brand prefers seasonal fashion colors',
@@ -62,6 +68,9 @@ test('brain retrieval enforces exact tenant, merchant, scope and permission filt
     allowed,
     candidate({ id: 'other-tenant', tenantId: 'merchant-b', merchantId: 'merchant-b' }),
     candidate({ id: 'other-merchant', merchantId: 'merchant-b' }),
+    candidate({ id: 'wrong-industry', industryId: 'trade_wholesale', studioId: 'trade_studio', knowledgeNamespace: 'trade' }),
+    candidate({ id: 'wrong-studio', studioId: 'leather_studio', knowledgeNamespace: 'leather' }),
+    candidate({ id: 'legacy-unscoped', industryId: '', studioId: '', knowledgeNamespace: '' }),
     candidate({ id: 'wrong-scope', scope: 'CUSTOMER' }),
     candidate({ id: 'forbidden', requiredPermissions: ['finance.read'] })
   ], context, { now });
@@ -215,12 +224,26 @@ test('brain tenant identity cannot be selected independently from the merchant t
   );
 });
 
+test('Brain context requires a complete industry namespace', () => {
+  assert.throws(
+    () => validateModaGptBrainAccessContext({ ...context, studioId: '' }),
+    /MODAGPT_BRAIN_ACCESS_CONTEXT_INVALID/
+  );
+  assert.throws(
+    () => validateModaGptBrainAccessContext({ ...context, knowledgeNamespace: 'Leather' }),
+    /MODAGPT_BRAIN_ACCESS_CONTEXT_INVALID/
+  );
+});
+
 test('Prisma Brain retrieval applies tenant and merchant filters before building agent context', async () => {
   const memoryWhere: Array<Record<string, unknown>> = [];
   const ownMemory = {
     id: 'memory-a',
     tenantId: 'merchant-a',
     merchantId: 'merchant-a',
+    industryId: context.industryId,
+    studioId: context.studioId,
+    knowledgeNamespace: context.knowledgeNamespace,
     scope: 'MERCHANT',
     content: 'Prefers seasonal dresses',
     category: 'preference',
@@ -264,8 +287,72 @@ test('Prisma Brain retrieval applies tenant and merchant filters before building
 
   assert.equal(memoryWhere[0].tenantId, 'merchant-a');
   assert.equal(memoryWhere[0].merchantId, 'merchant-a');
+  assert.equal(memoryWhere[0].industryId, context.industryId);
+  assert.equal(memoryWhere[0].studioId, context.studioId);
+  assert.equal(memoryWhere[0].knowledgeNamespace, context.knowledgeNamespace);
   assert.deepEqual(result.results.map(candidate => candidate.id), ['memory-a']);
   assert.equal(result.results[0].kind, 'memory');
+});
+
+test('service resolves namespace from the merchant registry instead of caller fields', async () => {
+  const prismaMock = {
+    merchant: {
+      findUnique: async () => ({
+        id: 'merchant-a',
+        industry: 'FASHION_COMPANY',
+        industryTemplate: 'apparel_production_wholesale'
+      })
+    }
+  } as unknown as PrismaClient;
+  const forgedInput = {
+    tenantId: 'merchant-a',
+    merchantId: 'merchant-a',
+    actorId: 'employee-a',
+    permissions: ['brain.read'] as const,
+    scopes: ['MERCHANT'] as const,
+    industryId: 'restaurant',
+    studioId: 'restaurant_studio',
+    knowledgeNamespace: 'restaurant'
+  };
+  const resolved = await new ModaGptBrainService(prismaMock).resolveMerchantAccessContext(forgedInput);
+
+  assert.equal(resolved.industryId, 'apparel_production_wholesale');
+  assert.equal(resolved.studioId, 'apparel_studio');
+  assert.equal(resolved.knowledgeNamespace, 'apparel');
+});
+
+test('service accepts the restaurant mapping and rejects unknown or inconsistent mappings', async () => {
+  const merchant = {
+    id: 'merchant-a',
+    industry: 'RESTAURANT',
+    industryTemplate: 'restaurant_ordering'
+  };
+  const prismaMock = {
+    merchant: { findUnique: async () => merchant }
+  } as unknown as PrismaClient;
+  const input = {
+    tenantId: 'merchant-a',
+    merchantId: 'merchant-a',
+    actorId: 'employee-a',
+    permissions: ['brain.read'],
+    scopes: ['MERCHANT'] as const
+  };
+
+  const restaurantContext = await new ModaGptBrainService(prismaMock).resolveMerchantAccessContext(input);
+  assert.equal(restaurantContext.industryId, 'restaurant');
+  assert.equal(restaurantContext.studioId, 'restaurant_studio');
+  assert.equal(restaurantContext.knowledgeNamespace, 'restaurant');
+
+  merchant.industryTemplate = 'not_a_registered_template';
+  await assert.rejects(
+    new ModaGptBrainService(prismaMock).resolveMerchantAccessContext(input),
+    /MODAGPT_BRAIN_INDUSTRY_UNAVAILABLE/
+  );
+  merchant.industryTemplate = 'apparel_production_wholesale';
+  await assert.rejects(
+    new ModaGptBrainService(prismaMock).resolveMerchantAccessContext(input),
+    /MODAGPT_BRAIN_INDUSTRY_UNAVAILABLE/
+  );
 });
 
 test('knowledge-only Brain retrieval does not query or rank memory and agent records', async () => {
@@ -296,6 +383,9 @@ test('Brain retrieval follows verified graph relations from tenant-matched entit
     id: 'fact-brand-product',
     tenantId: 'merchant-a',
     merchantId: 'merchant-a',
+    industryId: context.industryId,
+    studioId: context.studioId,
+    knowledgeNamespace: context.knowledgeNamespace,
     subjectEntityId: 'entity-brand',
     predicate: 'owns',
     objectEntityId: 'entity-product',
@@ -325,7 +415,14 @@ test('Brain retrieval follows verified graph relations from tenant-matched entit
     modaGptBrainEntity: {
       findMany: async (args: { where: Record<string, unknown> }) => {
         entityWhere.push(args.where);
-        return [{ id: 'entity-brand' }];
+        return [{
+          id: 'entity-brand',
+          tenantId: context.tenantId,
+          merchantId: context.merchantId,
+          industryId: context.industryId,
+          studioId: context.studioId,
+          knowledgeNamespace: context.knowledgeNamespace
+        }];
       }
     },
     modaGptBrainExperience: { findMany: async () => [] },
@@ -390,12 +487,13 @@ test('workflow experience and evaluation upserts are tenant-bound and idempotent
   const prismaMock = {
     modaGptBrainExperience: {
       upsert: async (args: {
-        where: { idempotencyKey: string };
+        where: { tenantId_industryId_studioId_knowledgeNamespace_idempotencyKey: { idempotencyKey: string } };
         create: Record<string, unknown>;
         update: Record<string, unknown>;
       }) => {
         assert.deepEqual(args.update, {});
-        const existing = experienceRows.find(row => row.idempotencyKey === args.where.idempotencyKey);
+        const key = args.where.tenantId_industryId_studioId_knowledgeNamespace_idempotencyKey.idempotencyKey;
+        const existing = experienceRows.find(row => row.idempotencyKey === key);
         if (existing) return existing;
         const row = { id: `experience-${experienceRows.length + 1}`, ...args.create };
         experienceRows.push(row);
@@ -405,12 +503,13 @@ test('workflow experience and evaluation upserts are tenant-bound and idempotent
     },
     modaGptBrainEvaluation: {
       upsert: async (args: {
-        where: { idempotencyKey: string };
+        where: { tenantId_industryId_studioId_knowledgeNamespace_idempotencyKey: { idempotencyKey: string } };
         create: Record<string, unknown>;
         update: Record<string, unknown>;
       }) => {
         assert.deepEqual(args.update, {});
-        const existing = evaluationRows.find(row => row.idempotencyKey === args.where.idempotencyKey);
+        const key = args.where.tenantId_industryId_studioId_knowledgeNamespace_idempotencyKey.idempotencyKey;
+        const existing = evaluationRows.find(row => row.idempotencyKey === key);
         if (existing) return existing;
         const row = { id: `evaluation-${evaluationRows.length + 1}`, ...args.create };
         evaluationRows.push(row);

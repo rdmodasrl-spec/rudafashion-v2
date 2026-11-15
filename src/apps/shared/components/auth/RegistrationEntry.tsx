@@ -9,8 +9,10 @@ type RegistrationPath = 'choose' | 'frontend' | 'enterprise';
 
 export const RegistrationEntry: React.FC<{ onBack?: () => void; initialPath?: RegistrationPath }> = ({ onBack, initialPath }) => {
   const { localizeCopy, setCurrentView } = useB2B();
+  const registrationType = new URLSearchParams(window.location.search).get('registration');
   const directEnterpriseRegistration = initialPath === 'enterprise'
-    || new URLSearchParams(window.location.search).get('registration') === 'enterprise';
+    || registrationType === 'enterprise'
+    || registrationType === 'merchant';
   const [registrationPath, setRegistrationPath] = useState<RegistrationPath>(
     initialPath || (directEnterpriseRegistration ? 'enterprise' : 'choose')
   );

@@ -1,0 +1,566 @@
+.page {
+  padding: 24rpx 24rpx 60rpx;
+  box-sizing: border-box;
+}
+
+.steps {
+  display: flex;
+  gap: 8rpx;
+  margin-bottom: 24rpx;
+}
+
+.step {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 14rpx 12rpx;
+  border-radius: 16rpx;
+  border: 2rpx solid #e5e5e5;
+  background: #ffffff;
+}
+
+.step-active {
+  border-color: #0a0a0a;
+  background: #0a0a0a;
+}
+
+.step-index {
+  width: 32rpx;
+  height: 32rpx;
+  line-height: 32rpx;
+  text-align: center;
+  border-radius: 999rpx;
+  background: #f5f5f5;
+  color: #525252;
+  font-size: 20rpx;
+  font-weight: 700;
+}
+
+.step-active .step-index {
+  background: #ffffff;
+  color: #0a0a0a;
+}
+
+.step-label {
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #404040;
+}
+
+.step-active .step-label {
+  color: #ffffff;
+}
+
+.card {
+  margin-bottom: 20rpx;
+  padding: 26rpx;
+  border-radius: 24rpx;
+  background: #ffffff;
+  border: 2rpx solid #e5e5e5;
+}
+
+.card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.concept-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+  min-width: 0;
+}
+
+.card-title {
+  display: block;
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #0a0a0a;
+}
+
+.card-meta {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 22rpx;
+  line-height: 34rpx;
+  color: #737373;
+}
+
+.hint {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 22rpx;
+  line-height: 34rpx;
+  color: #737373;
+}
+
+.error {
+  display: block;
+  margin-top: 12rpx;
+  padding: 16rpx 20rpx;
+  border-radius: 16rpx;
+  border: 2rpx solid #fecdd3;
+  background: #fff1f2;
+  font-size: 22rpx;
+  line-height: 34rpx;
+  color: #b91c1c;
+}
+
+.warn {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 20rpx;
+  line-height: 32rpx;
+  color: #b45309;
+}
+
+.empty {
+  margin-top: 16rpx;
+  padding: 32rpx;
+  border-radius: 20rpx;
+  border: 2rpx dashed #d4d4d4;
+  background: #fafafa;
+}
+
+.empty-title {
+  display: block;
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #171717;
+}
+
+.empty-hint {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  line-height: 34rpx;
+  color: #737373;
+}
+
+.search {
+  padding: 18rpx 22rpx;
+  border-radius: 16rpx;
+  border: 2rpx solid #d4d4d4;
+  font-size: 24rpx;
+  color: #0a0a0a;
+}
+
+.product {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-top: 14rpx;
+  padding: 16rpx;
+  border-radius: 18rpx;
+  border: 2rpx solid #e5e5e5;
+}
+
+.product-active {
+  border-color: #0a0a0a;
+  background: #fafafa;
+}
+
+.thumb {
+  width: 88rpx;
+  height: 112rpx;
+  border-radius: 14rpx;
+  background: #f5f5f5;
+  flex-shrink: 0;
+}
+
+.thumb-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18rpx;
+  color: #a3a3a3;
+  border: 2rpx dashed #d4d4d4;
+}
+
+.product-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.product-name {
+  display: block;
+  font-size: 24rpx;
+  font-weight: 700;
+  color: #0a0a0a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.product-meta {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 20rpx;
+  color: #737373;
+}
+
+.product-price {
+  flex-shrink: 0;
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #0a0a0a;
+}
+
+.facts {
+  display: flex;
+  gap: 12rpx;
+  margin-top: 16rpx;
+}
+
+.fact {
+  flex: 1;
+  padding: 16rpx 18rpx;
+  border-radius: 16rpx;
+  background: #fafafa;
+}
+
+.fact-label {
+  display: block;
+  font-size: 20rpx;
+  color: #737373;
+}
+
+.fact-value {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  font-weight: 700;
+  color: #0a0a0a;
+}
+
+.status-ready {
+  color: #047857;
+}
+
+.thumbs {
+  margin-top: 16rpx;
+  white-space: nowrap;
+}
+
+.thumb-sm {
+  display: inline-block;
+  width: 96rpx;
+  height: 128rpx;
+  margin-right: 12rpx;
+  border-radius: 14rpx;
+  background: #f5f5f5;
+}
+
+.missing {
+  margin-top: 18rpx;
+}
+
+.missing-title {
+  display: block;
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #404040;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rpx;
+  margin-top: 10rpx;
+}
+
+.chip {
+  padding: 4rpx 14rpx;
+  border-radius: 999rpx;
+  border: 2rpx solid #e5e5e5;
+  background: #fafafa;
+  font-size: 20rpx;
+  color: #525252;
+}
+
+.chip-solid {
+  border-color: #0a0a0a;
+  background: #0a0a0a;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.chip-disabled {
+  border-color: #e5e5e5;
+  background: #f5f5f5;
+  color: #a3a3a3;
+}
+
+.badge {
+  flex-shrink: 0;
+  padding: 4rpx 14rpx;
+  border-radius: 999rpx;
+  border: 2rpx solid #e5e5e5;
+  background: #fafafa;
+  font-size: 20rpx;
+  color: #525252;
+}
+
+.hook {
+  display: block;
+  margin-top: 16rpx;
+  font-size: 24rpx;
+  font-weight: 600;
+  line-height: 36rpx;
+  color: #0a0a0a;
+}
+
+.concept-active {
+  border-color: #0a0a0a;
+}
+
+.section-label {
+  display: block;
+  margin-top: 18rpx;
+  font-size: 20rpx;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #a3a3a3;
+}
+
+.line {
+  margin-top: 8rpx;
+}
+
+.line-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.line-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.line-label {
+  display: block;
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #171717;
+}
+
+.line-text {
+  display: block;
+  font-size: 22rpx;
+  line-height: 34rpx;
+  color: #525252;
+}
+
+.amount {
+  flex-shrink: 0;
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #0a0a0a;
+}
+
+.amount-warn {
+  color: #b45309;
+}
+
+.status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  margin-top: 16rpx;
+}
+
+.status {
+  font-size: 20rpx;
+  color: #737373;
+}
+
+.total {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 40rpx;
+  font-weight: 700;
+  color: #0a0a0a;
+}
+
+.quota {
+  margin-top: 18rpx;
+  padding-top: 18rpx;
+  border-top: 2rpx solid #f5f5f5;
+}
+
+.btn {
+  margin-top: 18rpx;
+  width: 100%;
+  border-radius: 16rpx;
+  font-size: 24rpx;
+  font-weight: 600;
+}
+
+.btn-primary {
+  background: #0a0a0a;
+  color: #ffffff;
+}
+
+.btn-ghost {
+  background: #ffffff;
+  color: #404040;
+  border: 2rpx solid #d4d4d4;
+}
+
+.btn-disabled {
+  background: #f5f5f5;
+  color: #a3a3a3;
+  border: 2rpx solid #e5e5e5;
+}
+
+.shot-visual {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  line-height: 36rpx;
+  color: #171717;
+}
+
+.shot-actions {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.duration-input {
+  width: 90rpx;
+  padding: 8rpx 10rpx;
+  border-radius: 12rpx;
+  border: 2rpx solid #d4d4d4;
+  font-size: 20rpx;
+  text-align: center;
+}
+
+.field {
+  margin-top: 12rpx;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 14rpx 18rpx;
+  border-radius: 14rpx;
+  border: 2rpx solid #d4d4d4;
+  font-size: 22rpx;
+  line-height: 34rpx;
+  color: #171717;
+}
+
+/* P3 收敛：技术上只保留说明样式；模式切换与专业参数下拉已从商家界面移除 */
+.page {
+  padding-bottom: 170rpx;
+}
+
+.mode-hint {
+  display: block;
+  margin-bottom: 20rpx;
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: #737373;
+}
+
+.field-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding: 14rpx 0;
+  border-bottom: 2rpx solid #f0f0f0;
+}
+
+.field-row:last-child {
+  border-bottom: none;
+}
+
+.field-label {
+  font-size: 24rpx;
+  color: #525252;
+}
+
+.picker {
+  min-width: 220rpx;
+  padding: 10rpx 18rpx;
+  border-radius: 12rpx;
+  border: 2rpx solid #e5e5e5;
+  font-size: 24rpx;
+  color: #0a0a0a;
+  text-align: center;
+}
+
+.concept-media {
+  position: relative;
+  margin-bottom: 16rpx;
+}
+
+.concept-image {
+  width: 100%;
+  height: 320rpx;
+  border-radius: 16rpx;
+  background: #f5f5f5;
+}
+
+.compare {
+  margin-top: 16rpx;
+  border-radius: 12rpx;
+  border: 2rpx solid #f0f0f0;
+  overflow: hidden;
+}
+
+.compare-row {
+  display: flex;
+  gap: 8rpx;
+  padding: 12rpx 14rpx;
+  border-bottom: 2rpx solid #f0f0f0;
+}
+
+.compare-row:last-child {
+  border-bottom: none;
+}
+
+.compare-cell {
+  flex: 1;
+  font-size: 22rpx;
+  color: #404040;
+  word-break: break-all;
+}
+
+.shot-pro {
+  margin-top: 12rpx;
+}
+
+.edit-sheet {
+  border-color: #0a0a0a;
+}
+
+.sticky-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding: 18rpx 24rpx calc(18rpx + env(safe-area-inset-bottom));
+  background: #ffffff;
+  border-top: 2rpx solid #e5e5e5;
+}
+
+.sticky-meta {
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #0a0a0a;
+}
+
+.sticky-cost {
+  font-size: 22rpx;
+  color: #737373;
+}

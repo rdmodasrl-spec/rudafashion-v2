@@ -6,9 +6,12 @@ const { clearSession, getSession } = require('../../utils/auth');
 const { recolorMaskedPixels } = require('../../utils/garment-recolor');
 const { createModaCore } = require('../../utils/moda-core');
 const { isModauiEnabled, refreshFeatureFlags } = require('../../utils/feature-flags');
+const { loadIndustryContext, getIndustryConfig } = require('../../utils/industry');
+const { inspectStudioFile, uploadStudioFile } = require('../../utils/studio-files');
 
 const context = 'dashboard';
 const scope = 'home';
+const apparelTemplateIds = new Set(['apparel_production_wholesale', 'apparel_wholesale']);
 const modes = [
   { id: 'design', title: '服装设计', description: '文字生成设计方案', icon: '/assets/icons/products.png', prompt: '帮我设计一款服装。先询问我还没有提供的关键信息，再整理成完整的设计方案。' },
   { id: 'generate', title: '图片生成', description: '生成服装图像', icon: '/assets/icons/assistant.png', prompt: '' },
@@ -100,6 +103,30 @@ function merchantTaskErrorMessage(error) {
   return `任务未能完成${code ? `（${code}）` : ''}。请检查权限和输入后重试。`;
 }
 
+function studioJobStatusLabel(status) {
+  const labels = {
+    queued: '排队中',
+    planning: '规划中',
+    running: '执行中',
+    waiting_approval: '等待确认',
+    verifying: '校验中',
+    retrying: '重试中',
+    completed: '已完成',
+    failed: '失败',
+    dead_letter: '需要处理',
+    cancelled: '已取消'
+  };
+  return labels[status] || '状态未知';
+}
+
+function studioFileSizeLabel(sizeBytes) {
+  const size = Number(sizeBytes);
+  if (!Number.isFinite(size) || size <= 0) return '';
+  return size < 1024 * 1024
+    ? `${Math.max(1, Math.ceil(size / 1024))} KB`
+    : `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function readImageDataUrl(filePath) {
   const extension = String(filePath).split('?')[0].split('.').pop().toLowerCase();
   const contentType = extension === 'png' ? 'image/png' : extension === 'webp' ? 'image/webp' : 'image/jpeg';
@@ -115,7 +142,11 @@ function readImageDataUrl(filePath) {
     },
     fail: () => reject(new Error('无法读取图片，请重新选择。'))
     });
+    void this.loadStudioProjectFiles(project.id, []);
+    void this.loadStudioProjectJobs(project.id);
   });
+  void this.loadStudioProjectFiles(project.id, Array.isArray(payload.fileIds) ? payload.fileIds : []);
+  void this.loadStudioProjectJobs(project.id);
 }
 
 function persistImageDataUrl(dataUrl) {
@@ -138,6 +169,13 @@ Page({
   data: {
     statusBarHeight: 0,
     section: 'chat',
+    industryContextLoaded: false,
+    industryChatOnly: false,
+    apparelStudioEnabled: false,
+    leatherStudioEnabled: false,
+    studioProjectsEnabled: false,
+    industryTitle: '',
+    industryPrompts: [],
     messages: [],
     input: '',
     loading: false,
@@ -196,6 +234,37 @@ Page({
     productLaunchProgress: '',
     designs: [],
     designsLoading: false,
+    studioProjects: [],
+    studioProjectsLoading: false,
+    studioProjectsSaving: false,
+    studioProjectsError: '',
+    studioProjectsNotice: '',
+    studioProjectId: '',
+    studioProjectChatProjectId: '',
+    studioProjectTitle: '',
+    studioProjectBrief: '',
+    studioProjectRevision: 0,
+    studioProjectPayload: null,
+    studioProjectConflict: false,
+    studioProjectDesigns: [],
+    studioProjectDesignOptions: [],
+    studioProjectDesignIndex: 0,
+    studioProjectDesignsLoading: false,
+    studioProjectDesignsError: '',
+    studioProjectLinkedFileIds: [],
+    studioProjectFiles: [],
+    studioProjectFilesNextCursor: null,
+    studioProjectFilesLoading: false,
+    studioProjectFilesUploading: false,
+    studioProjectRetryUploadAvailable: false,
+    studioProjectFilesError: '',
+    studioProjectFilesNotice: '',
+    studioProjectJobs: [],
+    studioProjectJobsNextCursor: null,
+    studioProjectJobsLoading: false,
+    studioProjectJobsError: '',
+    studioProjectJobDetail: null,
+    studioProjectJobDetailLoadingId: '',
     designFilter: 'all',
     designFilters: [
       { id: 'all', label: '全部' },
@@ -243,7 +312,7 @@ Page({
   },
 
   mountModaCore() {
-    if (this._modaCore || this.data.messages.length || this.data.section !== 'chat') return;
+    if (!this.data.industryContextLoaded || this.data.industryChatOnly || this._modaCore || this.data.messages.length || this.data.section !== 'chat') return;
     wx.createSelectorQuery().in(this).select('#modaui-core').fields({ node: true, size: true }).exec(result => {
       const entry = result && result[0];
       if (!entry || !entry.node || !entry.width || !entry.height || this._modaCore) return;
@@ -300,14 +369,141 @@ Page({
         return;
       }
       if (this.data.modauiBlocked) this.setData({ modauiBlocked: false });
-      if (!this.data.messages.length && this.data.section === 'chat') {
-        this.startWelcomeSequence();
-        wx.nextTick(() => this.mountModaCore());
-      }
       if (!canAccessTab(auth, 'assistant')) {
         this.setData({ error: '当前账号没有 ModaUI 访问权限。', messages: [], input: '', canSend: false });
         return;
       }
+      let industryContext;
+      let industryConfig;
+      try {
+        industryContext = await loadIndustryContext({ force: true });
+        industryConfig = getIndustryConfig(industryContext);
+        if (!industryConfig) throw new Error('行业工作台配置缺失，已停止加载行业专属助手入口。');
+        const studioResponse = await request('/api/merchant/studios');
+        const authorizedStudio = Array.isArray(studioResponse && studioResponse.studios)
+          ? studioResponse.studios.find(studio => studio && studio.industryTemplate === industryContext.templateId)
+          : null;
+        if (!authorizedStudio) throw new Error('当前行业没有可用的 AI 工作室授权。');
+      } catch (industryError) {
+        this.stopWelcomeSequence();
+        this.unmountModaCore();
+        this.setData({
+          industryContextLoaded: true,
+          industryChatOnly: true,
+          apparelStudioEnabled: false,
+          leatherStudioEnabled: false,
+          studioProjectsEnabled: false,
+          studioProjectId: '',
+          studioProjectChatProjectId: '',
+          studioProjectPayload: null,
+          studioProjectFiles: [],
+          studioProjectFilesNextCursor: null,
+          studioProjectJobs: [],
+          studioProjectJobsNextCursor: null,
+          studioProjects: [],
+          studioProjectDesignOptions: [],
+          studioProjectDesignIndex: 0,
+          section: 'chat',
+          industryTitle: '',
+          industryPrompts: [],
+          visibleHomeModes: [],
+          messages: [],
+          input: '',
+          apparelStudioEnabled: false,
+          leatherStudioEnabled: false,
+          studioProjectsEnabled: false,
+          taskMode: false,
+          taskPreview: null,
+          canSend: false,
+          error: industryError.message || '商家行业信息读取失败，请重试。'
+        });
+        return;
+      }
+      const templateId = industryContext.templateId;
+      const industryChatOnly = !apparelTemplateIds.has(templateId);
+      const templateChanged = this._industryTemplateId !== templateId;
+      const merchantChanged = this._studioProjectMerchantId !== String(industryContext.merchantId || '');
+      this._industryTemplateId = templateId;
+      this._studioProjectMerchantId = String(industryContext.merchantId || '');
+      if (industryChatOnly) {
+        this.stopWelcomeSequence();
+        this.unmountModaCore();
+      }
+      const industryUpdates = {
+        industryContextLoaded: true,
+        industryChatOnly,
+        apparelStudioEnabled: apparelTemplateIds.has(templateId),
+        leatherStudioEnabled: templateId === 'bags_wholesale',
+        studioProjectsEnabled: apparelTemplateIds.has(templateId) || templateId === 'bags_wholesale',
+        industryTitle: industryConfig.title,
+        industryPrompts: Array.isArray(industryConfig.modauiPrompts) ? industryConfig.modauiPrompts : [],
+      };
+      if (templateChanged) {
+        this._studioFilePending = null;
+        Object.assign(industryUpdates, {
+          visibleHomeModes: [],
+          activeMode: '',
+          selectedMode: null,
+          selectedDesign: null,
+          studioProjectId: '',
+          studioProjectChatProjectId: '',
+          studioProjectTitle: '',
+          studioProjectBrief: '',
+          studioProjectRevision: 0,
+          studioProjectPayload: null,
+          studioProjectConflict: false,
+          studioProjectLinkedFileIds: [],
+          studioProjectFiles: [],
+          studioProjectFilesNextCursor: null,
+          studioProjectFilesError: '',
+          studioProjectFilesNotice: '',
+          studioProjectRetryUploadAvailable: false,
+          studioProjectJobs: [],
+          studioProjectJobsNextCursor: null,
+          studioProjectJobsError: '',
+          studioProjectJobDetail: null,
+          studioProjects: [],
+          studioProjectDesignOptions: [],
+          studioProjectDesignIndex: 0,
+          studioProjectsError: '',
+          studioProjectsNotice: ''
+        });
+        if (industryChatOnly) Object.assign(industryUpdates, { section: 'chat', taskMode: false, taskPreview: null });
+      }
+      if (merchantChanged) {
+        this._studioFilePending = null;
+        Object.assign(industryUpdates, {
+          studioProjects: [],
+          studioProjectId: '',
+          studioProjectChatProjectId: '',
+          studioProjectTitle: '',
+          studioProjectBrief: '',
+          studioProjectRevision: 0,
+          studioProjectPayload: null,
+          studioProjectConflict: false,
+          studioProjectLinkedFileIds: [],
+          studioProjectFiles: [],
+          studioProjectFilesNextCursor: null,
+          studioProjectFilesError: '',
+          studioProjectFilesNotice: '',
+          studioProjectRetryUploadAvailable: false,
+          studioProjectJobs: [],
+          studioProjectJobsNextCursor: null,
+          studioProjectJobsError: '',
+          studioProjectJobDetail: null,
+          studioProjectsError: '',
+          studioProjectDesignOptions: [],
+          studioProjectDesignIndex: 0,
+          studioProjectsNotice: '',
+          section: this.data.section === 'projects' ? 'chat' : this.data.section
+        });
+      }
+      this.setData(industryUpdates, () => {
+        if (!industryChatOnly && !this.data.messages.length && this.data.section === 'chat') {
+          this.startWelcomeSequence();
+          wx.nextTick(() => this.mountModaCore());
+        }
+      });
       if (!this._initialized) {
         this._initialized = true;
         await Promise.all([this.loadEntitlements(), this.loadConversations(true)]);
@@ -408,14 +604,14 @@ Page({
   },
 
   startWelcomeSequence() {
-    if (this._welcomeTimer || this.data.messages.length || this.data.section !== 'chat') return;
+    if (!this.data.industryContextLoaded || this.data.industryChatOnly || this._welcomeTimer || this.data.messages.length || this.data.section !== 'chat') return;
     if (this._welcomeIndex >= welcomeModes.length) return;
     this.revealWelcomeMode();
   },
 
   revealWelcomeMode() {
     const index = this._welcomeIndex || 0;
-    if (index >= welcomeModes.length || this.data.messages.length || this.data.section !== 'chat') return;
+    if (!this.data.industryContextLoaded || this.data.industryChatOnly || index >= welcomeModes.length || this.data.messages.length || this.data.section !== 'chat') return;
     this._welcomeIndex = index + 1;
     this.setData({ visibleHomeModes: this.data.visibleHomeModes.concat([welcomeModes[index]]) });
     if (this._welcomeIndex < welcomeModes.length) {
@@ -573,10 +769,562 @@ Page({
 
   openSection(event) {
     const section = event.currentTarget.dataset.section;
+    if (this.data.industryChatOnly && ['create', 'designs', 'recolor'].includes(section)) return;
+    if (section === 'projects' && !this.data.studioProjectsEnabled) return;
     if (section !== 'chat') this.stopWelcomeSequence();
     this.setData({ section, menuOpen: false, historyOpen: false, toolsOpen: false, error: '' });
     if (section === 'designs') void this.loadDesigns();
+    if (section === 'projects') {
+      void this.loadStudioProjects();
+      if (!this.data.leatherStudioEnabled) void this.loadStudioProjectDesignOptions();
+    }
     if (section === 'knowledge') void this.loadKnowledgeDocuments();
+  },
+
+  async loadStudioProjects() {
+    this.setData({ studioProjectsLoading: true, studioProjectsError: '' });
+    try {
+      const templateId = this._industryTemplateId;
+      if (!templateId || !this.data.studioProjectsEnabled) throw new Error('当前行业没有可用的项目工作区。');
+      const result = await request(`/api/merchant/studio-projects?limit=50&industryTemplate=${encodeURIComponent(templateId)}`);
+      this.setData({ studioProjects: Array.isArray(result.projects) ? result.projects : [] });
+    } catch (error) {
+      this.setData({ studioProjectsError: error.message || '项目加载失败，请检查网络和商家权限后重试。' });
+    } finally {
+      this.setData({ studioProjectsLoading: false });
+    }
+  },
+
+  async loadStudioProjectDesignOptions() {
+    this.setData({ studioProjectDesignsLoading: true, studioProjectDesignsError: '' });
+    try {
+      const result = await request('/api/merchant/modagpt/designs?category=all');
+      this.setData({
+        studioProjectDesignOptions: [{ id: '', title: '请选择作品' }].concat(
+          Array.isArray(result.designs) ? result.designs : []
+        )
+      });
+    } catch (error) {
+      this.setData({ studioProjectDesignsError: error.message || '作品库加载失败，请重试。' });
+    } finally {
+      this.setData({ studioProjectDesignsLoading: false });
+    }
+  },
+
+  async loadStudioProjectFiles(projectId = this.data.studioProjectId, linkedFileIds = this.data.studioProjectLinkedFileIds, cursor = null, append = false) {
+    if (!projectId) return;
+    this.setData({ studioProjectFilesLoading: true, studioProjectFilesError: '' });
+    try {
+      const query = `limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
+      const result = await request(`/api/merchant/studio-projects/${encodeURIComponent(projectId)}/files?${query}`);
+      const linkedIds = Array.isArray(linkedFileIds) ? linkedFileIds : [];
+      this.setData({
+        studioProjectFiles: (append ? this.data.studioProjectFiles : []).concat((Array.isArray(result.files) ? result.files : []).map(file =>
+          Object.assign({}, file, {
+            linked: linkedIds.includes(file.id),
+            sizeLabel: studioFileSizeLabel(file.sizeBytes)
+          })
+        )),
+        studioProjectFilesNextCursor: result.nextCursor || null
+      });
+    } catch (error) {
+      this.setData({ studioProjectFilesError: error.message || '项目文件读取失败，请重试。' });
+    } finally {
+      this.setData({ studioProjectFilesLoading: false });
+    }
+  },
+
+  async refreshStudioProjectFiles() {
+    await this.loadStudioProjectFiles();
+  },
+
+  async loadMoreStudioProjectFiles() {
+    if (this.data.studioProjectFilesLoading || !this.data.studioProjectFilesNextCursor) return;
+    await this.loadStudioProjectFiles(
+      this.data.studioProjectId,
+      this.data.studioProjectLinkedFileIds,
+      this.data.studioProjectFilesNextCursor,
+      true
+    );
+  },
+
+  async loadStudioProjectJobs(projectId = this.data.studioProjectId, cursor = null, append = false) {
+    if (!projectId) return;
+    this.setData({ studioProjectJobsLoading: true, studioProjectJobsError: '' });
+    try {
+      const query = `limit=50${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
+      const result = await request(`/api/merchant/studio-projects/${encodeURIComponent(projectId)}/jobs?${query}`);
+      this.setData({
+        studioProjectJobs: (append ? this.data.studioProjectJobs : []).concat((Array.isArray(result.jobs) ? result.jobs : []).map(job =>
+          Object.assign({}, job, { statusLabel: studioJobStatusLabel(job.status) })
+        )),
+        studioProjectJobsNextCursor: result.nextCursor || null,
+        studioProjectJobDetail: append ? this.data.studioProjectJobDetail : null
+      });
+    } catch (error) {
+      this.setData({ studioProjectJobsError: error.message || 'AI 任务读取失败，请重试。' });
+    } finally {
+      this.setData({ studioProjectJobsLoading: false });
+    }
+  },
+
+  createStudioProject() {
+    if (!this.data.studioProjectsEnabled || this.data.studioProjectsSaving
+      || this.data.studioProjectFilesUploading || this.data.studioProjectRetryUploadAvailable) return;
+    const title = this.data.leatherStudioEnabled ? '未命名皮具项目' : '未命名服装项目';
+    const payload = {
+      schemaVersion: 1,
+      brief: this.data.input || '',
+      capability: this.data.activeMode || null
+    };
+    const fingerprint = JSON.stringify({ title, payload });
+    if (this._studioProjectPendingFingerprint !== fingerprint) {
+      this._studioProjectPendingFingerprint = fingerprint;
+      this._studioProjectPendingKey = makeRequestKey('apparel-project');
+    }
+    this.setData({ studioProjectsSaving: true, studioProjectsError: '', studioProjectsNotice: '' });
+    request('/api/merchant/studio-projects', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': this._studioProjectPendingKey },
+      data: { title, payload, industryTemplate: this._industryTemplateId }
+    }).then(result => {
+      const project = result.project;
+      if (!project || typeof project.id !== 'string') throw new Error('项目服务返回的数据无效，请重试。');
+      this._studioFilePending = null;
+      this._studioProjectPendingFingerprint = '';
+      this._studioProjectPendingKey = '';
+      this.setData({
+        studioProjectId: project.id,
+        studioProjectChatProjectId: '',
+        studioProjectTitle: project.title,
+        studioProjectBrief: typeof project.payload?.brief === 'string' ? project.payload.brief : '',
+        studioProjectRevision: project.revision,
+        studioProjectPayload: project.payload && typeof project.payload === 'object' ? project.payload : payload,
+        studioProjectDesigns: Array.isArray(project.payload?.linkedDesigns) ? project.payload.linkedDesigns : [],
+        studioProjectLinkedFileIds: Array.isArray(project.payload?.fileIds) ? project.payload.fileIds : [],
+        studioProjectFiles: [],
+        studioProjectFilesNextCursor: null,
+        studioProjectFilesError: '',
+        studioProjectFilesNotice: '',
+        studioProjectRetryUploadAvailable: false,
+        studioProjectJobs: [],
+        studioProjectJobsNextCursor: null,
+        studioProjectJobsError: '',
+        studioProjectDesignIndex: 0,
+        studioProjectConflict: false,
+        studioProjects: [project].concat(this.data.studioProjects.filter(item => item.id !== project.id)),
+        studioProjectsNotice: '项目已创建，可在已授权的商家端继续查看。'
+      });
+    }).catch(error => {
+      this.setData({ studioProjectsError: error.message || '项目创建失败；可使用相同内容重试。' });
+    }).finally(() => {
+      this.setData({ studioProjectsSaving: false });
+    });
+  },
+
+  async openStudioProject(event) {
+    const projectId = event.currentTarget.dataset.id;
+    if (!projectId || this.data.studioProjectFilesUploading || this.data.studioProjectRetryUploadAvailable) return;
+    this.setData({ studioProjectsLoading: true, studioProjectsError: '', studioProjectsNotice: '' });
+    try {
+      const result = await request(`/api/merchant/studio-projects/${encodeURIComponent(projectId)}?industryTemplate=${encodeURIComponent(this._industryTemplateId)}`);
+      const project = result.project;
+      if (!project || typeof project.id !== 'string') throw new Error('项目服务返回的数据无效，请重试。');
+      this._studioFilePending = null;
+      const payload = project.payload && typeof project.payload === 'object' ? project.payload : {};
+      this.setData({
+        studioProjectId: project.id,
+        studioProjectChatProjectId: '',
+        studioProjectTitle: project.title,
+        studioProjectBrief: typeof payload.brief === 'string' ? payload.brief : '',
+        studioProjectRevision: project.revision,
+        studioProjectPayload: payload,
+        studioProjectDesigns: Array.isArray(payload.linkedDesigns) ? payload.linkedDesigns : [],
+        studioProjectLinkedFileIds: Array.isArray(payload.fileIds) ? payload.fileIds : [],
+        studioProjectFiles: [],
+        studioProjectFilesNextCursor: null,
+        studioProjectFilesError: '',
+        studioProjectFilesNotice: '',
+        studioProjectRetryUploadAvailable: false,
+        studioProjectJobs: [],
+        studioProjectJobsNextCursor: null,
+        studioProjectJobsError: '',
+        studioProjectDesignIndex: 0,
+        studioProjectConflict: false,
+        section: 'projects',
+        studioProjects: [project].concat(this.data.studioProjects.filter(item => item.id !== project.id)),
+        studioProjectsNotice: ''
+      });
+    } catch (error) {
+      this.setData({ studioProjectsError: error.message || '项目打开失败，请重试。' });
+    } finally {
+      this.setData({ studioProjectsLoading: false });
+    }
+  },
+
+  onStudioProjectTitleInput(event) {
+    this.setData({ studioProjectTitle: event.detail.value || '' });
+  },
+
+  onStudioProjectBriefInput(event) {
+    this.setData({ studioProjectBrief: event.detail.value || '' });
+  },
+
+  onStudioProjectDesignPickerChange(event) {
+    this.setData({ studioProjectDesignIndex: Number(event.detail.value) || 0 });
+  },
+
+  addStudioProjectDesign() {
+    const projectId = this.data.studioProjectId;
+    const design = this.data.studioProjectDesignOptions[this.data.studioProjectDesignIndex];
+    if (!projectId || !design || !design.id) {
+      this.setData({ studioProjectsError: '请先打开或新建项目，并选择一个作品。' });
+      return;
+    }
+    const linkedDesigns = Array.isArray(this.data.studioProjectDesigns) ? this.data.studioProjectDesigns : [];
+    if (linkedDesigns.some(item => item.designId === design.id)) {
+      this.setData({ studioProjectsNotice: '该作品已关联到项目。' });
+      return;
+    }
+    if (linkedDesigns.length >= 50) {
+      this.setData({ studioProjectsError: '每个项目最多关联 50 个作品。' });
+      return;
+    }
+    this.setData({
+      studioProjectDesigns: linkedDesigns.concat([{
+        designId: design.id,
+        title: design.title,
+        category: design.category
+      }]),
+      studioProjectsError: '',
+      studioProjectsNotice: '作品已加入待保存内容；保存新版本后将在其他商家端同步。'
+    });
+  },
+
+  removeStudioProjectDesign(event) {
+    const designId = event.currentTarget.dataset.id;
+    this.setData({
+      studioProjectDesigns: this.data.studioProjectDesigns.filter(item => item.designId !== designId)
+    });
+  },
+
+  chooseStudioProjectImage() {
+    if (!this.data.studioProjectId || this.data.studioProjectFilesUploading) return;
+    wx.chooseMedia({
+      count: 1,
+      mediaType: ['image'],
+      sourceType: ['album', 'camera'],
+      success: result => {
+        const file = result.tempFiles && result.tempFiles[0];
+        if (!file) return;
+        const filePath = file.tempFilePath || '';
+        const fileName = filePath.split('/').pop() || '';
+        void this.uploadStudioProjectFile({ name: fileName, path: filePath, size: file.size });
+      },
+      fail: error => {
+        if (!String(error && error.errMsg || '').includes('cancel')) {
+          this.setData({ studioProjectFilesError: '无法选择图片，请检查微信相册权限后重试。' });
+        }
+      }
+    });
+  },
+
+  chooseStudioProjectFile() {
+    if (!this.data.studioProjectId || this.data.studioProjectFilesUploading) return;
+    wx.chooseMessageFile({
+      count: 1,
+      type: 'file',
+      extension: ['pdf', 'dxf', 'glb'],
+      success: result => {
+        const file = result.tempFiles && result.tempFiles[0];
+        if (!file) return;
+        void this.uploadStudioProjectFile({
+          name: file.name,
+          path: file.path || file.tempFilePath,
+          size: file.size
+        });
+      },
+      fail: error => {
+        if (!String(error && error.errMsg || '').includes('cancel')) {
+          this.setData({ studioProjectFilesError: '无法选择文件，请重试。' });
+        }
+      }
+    });
+  },
+
+  async uploadStudioProjectFile(file, retry = false) {
+    const projectId = this.data.studioProjectId;
+    if (!projectId || this.data.studioProjectFilesUploading) return;
+    if ((this.data.studioProjectLinkedFileIds || []).length >= 100) {
+      this.setData({ studioProjectFilesError: '每个项目版本最多关联 100 个文件。' });
+      return;
+    }
+    let metadata;
+    try {
+      metadata = inspectStudioFile(file);
+    } catch (error) {
+      this.setData({ studioProjectFilesError: error.message || '所选文件不符合上传要求。' });
+      return;
+    }
+    if (!file.path) {
+      this.setData({ studioProjectFilesError: '无法读取所选文件，请重新选择。' });
+      return;
+    }
+    if (!retry || !this._studioFilePending || this._studioFilePending.projectId !== projectId) {
+      this._studioFilePending = {
+        projectId,
+        file,
+        metadata,
+        requestKey: makeRequestKey('studio-file')
+      };
+    }
+    const pending = this._studioFilePending;
+    this.setData({
+      studioProjectFilesUploading: true,
+      studioProjectRetryUploadAvailable: false,
+      studioProjectFilesError: '',
+      studioProjectFilesNotice: ''
+    });
+    try {
+      const initialized = await request(`/api/merchant/studio-projects/${encodeURIComponent(projectId)}/files`, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': pending.requestKey },
+        data: pending.metadata
+      });
+      if (initialized.file.status !== 'ready') {
+        if (!initialized.uploadUrl) throw new Error('上传地址不可用，请重新选择文件后重试。');
+        await uploadStudioFile(initialized.uploadUrl, pending.file.path, pending.metadata.contentType);
+        await request(`/api/merchant/studio-files/${encodeURIComponent(initialized.file.id)}/complete`, {
+          method: 'POST',
+          data: {}
+        });
+      }
+      const linkedIds = Array.from(new Set((this.data.studioProjectLinkedFileIds || []).concat(initialized.file.id)));
+      this._studioFilePending = null;
+      this.setData({
+        studioProjectLinkedFileIds: linkedIds,
+        studioProjectRetryUploadAvailable: false,
+        studioProjectFilesNotice: '文件已私有保存；保存新版本后才会写入项目版本。',
+        studioProjectFilesError: ''
+      });
+      await this.loadStudioProjectFiles(projectId, linkedIds);
+    } catch (error) {
+      this.setData({
+        studioProjectRetryUploadAvailable: Boolean(this._studioFilePending),
+        studioProjectFilesError: error.message || '文件上传失败，可重试当前文件。'
+      });
+    } finally {
+      this.setData({ studioProjectFilesUploading: false });
+    }
+  },
+
+  toggleStudioProjectFile(event) {
+    const fileId = event.currentTarget.dataset.id;
+    if (!fileId || this.data.studioProjectsSaving || this.data.studioProjectConflict) return;
+    const current = this.data.studioProjectLinkedFileIds || [];
+    if (current.includes(fileId)) {
+      const studioProjectLinkedFileIds = current.filter(id => id !== fileId);
+      this.setData({
+        studioProjectLinkedFileIds,
+        studioProjectFiles: this.data.studioProjectFiles.map(file =>
+          Object.assign({}, file, { linked: studioProjectLinkedFileIds.includes(file.id) })
+        )
+      });
+      return;
+    }
+    if (current.length >= 100) {
+      this.setData({ studioProjectFilesError: '每个项目版本最多关联 100 个文件。' });
+      return;
+    }
+    const studioProjectLinkedFileIds = current.concat(fileId);
+    this.setData({
+      studioProjectLinkedFileIds,
+      studioProjectFiles: this.data.studioProjectFiles.map(file =>
+        Object.assign({}, file, { linked: studioProjectLinkedFileIds.includes(file.id) })
+      ),
+      studioProjectFilesError: ''
+    });
+  },
+
+  async downloadStudioProjectFile(event) {
+    const fileId = event.currentTarget.dataset.id;
+    const file = this.data.studioProjectFiles.find(item => item.id === fileId);
+    if (!fileId || !file) return;
+    try {
+      const result = await request(`/api/merchant/studio-files/${encodeURIComponent(fileId)}/download`);
+      wx.downloadFile({
+        url: result.url,
+        success: download => {
+          if (download.statusCode < 200 || download.statusCode >= 300) {
+            this.setData({ studioProjectFilesError: `文件下载失败（${download.statusCode}）。` });
+            return;
+          }
+          if (file.contentType.startsWith('image/')) {
+            wx.previewImage({ urls: [download.tempFilePath] });
+          } else if (file.contentType === 'application/pdf') {
+            wx.openDocument({
+              filePath: download.tempFilePath,
+              fileType: 'pdf',
+              showMenu: true,
+              fail: () => this.setData({ studioProjectFilesError: 'PDF 无法打开，请检查微信文件权限。' })
+            });
+          } else {
+            this.setData({ studioProjectFilesNotice: '工程文件已下载到临时目录；请在电脑工作站打开 DXF 或 GLB。' });
+          }
+        },
+        fail: () => this.setData({ studioProjectFilesError: '文件下载失败，请检查网络和微信下载域名配置。' })
+      });
+    } catch (error) {
+      this.setData({ studioProjectFilesError: error.message || '文件下载失败，请重试。' });
+    }
+  },
+
+  async refreshStudioProjectJobs() {
+    await this.loadStudioProjectJobs();
+  },
+
+  async loadMoreStudioProjectJobs() {
+    if (this.data.studioProjectJobsLoading || !this.data.studioProjectJobsNextCursor) return;
+    await this.loadStudioProjectJobs(
+      this.data.studioProjectId,
+      this.data.studioProjectJobsNextCursor,
+      true
+    );
+  },
+
+  async toggleStudioProjectJobDetail(event) {
+    const jobId = event.currentTarget.dataset.id;
+    if (!jobId || this.data.studioProjectJobDetailLoadingId) return;
+    if (this.data.studioProjectJobDetail?.jobId === jobId) {
+      this.setData({ studioProjectJobDetail: null });
+      return;
+    }
+    this.setData({ studioProjectJobDetailLoadingId: jobId, studioProjectJobsError: '' });
+    try {
+      const result = await request(`/api/merchant/modagpt/task/${encodeURIComponent(jobId)}`);
+      this.setData({
+        studioProjectJobDetail: {
+          jobId,
+          runtimeStatus: typeof result.runtimeStatus === 'string' ? studioJobStatusLabel(result.runtimeStatus) : '状态未知',
+          summary: typeof result.summary === 'string' ? result.summary : '',
+          approvalId: typeof result.approvalId === 'string' ? result.approvalId : '',
+          errors: Array.isArray(result.errors) ? result.errors.filter(item => typeof item === 'string') : []
+        }
+      });
+    } catch (error) {
+      this.setData({ studioProjectJobsError: error.message || 'AI 任务详情读取失败，请重试。' });
+    } finally {
+      this.setData({ studioProjectJobDetailLoadingId: '' });
+    }
+  },
+
+  async retryStudioProjectFile() {
+    if (!this._studioFilePending) return;
+    await this.uploadStudioProjectFile(this._studioFilePending.file, true);
+  },
+
+  discardStudioProjectFile() {
+    this._studioFilePending = null;
+    this.setData({
+      studioProjectRetryUploadAvailable: false,
+      studioProjectFilesError: '',
+      studioProjectFilesNotice: '已放弃当前文件上传，可以重新选择文件。'
+    });
+  },
+
+  async saveStudioProject() {
+    const projectId = this.data.studioProjectId;
+    if (!projectId || this.data.studioProjectsSaving || this.data.studioProjectConflict) return;
+    const title = String(this.data.studioProjectTitle || '').trim();
+    if (!title) {
+      this.setData({ studioProjectsError: '请填写项目名称。' });
+      return;
+    }
+    const payload = Object.assign({}, this.data.studioProjectPayload || {}, {
+      schemaVersion: 1,
+      brief: this.data.studioProjectBrief || '',
+      linkedDesigns: Array.isArray(this.data.studioProjectDesigns) ? this.data.studioProjectDesigns : [],
+      fileIds: Array.isArray(this.data.studioProjectLinkedFileIds) ? this.data.studioProjectLinkedFileIds : [],
+      capability: this.data.studioProjectPayload && typeof this.data.studioProjectPayload.capability === 'string'
+        ? this.data.studioProjectPayload.capability
+        : null
+    });
+    this.setData({ studioProjectsSaving: true, studioProjectsError: '', studioProjectsNotice: '' });
+    try {
+      const result = await request(`/api/merchant/studio-projects/${encodeURIComponent(projectId)}`, {
+        method: 'PUT',
+        data: {
+          title,
+          payload,
+          expectedRevision: this.data.studioProjectRevision,
+          industryTemplate: this._industryTemplateId
+        }
+      });
+      const updated = result.project;
+      if (!updated || updated.id !== projectId || !Number.isSafeInteger(updated.revision)) {
+        throw new Error('项目保存结果无效，请重新载入项目确认状态。');
+      }
+      this.setData({
+        studioProjectTitle: updated.title,
+        studioProjectRevision: updated.revision,
+        studioProjectPayload: updated.payload,
+        studioProjectDesigns: Array.isArray(updated.payload?.linkedDesigns) ? updated.payload.linkedDesigns : [],
+        studioProjectLinkedFileIds: Array.isArray(updated.payload?.fileIds) ? updated.payload.fileIds : [],
+        studioProjects: [updated].concat(this.data.studioProjects.filter(item => item.id !== updated.id)),
+        studioProjectsNotice: `项目已保存为版本 ${updated.revision}，其他端可使用同一项目 ID 打开。`
+      });
+    } catch (error) {
+      if (error.status === 409) {
+        this.setData({
+          studioProjectConflict: true,
+          studioProjectsError: '项目已在其他设备更新。当前内容未覆盖服务器版本；请载入最新版本后继续。'
+        });
+      } else {
+        this.setData({ studioProjectsError: error.message || '项目保存失败，请检查网络后重试。' });
+      }
+    } finally {
+      this.setData({ studioProjectsSaving: false });
+    }
+  },
+
+  async loadLatestStudioProject() {
+    const projectId = this.data.studioProjectId;
+    if (!projectId) return;
+    this.setData({ studioProjectsLoading: true, studioProjectsError: '' });
+    try {
+      const result = await request(`/api/merchant/studio-projects/${encodeURIComponent(projectId)}?industryTemplate=${encodeURIComponent(this._industryTemplateId)}`);
+      const project = result.project;
+      if (!project || project.id !== projectId) throw new Error('最新项目版本无法读取，请稍后重试。');
+      const payload = project.payload && typeof project.payload === 'object' ? project.payload : {};
+      this.setData({
+        studioProjectTitle: project.title,
+        studioProjectBrief: typeof payload.brief === 'string' ? payload.brief : '',
+        studioProjectRevision: project.revision,
+        studioProjectPayload: payload,
+        studioProjectDesigns: Array.isArray(payload.linkedDesigns) ? payload.linkedDesigns : [],
+        studioProjectLinkedFileIds: Array.isArray(payload.fileIds) ? payload.fileIds : [],
+        studioProjectConflict: false,
+        studioProjects: [project].concat(this.data.studioProjects.filter(item => item.id !== project.id)),
+        studioProjectsNotice: '已载入服务器最新版本，未保存的本地修改已被替换。'
+      });
+      void this.loadStudioProjectFiles(project.id, Array.isArray(payload.fileIds) ? payload.fileIds : []);
+      void this.loadStudioProjectJobs(project.id);
+    } catch (error) {
+      this.setData({ studioProjectsError: error.message || '最新版本加载失败，请重试。' });
+    } finally {
+      this.setData({ studioProjectsLoading: false });
+    }
+  },
+
+  openStudioBriefInChat() {
+    this.setData({
+      section: 'chat',
+      studioProjectChatProjectId: this.data.studioProjectId,
+      input: this.data.studioProjectBrief,
+      canSend: Boolean(String(this.data.studioProjectBrief || '').trim()),
+      activeMode: typeof this.data.studioProjectPayload?.capability === 'string' ? this.data.studioProjectPayload.capability : '',
+      studioProjectsNotice: '项目简报已载入对话；发送前请检查内容和所需素材。'
+    });
   },
 
   async loadKnowledgeDocuments() {
@@ -722,6 +1470,7 @@ Page({
   },
 
   selectMode(event) {
+    if (this.data.industryChatOnly) return;
     const mode = modes.find(item => item.id === event.currentTarget.dataset.mode);
     if (!mode) return;
     if (mode.id === 'fashionVideo') {
@@ -776,12 +1525,19 @@ Page({
   },
 
   toggleTaskMode() {
+    this.applyTaskMode(!this.data.taskMode);
+  },
+
+  setTaskMode(event) {
+    this.applyTaskMode(event.currentTarget.dataset.mode === 'task');
+  },
+
+  applyTaskMode(enabled) {
     if (this.data.loading) return;
     if (this._pendingTaskRequestKey) {
       this.setData({ error: '提交结果尚未确认，请使用同一请求重试，避免重复采购。' });
       return;
     }
-    const enabled = !this.data.taskMode;
     const previousMessage = this.data.taskPreview && this.data.taskPreview.message || '';
     this.setData({
       taskMode: enabled,
@@ -958,7 +1714,8 @@ Page({
         data: {
           message: preview.message,
           conversationId: this._conversationId || undefined,
-          inputs
+            projectId: this.data.studioProjectChatProjectId || undefined,
+            inputs
         }
       });
       if (!created || typeof created.taskId !== 'string' || !created.taskId) {
@@ -1380,7 +2137,7 @@ Page({
           }
         });
         if (!result.imageDataUrl && !result.imageUrl) throw new Error('图片生成服务没有返回结果。');
-        await this.addGeneratedImage(result.imageDataUrl || result.imageUrl, `设计概念图 ${index + 1}/${count}，请核对后决定是否保存。`, 'imageGeneration');
+        await this.addGeneratedImage(result.imageDataUrl || result.imageUrl, `AI 创作概念图 ${index + 1}/${count}（非实物实拍），请核对后决定是否保存。`, 'imageGeneration');
         completed = index + 1;
         this.setData({ productLaunchProgress: `正在生成概念图 ${completed}/${count}` });
         if (result.quota) this.updateRemaining('imageGeneration', result.quota.remaining);
@@ -1442,7 +2199,7 @@ Page({
       this._pendingChatRequestKey = '';
       const imageUrl = response.imageDataUrl || response.imageUrl;
       if (!imageUrl) throw new Error('图片生成服务没有返回结果，请稍后重试。');
-      await this.addGeneratedImage(imageUrl, mode === 'tryon' ? '这是本次 AI 虚拟试衣效果图。' : '这是生成的服装创意图。', mode === 'tryon' ? 'tryOn' : 'imageGeneration');
+      await this.addGeneratedImage(imageUrl, mode === 'tryon' ? '这是本次 AI 虚拟试衣效果图。' : '这是 AI 创作概念图（非实物实拍），请核对细节后再保存。', mode === 'tryon' ? 'tryOn' : 'imageGeneration');
       this.setData({ personPath: '', garmentPath: '', personImage: '', garmentImage: '', consent: false });
       if (response.quota) this.updateRemaining(mode === 'tryon' ? 'tryOn' : 'imageGeneration', response.quota.remaining);
     } else {
@@ -1501,7 +2258,7 @@ Page({
               }
             });
             if (!imageResult.imageDataUrl && !imageResult.imageUrl) throw new Error('图片生成服务没有返回结果。');
-            await this.addGeneratedImage(imageResult.imageDataUrl || imageResult.imageUrl, `商品上新视觉图 ${index + 1}/${count}，请检查后手动保存。`, 'imageGeneration');
+            await this.addGeneratedImage(imageResult.imageDataUrl || imageResult.imageUrl, `商品上新 AI 创作概念图 ${index + 1}/${count}（非实物实拍），请检查后手动保存。`, 'imageGeneration');
             completed = index + 1;
             this.setData({ productLaunchProgress: `正在生成商品图片 ${completed}/${count}` });
             if (imageResult.quota) this.updateRemaining('imageGeneration', imageResult.quota.remaining);
@@ -1756,7 +2513,13 @@ Page({
   usePrompt(event) {
     const prompt = event.currentTarget.dataset.prompt;
     if (prompt) {
-    this.setData({ input: prompt, canSend: true }, () => this.sendMessage());
+      this.setData({
+        input: prompt,
+        canSend: true,
+        taskMode: this.data.industryChatOnly ? true : this.data.taskMode,
+        toolsOpen: false,
+        error: ''
+      });
     }
   }
 });

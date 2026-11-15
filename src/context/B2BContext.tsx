@@ -4064,7 +4064,7 @@ export const B2BProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         password,
         storeName,
         verificationToken,
-        industry,
+        industryTemplate: industry,
         salesChannels
       });
       if (result.applicationId || result.applicationNo || result.merchantLoginAvailable === false) {

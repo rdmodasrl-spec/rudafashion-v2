@@ -12,6 +12,7 @@ function source(relativePath: string) {
 }
 
 const mobile = source('src/apps/merchant-admin-mobile/MerchantMobileApp.tsx');
+const modauiEntry = source('src/apps/merchant-admin-common/components/merchant/ModaUIEntry.tsx');
 const messageCenter = source('src/apps/merchant-admin-common/components/merchant/MerchantMessageCenter.tsx');
 const notifications = source('src/apps/merchant-admin-common/components/merchant/merchantNotifications.ts');
 const bell = source('src/apps/merchant-admin-common/components/merchant/MerchantNotificationBell.tsx');
@@ -58,17 +59,21 @@ test('消息中心覆盖系统、订单、库存分类并保留全部/未读/待
   assert.match(messageCenter, /role="dialog"[\s\S]*?aria-modal="true"/, '消息中心为可关闭的全屏对话框');
 });
 
-test('底部导航为五项且 ModaUI 位于中间并渲染统一单页工作台', () => {
+test('底部导航为五项且 AI 工作室位于中间并按行业路由到现有工作区', () => {
   assert.deepEqual(merchantMobilePrimaryTabs.map(tab => tab.id), ['dashboard', 'products', 'ai_home', 'orders', 'more']);
-  assert.equal(merchantMobilePrimaryTabs[2]!.zh, 'ModaUI');
+  assert.equal(merchantMobilePrimaryTabs[2]!.zh, 'AI工作室');
   assert.equal(merchantMobileMoreGroups.flatMap(group => group.items.map(item => item.id)).includes('ai_home' as never), false, '更多页不再重复 AI 入口');
   assert.match(mobile, /<div className="grid grid-cols-5 gap-1">/, '底栏渲染 5 个入口');
   assert.match(mobile, /id="merchant-bottom-navigation"[\s\S]{0,900}aria-hidden=\{activeTab === 'ai_home' \? true : undefined\}/, 'AI 页默认隐藏底部导航并同步无障碍状态');
   assert.doesNotMatch(mobile, /aiNavigationOpen/, '不再保留旧 AI 首页的导航开关与拖柄');
   assert.doesNotMatch(mobile, /bottomNavigation=\{\{ open: aiNavigationOpen/, '工作台不再复用旧 AI 首页的拖柄导航');
   assert.doesNotMatch(mobile, /onComposerFocus=\{\(\) => setAiNavigationOpen\(false\)\}/, '工作台不再把键盘状态塞给旧首页');
-  assert.match(mobile, /\{activeTab === 'ai_home' && \([\s\S]{0,900}<ModaUIWorkbench/, 'ModaUI 页渲染统一单页工作台');
-  assert.match(mobile, /import\('\.\.\/merchant-admin-common\/components\/merchant\/modaui\/ModaUIWorkbench'\)/, '手机端复用同一工作台，而不是旧 AI 首页');
+  assert.match(mobile, /\{activeTab === 'ai_home' && \([\s\S]{0,900}<ModaUIEntry/, 'ModaUI 页使用唯一行业入口');
+  assert.match(mobile, /import\('\.\.\/merchant-admin-common\/components\/merchant\/ModaUIEntry'\)/, '手机端加载共享行业入口');
+  assert.match(modauiEntry, /<ModaUIWorkbench/, '服装行业继续使用原有创作工作台');
+  assert.match(modauiEntry, /<MerchantAiHome/, '其他行业复用现有 AI 聊天工作区');
+  assert.match(modauiEntry, /shouldUseModaUIIndustryChat/, '工作区选择由行业模板路由');
+  assert.match(modauiEntry, /industryChatOnly/, '行业聊天不展示服装创作入口');
   assert.equal(readdirSync(path.join(root, 'src/apps/merchant-admin-mobile')).some(file => /ModaUiHome|ModaUIHome|AiHomePage/.test(file)), false, '未新增第二套 AI 页面');
   assert.match(mobile, /setActiveTab\(copilotOriginTabRef\.current \|\| 'dashboard'\)/, 'AI 页返回进入前的页签');
 });

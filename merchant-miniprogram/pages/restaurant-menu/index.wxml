@@ -1,0 +1,217 @@
+<view class="screen restaurant-menu-screen">
+  <view class="restaurant-menu-heading">
+    <view>
+      <text class="page-title">菜单管理</text>
+      <text class="page-note">维护菜品与菜单草稿；POS 收银、厨房出单和顾客点单尚未开放。</text>
+    </view>
+    <button class="secondary-button refresh-button" loading="{{loading}}" bindtap="retry">刷新</button>
+  </view>
+
+  <view wx:if="{{error}}" class="error-box" role="alert">{{error}}</view>
+  <view wx:if="{{notice}}" class="notice-box" role="status">{{notice}}</view>
+  <view wx:if="{{procurementError}}" class="error-box" role="alert">{{procurementError}}</view>
+  <view wx:if="{{procurementNotice}}" class="notice-box" role="status">{{procurementNotice}}</view>
+  <view wx:if="{{loading}}" class="empty-state">正在读取菜单…</view>
+
+  <view wx:if="{{showProcurement}}" class="ruda-card procurement-panel">
+    <view class="detail-heading">
+      <view>
+        <text class="section-title">原料采购与实收</text>
+        <text class="item-meta">按实际到货数量和发票单价收货；成本只读取已保存的收货记录。</text>
+      </view>
+      <button class="secondary-button" loading="{{procurementLoading}}" disabled="{{procurementLoading}}" bindtap="loadProcurement">刷新</button>
+    </view>
+    <view wx:if="{{procurementLoading}}" class="empty-state">正在读取供应商和采购记录…</view>
+    <view wx:if="{{!procurementLoading && !activeSuppliers.length}}" class="empty-state">尚无有效供应商。请先在现有供应商管理中创建并启用供应商。</view>
+
+    <view wx:if="{{!procurementLoading && activeSuppliers.length}}" class="quick-form">
+      <text class="section-title">新建采购草稿</text>
+      <picker range="{{activeSuppliers}}" range-key="name" value="{{purchaseSupplierIndex}}" bindchange="onPurchaseSupplierChange">
+        <view class="picker-input">{{purchaseSupplierId ? activeSuppliers[purchaseSupplierIndex].name : '选择供应商'}}</view>
+      </picker>
+      <input class="input" value="{{purchaseCurrency}}" placeholder="币种（如 EUR）" maxlength="3" bindinput="onPurchaseCurrencyInput" />
+      <input class="input" value="{{purchaseNotes}}" placeholder="采购备注" maxlength="2000" bindinput="onPurchaseNotesInput" />
+      <view wx:for="{{purchaseItems}}" wx:key="index" class="recipe-edit-row">
+        <picker range="{{ingredients}}" range-key="pickerName" value="{{item.ingredientIndex}}" bindchange="onPurchaseIngredientChange" data-index="{{index}}">
+          <view class="picker-input">{{item.ingredientId ? ingredients[item.ingredientIndex].pickerName : '选择原料'}}</view>
+        </picker>
+        <input class="input recipe-quantity" type="digit" value="{{item.orderedQuantity}}" placeholder="订购数量" bindinput="onPurchaseItemInput" data-index="{{index}}" data-field="orderedQuantity" />
+        <input class="input recipe-quantity" type="digit" value="{{item.quotedUnitCost}}" placeholder="报价/单位" bindinput="onPurchaseItemInput" data-index="{{index}}" data-field="quotedUnitCost" />
+        <button class="secondary-button" disabled="{{purchaseItems.length <= 1}}" bindtap="removePurchaseItem" data-index="{{index}}">移除</button>
+      </view>
+      <button class="secondary-button form-button" disabled="{{purchaseItems.length >= 100}}" bindtap="addPurchaseItem">添加原料项</button>
+      <button class="primary-button form-button" loading="{{busy}}" disabled="{{busy || !ingredients.length}}" bindtap="submitPurchaseOrder">保存采购草稿</button>
+    </view>
+
+    <view wx:if="{{!purchaseOrders.length && !procurementLoading}}" class="empty-state">还没有餐饮采购记录。保存草稿后，确认提交并在到货时登记实收。</view>
+    <view wx:for="{{purchaseOrders}}" wx:key="id" class="purchase-order-row">
+      <view class="detail-heading">
+        <view class="menu-item-copy">
+          <text class="item-title">{{item.supplier.name}} · {{item.status === 'draft' ? '草稿' : item.status === 'ordered' ? '已提交' : item.status === 'partially_received' ? '部分收货' : item.status === 'received' ? '已收齐' : '已取消'}}</text>
+          <text class="item-meta">{{item.items.length}} 项原料 · {{item.currency}} · 版本 {{item.version}}</text>
+        </view>
+        <button wx:if="{{item.status === 'draft'}}" class="secondary-button" loading="{{busy}}" disabled="{{busy}}" bindtap="submitPurchase" data-id="{{item.id}}">确认提交</button>
+        <button wx:if="{{item.status === 'ordered' || item.status === 'partially_received'}}" class="primary-button" loading="{{busy}}" disabled="{{busy}}" bindtap="beginReceipt" data-id="{{item.id}}">登记实收</button>
+      </view>
+      <view wx:for="{{item.items}}" wx:for-item="purchaseItem" wx:key="id" class="menu-item-row">
+        <view class="menu-item-copy">
+          <text class="item-title">{{purchaseItem.ingredientNameSnapshot}}</text>
+          <text class="item-meta">实收 {{purchaseItem.receivedQuantity}} / {{purchaseItem.orderedQuantity}} {{purchaseItem.unitSnapshot}}</text>
+        </view>
+      </view>
+      <view wx:if="{{receivingOrderId === item.id}}" class="quick-form">
+        <text class="item-meta">仅填写本次实际到货；单价按发票核对，可分批收货。</text>
+        <view wx:for="{{receiptItems}}" wx:key="itemId" class="recipe-edit-row">
+          <text class="item-title">{{item.ingredientNameSnapshot}} · 剩余 {{item.remainingQuantity}} {{item.unitSnapshot}}</text>
+          <input class="input recipe-quantity" type="digit" value="{{item.quantity}}" placeholder="实收数量" bindinput="onReceiptItemInput" data-index="{{index}}" data-field="quantity" />
+          <input class="input recipe-quantity" type="digit" value="{{item.unitCost}}" placeholder="发票单价" bindinput="onReceiptItemInput" data-index="{{index}}" data-field="unitCost" />
+        </view>
+        <button class="primary-button form-button" loading="{{busy}}" disabled="{{busy}}" bindtap="submitReceipt">确认实际收货</button>
+        <button class="secondary-button form-button" disabled="{{busy}}" bindtap="cancelReceipt">取消</button>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{showMenuForm}}" class="ruda-card quick-form">
+    <text class="section-title">新建菜单</text>
+    <input class="input" value="{{menuName}}" placeholder="菜单名称" maxlength="160" bindinput="onMenuInput" />
+    <input class="input" value="{{currency}}" placeholder="币种（如 EUR）" maxlength="3" bindinput="onCurrencyInput" />
+    <button class="primary-button form-button" loading="{{busy}}" disabled="{{busy}}" bindtap="submitMenu">保存草稿</button>
+  </view>
+
+  <view wx:if="{{showDishForm}}" class="ruda-card quick-form">
+    <text class="section-title">新增菜品</text>
+    <input class="input" value="{{dishName}}" placeholder="菜品名称" maxlength="160" bindinput="onDishInput" data-field="dishName" />
+    <input class="input" value="{{dishCategory}}" placeholder="分类" maxlength="120" bindinput="onDishInput" data-field="dishCategory" />
+    <textarea class="textarea" value="{{dishDescription}}" placeholder="菜品说明" maxlength="4000" bindinput="onDishInput" data-field="dishDescription" />
+    <button class="primary-button form-button" loading="{{busy}}" disabled="{{busy}}" bindtap="submitDish">保存菜品草稿</button>
+  </view>
+
+  <view wx:if="{{showIngredientForm}}" class="ruda-card quick-form">
+    <text class="section-title">新增原料</text>
+    <input class="input" value="{{ingredientCode}}" placeholder="原料编码" maxlength="80" bindinput="onIngredientInput" data-field="ingredientCode" />
+    <input class="input" value="{{ingredientName}}" placeholder="原料名称" maxlength="200" bindinput="onIngredientInput" data-field="ingredientName" />
+    <picker range="{{ingredientCategories}}" range-key="label" value="{{ingredientCategoryIndex}}" bindchange="onIngredientCategoryChange">
+      <view class="picker-input">{{ingredientCategories[ingredientCategoryIndex].label}}</view>
+    </picker>
+    <picker range="{{ingredientUnits}}" range-key="label" value="{{ingredientUnitIndex}}" bindchange="onIngredientUnitChange">
+      <view class="picker-input">{{ingredientUnits[ingredientUnitIndex].label}}</view>
+    </picker>
+    <input class="input" type="digit" value="{{ingredientReorderPoint}}" placeholder="预警阈值（计量单位）" bindinput="onIngredientInput" data-field="ingredientReorderPoint" />
+    <input class="input" type="number" value="{{ingredientLeadTimeDays}}" placeholder="预计供货天数" bindinput="onIngredientInput" data-field="ingredientLeadTimeDays" />
+    <input class="input" value="{{ingredientAllergens}}" placeholder="过敏原代码，逗号分隔" bindinput="onIngredientInput" data-field="ingredientAllergens" />
+    <text class="item-meta">可用代码：gluten, crustaceans, eggs, fish, peanuts, soybeans, milk, nuts, celery, mustard, sesame, sulphites, lupin, molluscs, other</text>
+    <button class="primary-button form-button" loading="{{busy}}" disabled="{{busy}}" bindtap="submitIngredient">保存原料</button>
+  </view>
+
+  <view wx:if="{{showRecipeForm}}" class="ruda-card quick-form">
+    <text class="section-title">创建配方版本</text>
+    <picker range="{{recipeDishes}}" range-key="name" value="{{recipeDishIndex}}" bindchange="onRecipeDishChange">
+      <view class="picker-input">{{recipeDishId ? recipeDishes[recipeDishIndex].name : '选择菜品'}}</view>
+    </picker>
+    <input class="input" type="digit" value="{{recipeYieldQuantity}}" placeholder="产出数量" bindinput="onRecipeYieldInput" />
+    <picker range="{{recipeYieldUnits}}" range-key="label" value="{{recipeYieldUnitIndex}}" bindchange="onRecipeYieldUnitChange">
+      <view class="picker-input">{{recipeYieldUnits[recipeYieldUnitIndex].label}}</view>
+    </picker>
+    <input class="input" value="{{recipeNotes}}" placeholder="版本备注" maxlength="2000" bindinput="onRecipeNotesInput" />
+    <view wx:for="{{recipeItems}}" wx:key="index" class="recipe-edit-row">
+      <picker range="{{ingredients}}" range-key="pickerName" value="{{item.ingredientIndex}}" bindchange="onRecipeIngredientChange" data-index="{{index}}">
+        <view class="picker-input">{{item.ingredientId ? ingredients[item.ingredientIndex].material.name : '选择原料'}}</view>
+      </picker>
+      <input class="input recipe-quantity" type="digit" value="{{item.quantity}}" placeholder="用量" bindinput="onRecipeItemInput" data-index="{{index}}" data-field="quantity" />
+      <input class="input recipe-quantity" type="digit" value="{{item.wasteRate}}" placeholder="损耗率（0–1）" bindinput="onRecipeItemInput" data-index="{{index}}" data-field="wasteRate" />
+      <button class="secondary-button" disabled="{{recipeItems.length <= 1}}" bindtap="removeRecipeItem" data-index="{{index}}">移除</button>
+    </view>
+    <button class="secondary-button form-button" bindtap="addRecipeItem">添加原料项</button>
+    <button class="primary-button form-button" loading="{{busy}}" disabled="{{busy || !recipeDishId || !ingredients.length}}" bindtap="submitRecipe">保存新版本</button>
+  </view>
+
+  <view class="restaurant-menu-actions">
+    <button class="secondary-button" bindtap="toggleDishForm">{{showDishForm ? '收起菜品' : '新增菜品'}}</button>
+    <button class="secondary-button" bindtap="toggleIngredientForm">{{showIngredientForm ? '收起原料' : '新增原料'}}</button>
+    <button wx:if="{{canManagePurchases}}" class="secondary-button" bindtap="toggleProcurement">{{showProcurement ? '收起采购' : '采购收货'}}</button>
+    <button class="secondary-button" disabled="{{!ingredients.length || !recipeDishes.length}}" bindtap="toggleRecipeForm">{{showRecipeForm ? '收起配方' : '新建配方'}}</button>
+    <button class="primary-button" bindtap="toggleMenuForm">{{showMenuForm ? '收起菜单' : '新建菜单'}}</button>
+  </view>
+
+  <view class="restaurant-menu-content">
+    <view class="restaurant-menu-list">
+      <text class="section-title">菜单</text>
+      <view wx:for="{{menus}}" wx:key="id" class="menu-row {{menu && menu.id === item.id ? 'menu-row--active' : ''}}" data-id="{{item.id}}" bindtap="selectMenu">
+        <view class="menu-row-copy">
+          <text class="item-title">{{item.name}}</text>
+          <text class="item-meta">{{item.status === 'draft' ? '草稿' : item.status === 'published' ? '已发布' : '已归档'}} · {{item._count.items || 0}} 道菜 · {{item.currency}}</text>
+        </view>
+        <text class="menu-row-arrow">›</text>
+      </view>
+      <view wx:if="{{!loading && !menus.length}}" class="empty-state">还没有菜单。新建菜单后可加入菜品。</view>
+    </view>
+
+    <view class="restaurant-menu-detail">
+      <view class="detail-heading">
+        <view>
+          <text class="section-title">{{menu ? menu.name : '菜单内容'}}</text>
+          <text wx:if="{{menu}}" class="item-meta">{{menu.currency}} · {{menu.status === 'draft' ? '草稿' : menu.status === 'published' ? '已发布' : '已归档'}}</text>
+        </view>
+        <button wx:if="{{menu && (menu.status === 'draft' || menu.status === 'published')}}" class="secondary-button publish-button" loading="{{busy}}" disabled="{{busy}}" bindtap="transitionMenu">{{menu.status === 'draft' ? '确认发布' : '撤回菜单'}}</button>
+      </view>
+      <view wx:if="{{menu && menu.status === 'draft'}}" class="add-dish-form">
+        <picker range="{{dishes}}" range-key="name" value="{{dishIndex}}" bindchange="onDishSelect">
+          <view class="picker-input">{{dishId ? dishes[dishIndex].name : '选择菜品'}}</view>
+        </picker>
+        <input class="input price-input" type="digit" value="{{price}}" placeholder="售价" bindinput="onPriceInput" />
+        <button class="secondary-button add-button" loading="{{busy}}" disabled="{{busy}}" bindtap="addDish">添加</button>
+      </view>
+      <view wx:if="{{menu && menu.items.length}}" class="menu-item-list">
+        <view wx:for="{{menu.items}}" wx:key="id" class="menu-item-row">
+          <view class="menu-item-copy">
+            <text class="item-title">{{item.dish.name}}</text>
+            <text class="item-meta">{{item.dish.category || '未分类'}} · {{item.status === 'available' ? '可售' : item.status === 'sold_out' ? '售罄' : '已隐藏'}}</text>
+          </view>
+          <text class="menu-item-price">{{item.price}} {{menu.currency}}</text>
+        </view>
+      </view>
+      <view wx:if="{{menu && !menu.items.length}}" class="empty-state">此菜单还没有菜品。</view>
+      <view wx:if="{{!menu}}" class="empty-state">选择菜单查看内容，或先创建菜单草稿。</view>
+    </view>
+  </view>
+
+  <view class="ruda-card ingredient-list">
+    <text class="section-title">原料目录</text>
+    <view wx:if="{{!ingredients.length}}" class="empty-state">尚无原料记录；配方成本需要实际采购收货数据，不能用预警阈值推算。</view>
+    <view wx:for="{{ingredients}}" wx:key="id" class="menu-item-row">
+      <view class="menu-item-copy">
+        <text class="item-title">{{item.material.name}} · {{item.material.code}}</text>
+        <text class="item-meta">{{item.material.unit}} · 预警阈值 {{item.material.reorderPoint}} · 过敏原 {{item.allergenLabel}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="ruda-card recipe-list">
+    <view class="detail-heading">
+      <view>
+        <text class="section-title">配方与成本</text>
+        <text class="item-meta">配方版本不可覆盖；成本只读取实际采购收货记录。</text>
+      </view>
+      <button class="secondary-button" disabled="{{!recipeDishId}}" bindtap="readCost">读取成本</button>
+    </view>
+    <picker range="{{recipeDishes}}" range-key="name" value="{{recipeDishIndex}}" bindchange="onRecipeDishChange">
+      <view class="picker-input">{{recipeDishId ? recipeDishes[recipeDishIndex].name : '选择菜品'}}</view>
+    </picker>
+    <view wx:for="{{recipes}}" wx:key="id" class="menu-item-row">
+      <view class="menu-item-copy">
+        <text class="item-title">配方 V{{item.version}} · {{item.status === 'active' ? '已激活' : item.status === 'draft' ? '草稿' : '已归档'}}</text>
+        <text class="item-meta">{{item.yieldQuantity}} {{item.yieldUnit}} · {{item.items.length}} 项原料</text>
+      </view>
+      <button wx:if="{{item.status === 'draft'}}" class="secondary-button" loading="{{busy}}" disabled="{{busy}}" bindtap="activateRecipe" data-id="{{item.id}}">确认激活</button>
+    </view>
+    <view wx:if="{{recipeDishId && !recipes.length}}" class="empty-state">该菜品尚无配方版本。</view>
+    <view wx:if="{{costResult}}" class="workspace-note">
+      <text wx:if="{{costResult.cost.status === 'ready'}}">实际收货加权成本：{{costResult.cost.costPerYield}} {{costResult.cost.currency}} / 产出单位</text>
+      <text wx:else>成本状态：{{costResult.cost.status}}。尚无完整、同币种的实际收货成本，不能计算毛利。</text>
+      <text wx:if="{{costResult.menuComparison}}"> · 菜单毛利：{{costResult.menuComparison.status === 'ready' ? costResult.menuComparison.grossMargin : costResult.menuComparison.status}}</text>
+    </view>
+  </view>
+
+  <view class="workspace-note">正式发布需有效配方及对应员工权限；本页不提供收银、厨房任务、支付或顾客下单。</view>
+</view>

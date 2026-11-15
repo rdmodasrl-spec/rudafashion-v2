@@ -5,6 +5,9 @@ module.exports = {
   templateId: 'general_retail',
   title: '综合零售',
   summary: '条码零售、门店收银与库存盘点',
+  modauiPrompts: [
+    { label: '分析销售与补货', prompt: '分析当前商家的 POS 销售和库存，列出有数据依据的补货候选；不要修改库存。' }
+  ],
   metrics: [
     { key: 'todaySales', label: '今日销售额', suffix: '€', emphasis: true },
     { key: 'totalOrders', label: '累计订单', suffix: '单' },

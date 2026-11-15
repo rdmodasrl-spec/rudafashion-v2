@@ -34,8 +34,10 @@ test('desktop merchant navigation keeps exactly 14 first-level entries in the ag
   assert.deepEqual([...positions].sort((left, right) => left - right), positions, 'navigation order drifted');
   assert.equal(positions.length, 14);
   for (const id of desktopNavIdOrder) {
-    assert.equal(portal.split(`id="${id}"`).length - 1, 1, `${id} must be declared once`);
+    const count = portal.split(`id="${id}"`).length - 1;
+    assert.equal(count, id === 'merchant-sidebar-tab-dashboard' ? 2 : 1, `${id} must be declared in the active navigation branch`);
   }
+  assert.match(portal, /restaurantWorkspaceAvailable \? \([\s\S]*?id="merchant-sidebar-tab-dashboard"[\s\S]*?\) : \([\s\S]*?id="merchant-sidebar-tab-dashboard"/);
 });
 
 test('desktop navigation keeps the bottom action group fixed outside the scrolling middle', () => {

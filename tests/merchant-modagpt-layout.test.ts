@@ -7,15 +7,27 @@ const root = process.cwd();
 const read = (relativePath: string) =>
   readFileSync(path.join(root, relativePath), 'utf8');
 
-test('merchant ModaUI surfaces: mobile and web both render the single-page workbench', () => {
+test('merchant ModaUI routes apparel to the workbench and other industries to shared chat', () => {
   const studio = read('src/apps/merchant-admin-common/components/merchant/MerchantAiHome.tsx');
+  const entry = read('src/apps/merchant-admin-common/components/merchant/ModaUIEntry.tsx');
   const mobileApp = read('src/apps/merchant-admin-mobile/MerchantMobileApp.tsx');
   const portal = read('src/apps/merchant-admin-web/MerchantPortal.tsx');
+  const mobileNavigation = read('src/apps/merchant-admin-common/components/merchant/merchantMobileNavigation.ts');
+  const miniMore = read('merchant-miniprogram/pages/more/index.js');
 
-  assert.match(mobileApp, /import\('\.\.\/merchant-admin-common\/components\/merchant\/modaui\/ModaUIWorkbench'\)/);
+  assert.match(mobileApp, /import\('\.\.\/merchant-admin-common\/components\/merchant\/ModaUIEntry'\)/);
   assert.doesNotMatch(mobileApp, /components\/merchant\/MerchantAiHome/);
-  assert.match(portal, /import\('\.\.\/merchant-admin-common\/components\/merchant\/modaui\/ModaUIWorkbench'\)/);
+  assert.match(portal, /import\('\.\.\/merchant-admin-common\/components\/merchant\/ModaUIEntry'\)/);
   assert.doesNotMatch(portal, /components\/merchant\/MerchantAiHome/);
+  assert.match(entry, /shouldUseModaUIIndustryChat/);
+  assert.match(entry, /<ModaUIWorkbench/);
+  assert.match(entry, /<MerchantAiHome/);
+  assert.match(entry, /industryChatOnly/);
+  assert.match(entry, /apiGet<\{ success: true; studios: MerchantStudioAccess\[\] \}>\('\/api\/merchant\/studios'\)/);
+  assert.match(entry, /resolveCurrentMerchantStudio\(result\.studios, industryTemplateId\)/);
+  assert.match(portal, /localizeCopy\('AI工作室', 'AI Studio · ModaUI'\)/);
+  assert.match(mobileNavigation, /\{ id: 'ai_home', zh: 'AI工作室', it: 'AI Studio' \}/);
+  assert.match(miniMore, /\{ id: 'ai_home', title: 'AI工作室'/);
   assert.match(studio, /<main className="[^"]*\bh-full\b[^"]*\bmin-h-0\b[^"]*\bw-full\b[^"]*\bmax-w-\[430px\]/);
   assert.doesNotMatch(studio, /h-\[calc\(100dvh-env\(safe-area-inset-top\)\)\]/);
 });

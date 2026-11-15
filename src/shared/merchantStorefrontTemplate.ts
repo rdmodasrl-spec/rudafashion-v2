@@ -1,9 +1,3 @@
-import {
-  ALL_STRUCTURAL_TEMPLATES,
-  isStorefrontTemplateAllowedForIndustry,
-  type StructuralStorefrontTemplateId
-} from './storefrontTemplates/registry';
-
 export const MERCHANT_STOREFRONT_TEMPLATES = [
   {
     id: 'fashion_monochrome',
@@ -25,16 +19,7 @@ export const MERCHANT_STOREFRONT_TEMPLATES = [
   }
 ] as const;
 
-export type MerchantStorefrontTemplate =
-  | typeof MERCHANT_STOREFRONT_TEMPLATES[number]['id']
-  | StructuralStorefrontTemplateId;
-
-const STOREFRONT_TEMPLATE_IDS = new Set<string>([
-  ...MERCHANT_STOREFRONT_TEMPLATES.map(template => template.id),
-  ...ALL_STRUCTURAL_TEMPLATES.map(template => template.id)
-]);
-
-export { isStorefrontTemplateAllowedForIndustry };
+export type MerchantStorefrontTemplate = typeof MERCHANT_STOREFRONT_TEMPLATES[number]['id'];
 
 function parseSettings(settings: unknown): Record<string, unknown> {
   let parsed: unknown = settings;
@@ -51,7 +36,7 @@ function parseSettings(settings: unknown): Record<string, unknown> {
 }
 
 export function isMerchantStorefrontTemplate(value: unknown): value is MerchantStorefrontTemplate {
-  return typeof value === 'string' && STOREFRONT_TEMPLATE_IDS.has(value);
+  return MERCHANT_STOREFRONT_TEMPLATES.some(template => template.id === value);
 }
 
 export function getMerchantStorefrontTemplate(settings: unknown): MerchantStorefrontTemplate {

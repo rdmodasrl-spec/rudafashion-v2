@@ -1,5 +1,5 @@
 /**
- * 七个行业后台的演示商家账号（仅用于功能测试）。
+ * 八个行业后台的演示商家账号（仅用于功能测试）。
  *
  * 规则：
  * - 只创建/更新 `demo-industry-*` 前缀的隔离数据，命中非演示商家时直接拒绝执行。
@@ -259,6 +259,21 @@ export const demoMerchantSeeds: readonly DemoMerchantSeed[] = [
         rrpPrice: 9.9,
         attributes: { barcode: '2300000000033', spec: '三格', unit: '个' }
       }
+    ]
+  },
+  {
+    templateId: 'restaurant_ordering',
+    key: 'restaurant-ordering',
+    name: 'DEMO · 餐饮商家',
+    city: 'Firenze',
+    zone: 'boutique_department',
+    businessType: 'restaurant',
+    contactPerson: 'RUDA Demo 餐饮',
+    stylePrefix: 'DEMO-RE',
+    products: [
+      { name: '番茄罗勒意面', category: 'main_course', wholesalePrice: 0, rrpPrice: 13.5 },
+      { name: '烤蔬菜拼盘', category: 'appetizer', wholesalePrice: 0, rrpPrice: 8.5 },
+      { name: '柠檬苏打水', category: 'beverage', wholesalePrice: 0, rrpPrice: 4.5 }
     ]
   }
 ];

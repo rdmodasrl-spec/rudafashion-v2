@@ -37,6 +37,7 @@ import {
   Info,
   Pencil,
   Sparkles,
+  Clapperboard,
   Download,
   Printer,
   FileText,
@@ -76,10 +77,11 @@ import {
 } from '../merchant-admin-common/components/merchant/MerchantSettingsPanel';
 import { MerchantBusinessCard } from '../merchant-admin-common/components/merchant/MerchantBusinessCard';
 import { MerchantMessageCenter } from '../merchant-admin-common/components/merchant/MerchantMessageCenter';
+import { RestaurantMenuWorkspace } from '../merchant-admin-common/components/merchant/RestaurantMenuWorkspace';
+import { RestaurantTableWorkspace } from '../merchant-admin-common/components/merchant/RestaurantTableWorkspace';
 import { useMerchantNotifications } from '../merchant-admin-common/components/merchant/merchantNotifications';
 import { MerchantStoreView } from '../shared/components/frontend/MerchantStoreView';
 import { MERCHANT_STOREFRONT_TEMPLATES, type MerchantStorefrontTemplate } from '../../shared/merchantStorefrontTemplate';
-import { getStorefrontTemplatesForIndustry } from '../../shared/storefrontTemplates/registry';
 import { ApiError, apiGet, apiPost, apiPut, apiRequest } from '../../api/client';
 import { DEFAULT_MERCHANT_LOGO, merchantMediaUrl } from '../../utils/merchantMedia';
 import { parseCsvRecords } from '../../utils/csv';
@@ -138,8 +140,8 @@ const MerchantGrowthWorkspace = lazy(() =>
   import('../merchant-admin-common/components/merchant/MerchantGrowthWorkspace').then(module => ({ default: module.MerchantGrowthWorkspace }))
 );
 
-const ModaUIWorkbench = lazy(() =>
-  import('../merchant-admin-common/components/merchant/modaui/ModaUIWorkbench').then(module => ({ default: module.ModaUIWorkbench }))
+const ModaUIEntry = lazy(() =>
+  import('../merchant-admin-common/components/merchant/ModaUIEntry').then(module => ({ default: module.ModaUIEntry }))
 );
 
 const MerchantAiEmployees = lazy(() =>
@@ -147,6 +149,9 @@ const MerchantAiEmployees = lazy(() =>
 );
 const MerchantAiTools = lazy(() =>
   import('../merchant-admin-common/components/merchant/MerchantAiTools').then(module => ({ default: module.MerchantAiTools }))
+);
+const ModaUiAdPlanner = lazy(() =>
+  import('../merchant-admin-common/components/merchant/ModaUiAdPlanner').then(module => ({ default: module.ModaUiAdPlanner }))
 );
 const MerchantAppStore = lazy(() =>
   import('../merchant-admin-common/components/merchant/AppStore').then(module => ({ default: module.AppStore }))
@@ -228,7 +233,7 @@ interface MobileMaterial {
   name: string;
   category: string;
   unit: string;
-  unitCost: number;
+  unitCost?: number;
   reorderPoint: number;
   leadTimeDays: number;
   status: string;
@@ -361,9 +366,10 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
   } = useB2B();
   // 平台全局 ModaUI 总闸：关闭时隐藏 ai_home 标签并显示统一提示。
   const { modauiEnabled } = useModuleAvailability();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'inventory' | 'orders' | 'customers' | 'store' | 'profile' | 'ai_home' | 'pos' | 'finance' | 'growth' | 'production' | 'procurement' | 'content' | 'more' | 'ai_employees' | 'ai_tools' | 'support'>(() =>
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'inventory' | 'orders' | 'customers' | 'store' | 'profile' | 'ai_home' | 'pos' | 'finance' | 'growth' | 'production' | 'procurement' | 'content' | 'more' | 'ai_employees' | 'ai_tools' | 'ad_planner' | 'support'>(() =>
     initialTab || (isModaGptEntryRequest(window.location.search) ? 'ai_home' : 'dashboard')
   );
+  const [restaurantMobileSection, setRestaurantMobileSection] = useState<'menu' | 'tables'>('menu');
   const [industrySection, setIndustrySection] = useState<MerchantIndustryModuleKey>('dashboard');
   const pendingIndustrySectionRef = React.useRef<MerchantIndustryModuleKey | null>(null);
   const industryPanelActive = Boolean(
@@ -398,7 +404,7 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
   const [mobileContentSection, setMobileContentSection] = useState<ContentKind>('metaobject');
   const [mobileGrowthSection, setMobileGrowthSection] = useState<GrowthSection>('overview');
   useEffect(() => {
-    if (activeTab !== 'ai_home' && activeTab !== 'more' && activeTab !== 'ai_employees' && activeTab !== 'ai_tools' && activeTab !== 'support') {
+    if (activeTab !== 'ai_home' && activeTab !== 'more' && activeTab !== 'ai_employees' && activeTab !== 'ai_tools' && activeTab !== 'ad_planner' && activeTab !== 'support') {
       copilotOriginTabRef.current = activeTab;
     }
   }, [activeTab]);
@@ -580,7 +586,10 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
   }, [selectedMerchantId, addNotification, settingsSyncNonce]);
 
   const [factoryMaterials, setFactoryMaterials] = useState<MobileMaterial[]>([]);
+  const [canViewFactoryMaterialCosts, setCanViewFactoryMaterialCosts] = useState(false);
   const [showMaterialManager, setShowMaterialManager] = useState(false);
+  const [factoryOperationsOpen, setFactoryOperationsOpen] = useState(false);
+  const factoryOperationsRef = React.useRef<HTMLDetailsElement>(null);
   const [materialBusy, setMaterialBusy] = useState(false);
   const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
   const [editingMaterialUnitLocked, setEditingMaterialUnitLocked] = useState(false);
@@ -604,10 +613,20 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
 
   const currentMerchantId = selectedMerchantId || 'mch-prato';
   const currentMerchant = merchants.find(m => m.id === currentMerchantId) || merchants[0];
-  const storefrontTemplateOptions = getStorefrontTemplatesForIndustry(currentMerchant?.industryTemplate);
-  const selectedLegacyStorefrontTemplate = MERCHANT_STOREFRONT_TEMPLATES.find(
-    template => template.id === storefrontTemplate
-  );
+  const restaurantWorkspaceAvailable = currentMerchant?.industry === 'RESTAURANT'
+    && currentMerchant.industryTemplate === 'restaurant_ordering'
+    && currentMerchant.workspace?.templateId === 'restaurant_ordering'
+    && currentMerchant.workspace.accessAllowed;
+  const restaurantMenuAvailable = restaurantWorkspaceAvailable
+    && currentMerchant.workspace?.modules.includes('restaurant_menu') === true;
+  const restaurantTablesAvailable = restaurantWorkspaceAvailable
+    && currentMerchant.workspace?.modules.includes('restaurant_tables') === true;
+
+  useEffect(() => {
+    if (showMaterialManager && activeTab === 'dashboard') {
+      factoryOperationsRef.current?.scrollIntoView({ block: 'start' });
+    }
+  }, [activeTab, showMaterialManager]);
 
   // 「已售出」入口使用真实成交明细汇总；每次进入商品页重新读取，避免展示过期数字。
   const loadProductSalesSummary = async () => {
@@ -670,6 +689,7 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
         break;
       case 'materials':
         setShowMaterialManager(true);
+        setFactoryOperationsOpen(true);
         setActiveTab('dashboard');
         break;
       case 'procurement':
@@ -705,6 +725,9 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
         break;
       case 'ai_tools':
         setActiveTab('ai_tools');
+        break;
+      case 'ad_planner':
+        setActiveTab('ad_planner');
         break;
       case 'team':
         setSettingsSection('team');
@@ -770,6 +793,7 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
   };
   const returnFromMoreChild = () => {
     setShowMaterialManager(false);
+    setFactoryOperationsOpen(false);
     setSettingsSection(null);
     setReturnToMore(false);
     setMoreReturnTitle('');
@@ -1265,9 +1289,10 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
   const refreshFactoryData = async () => {
     if (factoryLoading) return;
     setFactoryLoading(true);
+    setCanViewFactoryMaterialCosts(false);
     try {
       const results = await Promise.allSettled([
-        apiGet<{ success: true; materials: MobileMaterial[] }>('/api/merchant/materials'),
+        apiGet<{ success: true; canViewCosts: boolean; materials: MobileMaterial[] }>('/api/merchant/materials'),
         apiGet<{ success: true; workOrders: MobileWorkOrder[] }>('/api/merchant/production/work-orders'),
         apiGet<{ success: true; accounts: MobileBankAccount[] }>('/api/merchant/bank-accounts'),
         apiGet<MobileOperationsIntelligence & { success: true }>('/api/merchant/operations/intelligence'),
@@ -1275,7 +1300,10 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
       ]);
       const [materialsResult, workOrdersResult, bankResult, intelligenceResult, financeResult] = results;
       const failed: string[] = [];
-      if (materialsResult.status === 'fulfilled') setFactoryMaterials(materialsResult.value.materials);
+      if (materialsResult.status === 'fulfilled') {
+        setFactoryMaterials(materialsResult.value.materials);
+        setCanViewFactoryMaterialCosts(materialsResult.value.canViewCosts === true);
+      }
       else failed.push('材料');
       if (workOrdersResult.status === 'fulfilled') setFactoryWorkOrders(workOrdersResult.value.workOrders);
       else failed.push('工单');
@@ -1296,8 +1324,10 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
   };
 
   const refreshFactoryMaterials = async () => {
-    const result = await apiGet<{ success: true; materials: MobileMaterial[] }>('/api/merchant/materials');
+    setCanViewFactoryMaterialCosts(false);
+    const result = await apiGet<{ success: true; canViewCosts: boolean; materials: MobileMaterial[] }>('/api/merchant/materials');
     setFactoryMaterials(result.materials);
+    setCanViewFactoryMaterialCosts(result.canViewCosts === true);
     if (!result.materials.some(material => material.id === materialInbound.materialId && material.status === 'active')) {
       setMaterialInbound(previous => ({ ...previous, materialId: result.materials.find(material => material.status === 'active')?.id || '' }));
     }
@@ -1317,7 +1347,7 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
       name: material.name,
       category: material.category,
       unit: material.unit,
-      unitCost: String(material.unitCost),
+      unitCost: String(material.unitCost ?? 0),
       reorderPoint: String(material.reorderPoint),
       leadTimeDays: String(material.leadTimeDays),
       status: material.status,
@@ -1329,16 +1359,26 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
   const saveFactoryMaterial = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (materialBusy) return;
-    const unitCost = Number(materialForm.unitCost);
+    const unitCost = canViewFactoryMaterialCosts ? Number(materialForm.unitCost) : 0;
     const reorderPoint = Number(materialForm.reorderPoint);
     const leadTimeDays = Number(materialForm.leadTimeDays);
-    if (!Number.isFinite(unitCost) || unitCost < 0 || !Number.isFinite(reorderPoint) || reorderPoint < 0 || !Number.isInteger(leadTimeDays) || leadTimeDays < 0) {
+    if ((canViewFactoryMaterialCosts && (!Number.isFinite(unitCost) || unitCost < 0)) || !Number.isFinite(reorderPoint) || reorderPoint < 0 || !Number.isInteger(leadTimeDays) || leadTimeDays < 0) {
       addNotification('warning', '物料资料不正确', '成本、安全库存需为非负数，交期需为非负整数');
       return;
     }
     setMaterialBusy(true);
     try {
-      const payload = { ...materialForm, code: materialForm.code.trim().toUpperCase(), name: materialForm.name.trim(), unitCost, reorderPoint, leadTimeDays };
+      const payload = {
+        code: materialForm.code.trim().toUpperCase(),
+        name: materialForm.name.trim(),
+        category: materialForm.category,
+        unit: materialForm.unit,
+        ...(canViewFactoryMaterialCosts ? { unitCost } : {}),
+        reorderPoint,
+        leadTimeDays,
+        status: materialForm.status,
+        notes: materialForm.notes
+      };
       if (editingMaterialId) {
         await apiPut(`/api/merchant/materials/${encodeURIComponent(editingMaterialId)}`, payload);
       } else {
@@ -1990,6 +2030,7 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
     domains: Globe,
     content: PanelsTopLeft,
     ai: Sparkles,
+    ads: Clapperboard,
     team: Users,
     notifications: Bell,
     settings: Settings,
@@ -1999,6 +2040,9 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
   } as const;
   const tabs = merchantMobilePrimaryTabs.map(tab => ({
     ...tab,
+    ...(tab.id === 'products' && restaurantMenuAvailable
+      ? { zh: '菜单', it: 'Menu' }
+      : {}),
     icon: primaryTabIcons[tab.id],
     badge: tab.id === 'orders' && orderActionCount > 0 ? orderActionCount : undefined
   })).filter(tab => modauiEnabled || tab.id !== 'ai_home');
@@ -2247,18 +2291,26 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
             <MerchantAiTools />
           </Suspense>
         )}
+        {activeTab === 'ad_planner' && (
+          <Suspense fallback={<div className="rounded-3xl bg-white p-8 text-center text-[11px] text-neutral-500">{mobileText('正在打开广告策划', 'Caricamento piano ads')}</div>}>
+            <ModaUiAdPlanner compact />
+          </Suspense>
+        )}
         {activeTab === 'ai_home' && (modauiEnabled ? (
           <div
             className="fixed inset-x-0 top-0 z-[60] bg-white pt-[env(safe-area-inset-top)]"
             style={{ bottom: visualViewportInset }}
           >
             <Suspense fallback={<div className="flex h-full items-center justify-center text-xs text-neutral-500">{mobileText('ModaUI 正在加载…', 'Caricamento di ModaUI…')}</div>}>
-              {/* 与电脑端同一个单页工作台：五项能力、推理中枢与结果检查都在这一页，不再渲染旧 AI 首页。 */}
-              <ModaUIWorkbench
+              {/* 与电脑端共用行业入口；服装保持工作台，其他行业进入统一聊天。 */}
+              <ModaUIEntry
                 key={currentMerchantId}
                 isIt={mobileItalian}
                 merchantId={currentMerchantId}
                 merchantName={currentMerchant?.name || ''}
+                industryTemplateId={currentMerchant?.workspace?.templateId || currentMerchant?.industryTemplate}
+                merchantIndustry={currentMerchant?.industry}
+                onNavigate={tab => setActiveTab(tab)}
                 onExit={() => {
                   const nextUrl = new URL(window.location.href);
                   nextUrl.searchParams.delete('workspace');
@@ -2463,15 +2515,24 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
               </div>
             </section>
 
-            <details className="ruda-home-surface ruda-home-enter overflow-hidden rounded-xl border">
-              <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between px-3.5 text-sm font-semibold text-neutral-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-neutral-700">
+            <details
+              ref={factoryOperationsRef}
+              open={factoryOperationsOpen || showMaterialManager}
+              onToggle={event => {
+                const isOpen = event.currentTarget.open;
+                setFactoryOperationsOpen(isOpen);
+                if (!isOpen) setShowMaterialManager(false);
+              }}
+              className="ruda-home-enter"
+            >
+              <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between rounded-[var(--radius-ruda-card)] border border-neutral-200 bg-white px-3.5 text-sm font-semibold text-neutral-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-neutral-700">
                 <div className="flex items-center gap-2">
                   <Layers className="h-4 w-4 text-neutral-600" aria-hidden="true" />
                   <span>{mobileText('生产运营', 'Produzione')}</span>
                 </div>
                 <span className="text-xs font-normal text-neutral-500">{lowMaterialCount > 0 || activeWorkOrders.length > 0 ? `${lowMaterialCount} ${mobileText('物料预警', 'Materiali')} · ${activeWorkOrders.length} ${mobileText('工单', 'lavori')}` : mobileText('暂无生产预警', 'Nessun avviso')}</span>
               </summary>
-              <div className="border-t border-neutral-100">
+              <div className="mt-2">
               <div className="flex justify-end px-3 pt-2">
                 <button type="button" onClick={() => void refreshFactoryData()} disabled={factoryLoading} className="inline-flex min-h-9 items-center gap-1.5 text-xs font-medium text-neutral-600 disabled:opacity-40">
                   <Loader2 className={`h-3.5 w-3.5 ${factoryLoading ? 'animate-spin' : ''}`} />
@@ -2517,33 +2578,36 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
                 </button>
                 {showMaterialManager && <div className="mt-3 space-y-3">
                   <form onSubmit={event => void saveFactoryMaterial(event)} className="space-y-2 rounded-xl border border-neutral-200 bg-neutral-50 p-3">
-                    <div className="flex items-center justify-between gap-2"><strong className="text-[11px]">{editingMaterialId ? '编辑面辅料资料' : '创建面料 / 辅料档案'}</strong>{editingMaterialId && <button type="button" onClick={() => openMaterialEditor()} className="text-[10px] font-semibold text-neutral-500">取消编辑</button>}</div>
+                    <div className="flex items-center justify-between gap-2"><strong className="text-xs">{editingMaterialId ? '编辑面辅料资料' : '创建面料 / 辅料档案'}</strong>{editingMaterialId && <button type="button" onClick={() => openMaterialEditor()} className="text-xs font-semibold text-neutral-500">取消编辑</button>}</div>
                     <div className="grid grid-cols-2 gap-2">
-                      <input required maxLength={80} value={materialForm.code} onChange={event => setMaterialForm(previous => ({ ...previous, code: event.target.value }))} placeholder="物料编码" className="min-w-0 rounded-lg border border-neutral-200 bg-white px-2.5 py-2 text-[11px]" />
-                      <input required maxLength={200} value={materialForm.name} onChange={event => setMaterialForm(previous => ({ ...previous, name: event.target.value }))} placeholder="面料 / 辅料名称" className="min-w-0 rounded-lg border border-neutral-200 bg-white px-2.5 py-2 text-[11px]" />
-                      <select value={materialForm.category} onChange={event => setMaterialForm(previous => ({ ...previous, category: event.target.value }))} className="min-w-0 rounded-lg border border-neutral-200 bg-white px-2.5 py-2 text-[11px]"><option value="fabric">面料</option><option value="lining">里料</option><option value="trim">辅料 / 配件</option><option value="label">标签 / 标牌</option><option value="packaging">包装材料</option><option value="other">其他</option></select>
-                      <select value={materialForm.unit} disabled={editingMaterialUnitLocked} onChange={event => setMaterialForm(previous => ({ ...previous, unit: event.target.value }))} className="min-w-0 rounded-lg border border-neutral-200 bg-white px-2.5 py-2 text-[11px] disabled:bg-neutral-100"><option value="meter">米</option><option value="piece">件 / 个</option><option value="kg">千克</option><option value="roll">卷</option></select>
-                      <input type="number" min="0" step="0.0001" value={materialForm.unitCost} onChange={event => setMaterialForm(previous => ({ ...previous, unitCost: event.target.value }))} placeholder="单位成本 (€)" className="min-w-0 rounded-lg border border-neutral-200 bg-white px-2.5 py-2 text-[11px]" />
-                      <input type="number" min="0" step="0.001" value={materialForm.reorderPoint} onChange={event => setMaterialForm(previous => ({ ...previous, reorderPoint: event.target.value }))} placeholder="安全库存" className="min-w-0 rounded-lg border border-neutral-200 bg-white px-2.5 py-2 text-[11px]" />
-                      <input type="number" min="0" step="1" value={materialForm.leadTimeDays} onChange={event => setMaterialForm(previous => ({ ...previous, leadTimeDays: event.target.value }))} placeholder="采购交期（天）" className="min-w-0 rounded-lg border border-neutral-200 bg-white px-2.5 py-2 text-[11px]" />
-                      <select value={materialForm.status} onChange={event => setMaterialForm(previous => ({ ...previous, status: event.target.value }))} className="min-w-0 rounded-lg border border-neutral-200 bg-white px-2.5 py-2 text-[11px]"><option value="active">启用</option><option value="suspended">停用</option></select>
-                      <textarea maxLength={2000} rows={2} value={materialForm.notes} onChange={event => setMaterialForm(previous => ({ ...previous, notes: event.target.value }))} placeholder="规格备注：成分、克重、幅宽、颜色号等" className="col-span-2 rounded-lg border border-neutral-200 bg-white px-2.5 py-2 text-[11px]" />
+                      <label className="grid min-w-0 gap-1 text-xs text-neutral-700"><span>物料编码</span><input required maxLength={80} value={materialForm.code} onChange={event => setMaterialForm(previous => ({ ...previous, code: event.target.value }))} className="min-w-0 rounded-lg border border-neutral-200 bg-white px-2.5 py-2 text-xs" /></label>
+                      <label className="grid min-w-0 gap-1 text-xs text-neutral-700"><span>面料 / 辅料名称</span><input required maxLength={200} value={materialForm.name} onChange={event => setMaterialForm(previous => ({ ...previous, name: event.target.value }))} className="min-w-0 rounded-lg border border-neutral-200 bg-white px-2.5 py-2 text-xs" /></label>
+                      <label className="grid min-w-0 gap-1 text-xs text-neutral-700"><span>类别</span><select value={materialForm.category} onChange={event => setMaterialForm(previous => ({ ...previous, category: event.target.value }))} className="min-w-0 rounded-lg border border-neutral-200 bg-white px-2.5 py-2 text-xs"><option value="fabric">面料</option><option value="lining">里料</option><option value="trim">辅料 / 配件</option><option value="label">标签 / 标牌</option><option value="packaging">包装材料</option><option value="other">其他</option></select></label>
+                      <label className="grid min-w-0 gap-1 text-xs text-neutral-700"><span>计量单位</span><select value={materialForm.unit} disabled={editingMaterialUnitLocked} onChange={event => setMaterialForm(previous => ({ ...previous, unit: event.target.value }))} className="min-w-0 rounded-lg border border-neutral-200 bg-white px-2.5 py-2 text-xs disabled:bg-neutral-100"><option value="meter">米</option><option value="piece">件 / 个</option><option value="kg">千克</option><option value="roll">卷</option></select></label>
+                      {canViewFactoryMaterialCosts && <label className="grid min-w-0 gap-1 text-xs text-neutral-700"><span>单位成本 (€)</span><input type="number" min="0" step="0.0001" value={materialForm.unitCost} onChange={event => setMaterialForm(previous => ({ ...previous, unitCost: event.target.value }))} className="min-w-0 rounded-lg border border-neutral-200 bg-white px-2.5 py-2 text-xs" /></label>}
+                      <label className="grid min-w-0 gap-1 text-xs text-neutral-700"><span>安全库存</span><input type="number" min="0" step="0.001" value={materialForm.reorderPoint} onChange={event => setMaterialForm(previous => ({ ...previous, reorderPoint: event.target.value }))} className="min-w-0 rounded-lg border border-neutral-200 bg-white px-2.5 py-2 text-xs" /></label>
+                      <label className="grid min-w-0 gap-1 text-xs text-neutral-700"><span>采购交期（天）</span><input type="number" min="0" step="1" value={materialForm.leadTimeDays} onChange={event => setMaterialForm(previous => ({ ...previous, leadTimeDays: event.target.value }))} className="min-w-0 rounded-lg border border-neutral-200 bg-white px-2.5 py-2 text-xs" /></label>
+                      <label className="grid min-w-0 gap-1 text-xs text-neutral-700"><span>状态</span><select value={materialForm.status} onChange={event => setMaterialForm(previous => ({ ...previous, status: event.target.value }))} className="min-w-0 rounded-lg border border-neutral-200 bg-white px-2.5 py-2 text-xs"><option value="active">启用</option><option value="suspended">停用</option></select></label>
+                      <label className="col-span-2 grid min-w-0 gap-1 text-xs text-neutral-700"><span>规格备注</span><textarea maxLength={2000} rows={2} value={materialForm.notes} onChange={event => setMaterialForm(previous => ({ ...previous, notes: event.target.value }))} placeholder="成分、克重、幅宽、颜色号等" className="min-w-0 rounded-lg border border-neutral-200 bg-white px-2.5 py-2 text-xs" /></label>
                     </div>
-                    {editingMaterialUnitLocked && <p className="text-[10px] text-neutral-500">已关联 · 单位锁定</p>}
+                    {editingMaterialUnitLocked && <p className="text-xs text-neutral-500">已关联 · 单位锁定</p>}
                     <button type="submit" disabled={materialBusy} className="ruda-btn-primary w-full text-[13px]">{materialBusy ? '保存中…' : editingMaterialId ? '保存物料修改' : '创建物料'}</button>
                   </form>
                   <form onSubmit={event => void receiveFactoryMaterial(event)} className="space-y-2 rounded-xl border border-emerald-100 bg-emerald-50 p-3">
-                    <strong className="block text-[11px] text-emerald-900">收货入库</strong>
-                    <select value={materialInbound.materialId} onChange={event => setMaterialInbound(previous => ({ ...previous, materialId: event.target.value }))} className="w-full rounded-lg border border-emerald-100 bg-white px-2.5 py-2 text-[11px]">
+                    <strong className="block text-xs text-emerald-900">收货入库</strong>
+                    <label className="grid gap-1 text-xs text-emerald-900"><span>面辅料</span><select value={materialInbound.materialId} onChange={event => setMaterialInbound(previous => ({ ...previous, materialId: event.target.value }))} className="w-full rounded-lg border border-emerald-100 bg-white px-2.5 py-2 text-xs">
                       <option value="">选择启用中的面辅料</option>
                       {factoryMaterials.filter(material => material.status === 'active').map(material => <option key={material.id} value={material.id}>{material.code} · {material.name}（{material.unit}）</option>)}
-                    </select>
-                    <div className="grid grid-cols-2 gap-2"><input required type="number" min="0.001" step="0.001" value={materialInbound.quantity} onChange={event => setMaterialInbound(previous => ({ ...previous, quantity: event.target.value }))} placeholder={`收货数量 ${factoryMaterials.find(material => material.id === materialInbound.materialId)?.unit || ''}`} className="min-w-0 rounded-lg border border-emerald-100 bg-white px-2.5 py-2 text-[11px]" /><input maxLength={500} value={materialInbound.note} onChange={event => setMaterialInbound(previous => ({ ...previous, note: event.target.value }))} placeholder="送货单 / 备注" className="min-w-0 rounded-lg border border-emerald-100 bg-white px-2.5 py-2 text-[11px]" /></div>
-                    <button type="submit" disabled={materialBusy || !factoryMaterials.some(material => material.id === materialInbound.materialId && material.status === 'active')} className="w-full rounded-lg bg-emerald-700 py-2.5 text-[11px] font-bold text-white disabled:opacity-50">{materialBusy ? '处理中…' : '确认收货入库'}</button>
+                    </select></label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="grid min-w-0 gap-1 text-xs text-emerald-900"><span>收货数量</span><input required type="number" min="0.001" step="0.001" value={materialInbound.quantity} onChange={event => setMaterialInbound(previous => ({ ...previous, quantity: event.target.value }))} className="min-w-0 rounded-lg border border-emerald-100 bg-white px-2.5 py-2 text-xs" /></label>
+                      <label className="grid min-w-0 gap-1 text-xs text-emerald-900"><span>送货单 / 备注</span><input maxLength={500} value={materialInbound.note} onChange={event => setMaterialInbound(previous => ({ ...previous, note: event.target.value }))} className="min-w-0 rounded-lg border border-emerald-100 bg-white px-2.5 py-2 text-xs" /></label>
+                    </div>
+                    <button type="submit" disabled={materialBusy || !factoryMaterials.some(material => material.id === materialInbound.materialId && material.status === 'active')} className="w-full rounded-lg bg-emerald-700 py-2.5 text-xs font-bold text-white disabled:opacity-50">{materialBusy ? '处理中…' : '确认收货入库'}</button>
                   </form>
                   <div className="space-y-2">
                     {factoryMaterials.map(material => <div key={material.id} className="rounded-xl border border-neutral-100 bg-white p-3">
-                      <div className="flex items-start justify-between gap-2"><div className="min-w-0"><strong className="block truncate text-[11px]">{material.code} · {material.name}</strong><span className="mt-1 block text-[10px] text-neutral-500">{material.category} · {material.unit} · 成本 €{material.unitCost.toFixed(4)} · 安全库存 {material.reorderPoint} · {material.status === 'active' ? '启用' : '停用'}</span><span className="mt-1 block text-[10px] font-semibold text-emerald-700">可用 {material.availableQuantity.toFixed(3)} / 现有 {material.onHandQuantity.toFixed(3)} {material.unit}</span></div><button type="button" onClick={() => openMaterialEditor(material)} className="shrink-0 rounded-lg border border-neutral-200 px-2.5 py-1.5 text-[10px] font-bold text-neutral-700">编辑</button></div>
+                      <div className="flex items-start justify-between gap-2"><div className="min-w-0"><strong className="block truncate text-[11px]">{material.code} · {material.name}</strong><span className="mt-1 block text-[10px] text-neutral-500">{material.category} · {material.unit}{canViewFactoryMaterialCosts && material.unitCost !== undefined ? ` · 成本 €${material.unitCost.toFixed(4)}` : ''} · 安全库存 {material.reorderPoint} · {material.status === 'active' ? '启用' : '停用'}</span><span className="mt-1 block text-[10px] font-semibold text-emerald-700">可用 {material.availableQuantity.toFixed(3)} / 现有 {material.onHandQuantity.toFixed(3)} {material.unit}</span></div><button type="button" onClick={() => openMaterialEditor(material)} className="shrink-0 rounded-lg border border-neutral-200 px-2.5 py-1.5 text-[10px] font-bold text-neutral-700">编辑</button></div>
                     </div>)}
                     {factoryMaterials.length === 0 && <p className="rounded-lg bg-neutral-50 p-3 text-center text-[10px] text-neutral-500">先建物料再收货</p>}
                   </div>
@@ -2558,7 +2622,35 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
           </div>
         )}
 
-        {activeTab === 'products' && (
+        {activeTab === 'products' && restaurantMenuAvailable && (
+          <div className="ruda-products-page -mx-4 -mt-2 min-h-[calc(100dvh-150px)] bg-white px-4 pb-[calc(60px+env(safe-area-inset-bottom))] pt-4">
+            {restaurantTablesAvailable && (
+              <div className="mb-4 flex gap-2 border-b border-neutral-200 pb-3" aria-label="餐饮工作区">
+                <button
+                  type="button"
+                  aria-pressed={restaurantMobileSection === 'menu'}
+                  onClick={() => setRestaurantMobileSection('menu')}
+                  className={`min-h-10 rounded-[var(--radius-ruda-control)] px-4 text-sm font-semibold ${restaurantMobileSection === 'menu' ? 'bg-neutral-950 text-white' : 'border border-neutral-200 bg-white text-neutral-700'}`}
+                >
+                  菜单
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={restaurantMobileSection === 'tables'}
+                  onClick={() => setRestaurantMobileSection('tables')}
+                  className={`min-h-10 rounded-[var(--radius-ruda-control)] px-4 text-sm font-semibold ${restaurantMobileSection === 'tables' ? 'bg-neutral-950 text-white' : 'border border-neutral-200 bg-white text-neutral-700'}`}
+                >
+                  桌台
+                </button>
+              </div>
+            )}
+            {restaurantMobileSection === 'tables' && restaurantTablesAvailable
+              ? <RestaurantTableWorkspace />
+              : <RestaurantMenuWorkspace />}
+          </div>
+        )}
+
+        {activeTab === 'products' && !restaurantMenuAvailable && (
           <div className="ruda-products-page -mx-4 -mt-2 min-h-[calc(100dvh-150px)] bg-white pb-[calc(60px+env(safe-area-inset-bottom))]">
             {/* 固定顶部：标题与上传、搜索、快捷筛选、商品分区 */}
             <div className="sticky top-0 z-30 border-b border-neutral-100 bg-white/95 px-4 pt-[calc(0.5rem+env(safe-area-inset-top))] pb-1.5 backdrop-blur-xl">
@@ -2826,7 +2918,7 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
 
         {activeTab === 'growth' && mobileGrowthSection === 'overview' && (
           <div className="space-y-4 animate-fadeIn">
-            <section className="rounded-3xl bg-gradient-to-br from-indigo-950 via-indigo-900 to-violet-900 p-5 text-white shadow-xl shadow-indigo-950/10">
+            <section className="rounded-3xl bg-neutral-900 p-5 text-white shadow-xl shadow-neutral-900/10">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-[12px] font-semibold text-white/60">{mobileText('增长与经营分析', 'Crescita e analisi')}</p>
@@ -3147,7 +3239,7 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
 
             <button
               type="button"
-              onClick={() => { setShowMaterialManager(true); setActiveTab('dashboard'); }}
+              onClick={() => openMoreItem('materials')}
               className="flex w-full items-center justify-between rounded-2xl bg-neutral-900 px-4 py-3 text-left text-[11px] font-bold text-white"
             >
               <span>{mobileText('打开物料台账与入库管理', 'Apri materiali e carichi')}</span>
@@ -3880,32 +3972,26 @@ export const MerchantMobileApp: React.FC<MerchantMobileAppProps> = ({ onSwitchTo
                 </div>
                 <div className="space-y-2 border-t border-neutral-100 pt-3">
                   <div>
-                    <p className="text-sm font-semibold text-neutral-900">{mobileText('网店展示模板', 'Tema del negozio')}</p>
-                    <div className="mt-1 flex flex-wrap gap-2 text-xs leading-5 text-neutral-600"><span>{mobileText('按当前行业提供三套结构', 'Tre strutture per il settore')}</span><span>{mobileText('不改商品订单', 'Prodotti e ordini invariati')}</span></div>
+                    <p className="text-[11px] font-bold text-neutral-800">{mobileText('网店展示模板', 'Tema del negozio')}</p>
+                    <div className="mt-1 flex flex-wrap gap-2 text-[10px] leading-4 text-neutral-500"><span>{mobileText('应用后立即生效', 'Applicazione immediata')}</span><span>{mobileText('不改商品订单', 'Prodotti e ordini invariati')}</span></div>
                   </div>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                    {storefrontTemplateOptions.map(template => {
+                    {MERCHANT_STOREFRONT_TEMPLATES.map(template => {
                       const selected = storefrontTemplate === template.id;
                       return (
-                        <button key={template.id} type="button" aria-pressed={selected} onClick={() => setStorefrontTemplate(template.id as MerchantStorefrontTemplate)} className={`min-h-16 rounded-[var(--radius-ruda-card)] border p-3 text-left ${selected ? 'border-neutral-900 bg-neutral-50 ring-1 ring-neutral-900/10' : 'border-neutral-200 bg-white'}`}>
-                          <span className="flex items-start justify-between gap-2">
-                            <span className="text-sm font-semibold text-neutral-900">{template.name}</span>
-                            <span className="text-xs text-neutral-600">{selected ? mobileText('当前选择', 'Selezionato') : mobileText('点击选择', 'Seleziona')}</span>
+                        <button key={template.id} type="button" aria-pressed={selected} onClick={() => setStorefrontTemplate(template.id)} className={`flex items-center gap-2 rounded-xl border p-2 text-left ${selected ? 'border-neutral-900 bg-neutral-50 ring-1 ring-neutral-900/10' : 'border-neutral-200 bg-white'}`}>
+                          <span className="flex h-9 w-12 shrink-0 overflow-hidden rounded border border-black/5">
+                            {template.colors.map(color => <span key={color} className="h-full flex-1" style={{ backgroundColor: color }} />)}
                           </span>
-                          <span className="mt-1 block text-xs leading-5 text-neutral-600">{template.positioning}</span>
+                          <span className="min-w-0">
+                            <span className="block text-[10px] font-bold text-neutral-800">{template.name}</span>
+                            <span className="mt-0.5 block text-[9px] leading-3 text-neutral-500">{selected ? mobileText('当前选择', 'Selezionato') : mobileText('点击选择', 'Seleziona')}</span>
+                          </span>
                         </button>
                       );
                     })}
                   </div>
-                  {selectedLegacyStorefrontTemplate ? (
-                    <p className="text-xs leading-5 text-neutral-600">
-                      {mobileText(
-                        `当前店铺仍使用兼容模板「${selectedLegacyStorefrontTemplate.name}」。选择本行业新模板并保存后才会切换；旧模板设置不会自动改写。`,
-                        `Il negozio usa ancora il tema compatibile "${selectedLegacyStorefrontTemplate.name}".`
-                      )}
-                    </p>
-                  ) : null}
-                  <button type="button" onClick={() => void applyStorefrontTemplate()} disabled={storefrontTemplateBusy || !currentMerchant} className="h-10 w-full rounded-[var(--radius-ruda-control)] bg-neutral-900 text-sm font-semibold text-white disabled:opacity-50">
+                  <button type="button" onClick={() => void applyStorefrontTemplate()} disabled={storefrontTemplateBusy || !currentMerchant} className="h-10 w-full rounded-2xl bg-neutral-900 text-[11px] font-bold text-white disabled:opacity-50">
                     {storefrontTemplateBusy ? mobileText('正在应用…', 'Applicazione...') : mobileText('一键应用到公开网店', 'Applica al negozio')}
                   </button>
                 </div>

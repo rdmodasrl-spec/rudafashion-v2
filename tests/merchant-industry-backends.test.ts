@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
-import { merchantIndustryTemplates, openMerchantIndustryTemplates } from '../src/constants/merchantIndustryTemplates';
+import { getMerchantWorkspaceTemplate, merchantIndustryTemplates, openMerchantIndustryTemplates } from '../src/constants/merchantIndustryTemplates';
 import {
   getMerchantIndustryAttributeKeys,
   getMerchantIndustryCapability,
@@ -58,14 +58,21 @@ function listFiles(directory: string): string[] {
   });
 }
 
-test('seven industry templates map to seven independent front-end modules', () => {
-  assert.equal(merchantIndustryTemplates.length, 7);
-  assert.equal(openMerchantIndustryTemplates.length, 7);
-  assert.equal(Object.keys(industryWorkspaceModules).length, 7);
+test('all eight industry templates have unique workspace mappings and Restaurant stays isolated', () => {
+  assert.equal(merchantIndustryTemplates.length, 8);
+  assert.equal(openMerchantIndustryTemplates.length, 8);
+  assert.equal(Object.keys(industryWorkspaceModules).length, 8);
   assert.equal(industryWorkspaceModules.apparel_production_wholesale, null, 'existing apparel portal stays in place');
+  assert.equal(industryWorkspaceModules.restaurant_ordering, null, 'restaurant must not fall through to another industry');
   for (const template of merchantIndustryTemplates) {
     assert.ok(Object.hasOwn(industryWorkspaceModules, template.id), `${template.id} has a registry entry`);
   }
+  const restaurant = merchantIndustryTemplates.find(template => template.id === 'restaurant_ordering');
+  assert.equal(restaurant?.status, 'open');
+  assert.equal(restaurant?.industryCode, 'restaurant');
+  assert.equal(restaurant?.studioCode, 'restaurant_studio');
+  assert.equal(restaurant?.knowledgeNamespace, 'restaurant');
+  assert.deepEqual(getMerchantWorkspaceTemplate(restaurant.workspaceTemplateId)?.modules, ['restaurant_menu', 'restaurant_tables']);
   for (const [templateId] of Object.entries(manifetsFolderById)) {
     const directory = path.join(industriesRoot, manifetsFolderById[templateId]);
     assert.ok(existsSync(path.join(directory, 'manifest.ts')), `${templateId} manifest exists`);
@@ -228,4 +235,3 @@ test('module spec records isolation, API contracts and acceptance status', () =>
   assert.match(moduleSpec, /POS/);
   assert.match(moduleSpec, /待验证/);
 });
-

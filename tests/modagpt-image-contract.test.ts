@@ -5,7 +5,11 @@ import {
   buildModelStudioPrompt,
   maximumModaGptImagePromptLength
 } from '../src/shared/modagptImageContract';
-import { parseModaGptImageRequest } from '../src/server/modagptEntitlements';
+import {
+  buildModaGptStudioImageEditPrompt as buildServerModaGptStudioImageEditPrompt,
+  parseModaGptImageRequest,
+  resolveModaGptStudioImagePolicy
+} from '../src/server/modagptEntitlements';
 
 test('model studio prompts stay within the image API limit', () => {
   const prompt = buildModelStudioPrompt('春夏系列'.repeat(500), 2, 'three-quarter view');
@@ -66,4 +70,38 @@ test('fashion design prompt rejects empty briefs and invalid concept numbers', (
     () => buildFashionDesignConceptPrompt('A coat', 5),
     { message: 'MODAGPT_FASHION_DESIGN_PROMPT_INVALID' }
   );
+});
+
+test('image edit accepts only a bounded inline reference image and known request fields', () => {
+  const image = `data:image/png;base64,${Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString('base64')}`;
+  assert.deepEqual(parseModaGptImageRequest({ task: 'imageEdit', prompt: 'Replace the background', referenceImage: image }), {
+    task: 'imageEdit',
+    prompt: 'Replace the background',
+    referenceImage: image
+  });
+  assert.equal(parseModaGptImageRequest({
+    task: 'imageEdit',
+    prompt: 'Edit',
+    referenceImage: image,
+    imageUrl: 'https://example.com/image.png'
+  }), null);
+  assert.equal(parseModaGptImageRequest({
+    task: 'imageEdit',
+    prompt: 'Edit',
+    referenceImage: 'https://example.com/image.png'
+  }), null);
+});
+
+test('image edit policy is industry-scoped and preserves source identity', () => {
+  const restaurantPolicy = resolveModaGptStudioImagePolicy('restaurant_ordering', 'imageEdit');
+  const leatherPolicy = resolveModaGptStudioImagePolicy('bags_wholesale', 'imageEdit');
+
+  assert.ok(restaurantPolicy);
+  assert.ok(leatherPolicy);
+  assert.equal(resolveModaGptStudioImagePolicy('restaurant_ordering', 'tryOn'), null);
+  const prompt = buildServerModaGptStudioImageEditPrompt(restaurantPolicy!, 'Change the background to a dining table');
+  assert.match(prompt, /Edit the supplied product image/);
+  assert.match(prompt, /Preserve the product identity/);
+  assert.match(prompt, /Industry restaurant/);
+  assert.match(prompt, /Change the background/);
 });

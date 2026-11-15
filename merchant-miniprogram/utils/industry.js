@@ -21,7 +21,8 @@ const INDUSTRY_CONFIGS = {
   department_wholesale: require('../industries/department-wholesale'),
   bags_wholesale: require('../industries/bags-wholesale'),
   department_chain_retail: require('../industries/department-chain-retail'),
-  general_retail: require('../industries/general-retail')
+  general_retail: require('../industries/general-retail'),
+  restaurant_ordering: require('../industries/restaurant-ordering')
 };
 
 function merchantIdFromSession(session) {

@@ -13,9 +13,12 @@
     "pages/reservation-requests/index",
     "pages/workspace/index",
     "pages/industry/index",
+    "pages/restaurant-menu/index",
+    "pages/restaurant-tables/index",
     "pages/pos/index",
     "pages/business-card/index",
     "pages/ai-tools/index",
+    "pages/ad-planner/index",
     "pages/privacy/index",
     "pages/service-agreement/index"
   ],

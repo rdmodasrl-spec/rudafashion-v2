@@ -1,7 +1,7 @@
 import type { MerchantIndustryModuleKey } from '../../../constants/merchantIndustryCapabilities';
 
 export type MerchantPortalIndustryTab =
-  | 'dashboard' | 'products' | 'inventory' | 'orders' | 'customers' | 'procurement' | 'pos' | 'settings';
+  | 'dashboard' | 'products' | 'restaurant_tables' | 'inventory' | 'orders' | 'customers' | 'procurement' | 'pos' | 'settings';
 export type MerchantMobileIndustryTab =
   | 'dashboard' | 'products' | 'inventory' | 'orders' | 'customers' | 'procurement' | 'pos' | 'profile';
 
@@ -20,7 +20,9 @@ export const merchantPortalTabByIndustrySection = {
   transfers: 'inventory',
   team: 'settings',
   messages: 'dashboard',
-  settings: 'settings'
+  settings: 'settings',
+  restaurant_menu: 'products',
+  restaurant_tables: 'restaurant_tables'
 } as const satisfies Readonly<Record<MerchantIndustryModuleKey, MerchantPortalIndustryTab>>;
 
 export const merchantMobileTabByIndustrySection = {
@@ -38,13 +40,16 @@ export const merchantMobileTabByIndustrySection = {
   transfers: 'inventory',
   team: 'profile',
   messages: 'dashboard',
-  settings: 'profile'
+  settings: 'profile',
+  restaurant_menu: 'products',
+  restaurant_tables: 'products'
 } as const satisfies Readonly<Record<MerchantIndustryModuleKey, MerchantMobileIndustryTab>>;
 
 export const merchantPortalIndustrySectionByTab: Readonly<Record<string, MerchantIndustryModuleKey>> = {
   dashboard: 'dashboard',
   products: 'products',
   sku_matrix: 'products',
+  restaurant_tables: 'restaurant_tables',
   inventory: 'inventory',
   materials: 'inventory',
   procurement: 'procurement',

@@ -5,6 +5,9 @@ module.exports = {
   templateId: 'department_wholesale',
   title: '百货批发',
   summary: '多品类、规格与计量单位、箱规批发',
+  modauiPrompts: [
+    { label: '检查商品规格资料', prompt: '检查当前百货商品的包装规格、计量单位和资料缺项，只使用当前商家的真实商品数据。' }
+  ],
   metrics: [
     { key: 'pendingOrders', label: '待确认订单', suffix: '单', emphasis: true },
     { key: 'pickingOrders', label: '待发货', suffix: '单' },

@@ -51,6 +51,29 @@ test('image client returns the synchronous completed result and sends an idempot
   assert.equal(calls, 1, 'synchronous contract must not trigger a follow-up task poll');
 });
 
+test('image client accepts the existing-image edit task through the shared endpoint', async () => {
+  let requestBody: Record<string, unknown> = {};
+  await withFetch((_url, init) => {
+    requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    return new Response(JSON.stringify({ ...completedTask, task: 'imageEdit' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }, async () => {
+    const result = await requestModaGptImage({
+      task: 'imageEdit',
+      prompt: 'Replace the background',
+      referenceImage: 'data:image/png;base64,dGVzdA=='
+    }, merchantId);
+    assert.equal(result.task, 'imageEdit');
+  });
+  assert.deepEqual(requestBody, {
+    task: 'imageEdit',
+    prompt: 'Replace the background',
+    referenceImage: 'data:image/png;base64,dGVzdA=='
+  });
+});
+
 test('image client surfaces an unknown result instead of pretending success', async () => {
   await withFetch(() => new Response(JSON.stringify({ success: true, status: 'processing' }), {
     status: 202,

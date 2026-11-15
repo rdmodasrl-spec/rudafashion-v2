@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { PrismaClient } from '@prisma/client';
-import { getModaGptIndustryTemplateAssistantProfile } from '../src/server/modagptCoreEmployees';
+import {
+  getModaGptIndustryAssistantPersona,
+  getModaGptIndustryTemplateAssistantProfile
+} from '../src/server/modagptCoreEmployees';
 import {
   createModaGptIndustryTools,
   resolveModaGptIndustryTemplate
@@ -517,4 +520,28 @@ test('template assistant profiles are limited to the four intended commerce indu
   assert.equal(getModaGptIndustryTemplateAssistantProfile('apparel_wholesale'), null);
   assert.equal(getModaGptIndustryTemplateAssistantProfile('trading_wholesale'), null);
   assert.equal(getModaGptIndustryTemplateAssistantProfile('department_chain_retail')?.agentId, 'business-manager');
+});
+
+test('all eight exact industry templates have distinct server-side ModaUI personas', () => {
+  const templateIds = [
+    'apparel_production_wholesale',
+    'apparel_wholesale',
+    'trading_wholesale',
+    'department_wholesale',
+    'bags_wholesale',
+    'department_chain_retail',
+    'general_retail',
+    'restaurant_ordering'
+  ] as const;
+  const personas = templateIds.map(templateId => getModaGptIndustryAssistantPersona(templateId));
+
+  assert.equal(personas.length, 8);
+  assert.ok(personas.every((persona, index) =>
+    persona?.templateId === templateIds[index] && persona.systemInstruction.length > 0
+  ));
+  assert.equal(new Set(personas.map(persona => persona?.displayName)).size, 8);
+  assert.match(getModaGptIndustryAssistantPersona('department_wholesale')?.systemInstruction || '', /包装规格/);
+  assert.match(getModaGptIndustryAssistantPersona('department_chain_retail')?.systemInstruction || '', /门店库存分布/);
+  assert.match(getModaGptIndustryAssistantPersona('restaurant_ordering')?.systemInstruction || '', /餐饮菜单/);
+  assert.equal(getModaGptIndustryAssistantPersona('DEPARTMENT_STORE'), null);
 });

@@ -1,5 +1,5 @@
 /**
- * 七种商家后台的行业能力清单（单一事实来源，前后端共享）。
+ * 商家后台行业能力清单（单一事实来源，前后端共享）。
  *
  * 规则：
  * - 模板 ID 唯一来自 `merchantIndustryTemplates.ts`，本文件不得新增第二套行业枚举。
@@ -24,7 +24,9 @@ export type MerchantIndustryModuleKey =
   | 'transfers'
   | 'team'
   | 'messages'
-  | 'settings';
+  | 'settings'
+  | 'restaurant_menu'
+  | 'restaurant_tables';
 
 export type MerchantProductModel = 'apparel' | 'bags' | 'generic' | 'retail';
 
@@ -284,6 +286,16 @@ export const merchantIndustryCapabilities: Readonly<Record<MerchantIndustryTempl
     inventory: { mode: 'generic', materials: false },
     features: { procurement: true, suppliers: true, customers: true, pos: true, stores: false, transfers: false },
     productFields: retailFields
+  },
+  restaurant_ordering: {
+    templateId: 'restaurant_ordering',
+    modules: ['restaurant_menu', 'restaurant_tables'],
+    productModel: 'generic',
+    variant: genericVariant,
+    pricing: { primary: 'retail', wholesale: false, retail: false, cost: false, tiered: false, moq: false },
+    inventory: { mode: 'generic', materials: false },
+    features: { procurement: false, suppliers: false, customers: false, pos: false, stores: false, transfers: false },
+    productFields: []
   }
 };
 
@@ -314,4 +326,3 @@ export function requiresCompleteVariantAttributes(value: unknown): boolean {
   if (!capability) return true;
   return capability.variant.requiresColor && capability.variant.requiresSize;
 }
-

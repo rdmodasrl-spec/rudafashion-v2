@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ExternalLink, RefreshCw, Search } from 'lucide-react';
-import { apiGet } from '../../../../api/client';
+import { apiDelete, apiGet, apiPut } from '../../../../api/client';
+import { merchantFormalIndustries } from '../../../../constants/merchantIndustryTemplates';
 
 type MerchantCenterRange = { from: string; to: string };
 type MerchantCenterOverview = {
@@ -50,6 +51,21 @@ type MerchantCenterMerchant = {
 type MerchantCenterDetail = MerchantCenterMerchant & {
   showroomAddress: string;
   modules: string[];
+  studioEntitlements: Array<{
+    id: string;
+    formalIndustryId: string | null;
+    formalIndustryName: string | null;
+    industryCode: string;
+    industryTemplate: string;
+    studioCode: string;
+    mode: string;
+    status: string;
+    capabilities: Record<string, boolean>;
+    grantedBy: string | null;
+    grantedAt: string;
+    revokedAt: string | null;
+    source: string;
+  }>;
   readiness: {
     profileComplete: boolean;
     storeInitialized: boolean;
@@ -149,6 +165,16 @@ export const AdminMerchantCenter: React.FC<AdminMerchantCenterProps> = ({ onEnte
   const [loadingList, setLoadingList] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [error, setError] = useState('');
+  const [grantIndustryId, setGrantIndustryId] = useState('');
+  const [grantCapabilityIds, setGrantCapabilityIds] = useState<string[]>([]);
+  const [savingEntitlement, setSavingEntitlement] = useState(false);
+
+  const grantIndustry = merchantFormalIndustries.find(industry =>
+    industry.id === grantIndustryId && industry.registrationStatus === 'open'
+  );
+  const grantIndustryEntitlement = detail?.studioEntitlements.find(entitlement =>
+    entitlement.formalIndustryId === grantIndustryId && entitlement.status === 'active' && !entitlement.revokedAt
+  );
 
   useEffect(() => {
     let active = true;
@@ -219,6 +245,8 @@ export const AdminMerchantCenter: React.FC<AdminMerchantCenterProps> = ({ onEnte
   const loadDetail = async (merchantId: string) => {
     setLoadingDetail(true);
     setError('');
+    setGrantIndustryId('');
+    setGrantCapabilityIds([]);
     try {
       const result = await apiGet<{ success: true; merchant: MerchantCenterDetail }>(
         `/api/admin/merchant-center/merchants/${encodeURIComponent(merchantId)}`
@@ -228,6 +256,56 @@ export const AdminMerchantCenter: React.FC<AdminMerchantCenterProps> = ({ onEnte
       setError(loadError instanceof Error ? loadError.message : '商家详情加载失败');
     } finally {
       setLoadingDetail(false);
+    }
+  };
+
+  const changeGrantIndustry = (formalIndustryId: string) => {
+    setGrantIndustryId(formalIndustryId);
+    const activeEntitlement = detail?.studioEntitlements.find(entitlement =>
+      entitlement.formalIndustryId === formalIndustryId && entitlement.status === 'active' && !entitlement.revokedAt
+    );
+    const allowedCapabilities = merchantFormalIndustries.find(industry => industry.id === formalIndustryId)?.capabilityIds ?? [];
+    setGrantCapabilityIds(
+      activeEntitlement
+        ? Object.entries(activeEntitlement.capabilities)
+          .filter(([, enabled]) => enabled)
+          .map(([capabilityId]) => capabilityId)
+          .filter(capabilityId => allowedCapabilities.some(allowed => allowed === capabilityId))
+        : []
+    );
+  };
+
+  const saveEntitlement = async () => {
+    if (!detail || !grantIndustry) return;
+    setSavingEntitlement(true);
+    setError('');
+    try {
+      await apiPut(
+        `/api/admin/merchant-center/merchants/${encodeURIComponent(detail.id)}/studio-entitlements/${encodeURIComponent(grantIndustry.id)}`,
+        { capabilityIds: grantCapabilityIds }
+      );
+      await loadDetail(detail.id);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : '行业工作室授权失败');
+    } finally {
+      setSavingEntitlement(false);
+    }
+  };
+
+  const revokeEntitlement = async (entitlement: MerchantCenterDetail['studioEntitlements'][number]) => {
+    if (!detail || !entitlement.formalIndustryId) return;
+    if (!window.confirm(`撤销「${entitlement.formalIndustryName || entitlement.formalIndustryId}」工作室授权？现有项目和文件会保留，但商家将无法继续访问。`)) return;
+    setSavingEntitlement(true);
+    setError('');
+    try {
+      await apiDelete(
+        `/api/admin/merchant-center/merchants/${encodeURIComponent(detail.id)}/studio-entitlements/${encodeURIComponent(entitlement.formalIndustryId)}`
+      );
+      await loadDetail(detail.id);
+    } catch (revokeError) {
+      setError(revokeError instanceof Error ? revokeError.message : '撤销行业工作室授权失败');
+    } finally {
+      setSavingEntitlement(false);
     }
   };
 
@@ -300,6 +378,7 @@ export const AdminMerchantCenter: React.FC<AdminMerchantCenterProps> = ({ onEnte
             <button type="button" onClick={() => setDetail(null)} className="rounded-md border border-neutral-300 px-3 py-2 text-sm text-neutral-800 hover:bg-neutral-50">返回列表</button>
           </div>
         </header>
+        {error && <p role="alert" className="border-y border-neutral-300 py-2 text-sm text-neutral-800">操作失败：{error}</p>}
         {detail.isDemo && <p className="border-b border-neutral-300 pb-3 text-sm font-medium text-neutral-800">演示商家 · 不计入正式经营统计</p>}
         {loadingDetail ? <p className="py-8 text-center text-sm text-neutral-500">正在读取详情…</p> : (
           <div className="grid gap-6 lg:grid-cols-2">
@@ -339,6 +418,87 @@ export const AdminMerchantCenter: React.FC<AdminMerchantCenterProps> = ({ onEnte
               <p className="text-xs leading-5 text-neutral-600">启用员工角色：{Object.entries(detail.employeeRoleCounts).map(([key, count]) => `${employeeRoleLabels[key] || key} ${count}`).join(' · ') || '暂无记录'}</p>
               <p className="text-xs leading-5 text-neutral-600">已启用模块：{detail.modules.map(module => moduleLabels[module] || module).join('、') || '行业未分类'}</p>
               <p className="text-xs leading-5 text-neutral-600">商品初始化：{detail.readiness.productsInitialized ? '已有商品' : '暂无商品'} · 员工初始化：{detail.readiness.employeesInitialized ? '已有启用员工' : '暂无启用员工'}</p>
+            </section>
+            <section className="space-y-3 lg:col-span-2" aria-label="行业工作室授权">
+              <div>
+                <h3 className="text-sm font-semibold text-neutral-950">行业工作室授权</h3>
+                <p className="mt-1 text-xs leading-5 text-neutral-600">只影响所选行业的工作室访问；撤销不会删除该行业的项目或文件。</p>
+              </div>
+              <ul className="divide-y divide-neutral-200 border-y border-neutral-200">
+                {detail.studioEntitlements.length === 0
+                  ? <li className="py-3 text-sm text-neutral-500">暂无正式行业授权</li>
+                  : detail.studioEntitlements.map(entitlement => (
+                    <li key={entitlement.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-neutral-900">
+                          {entitlement.formalIndustryName || entitlement.formalIndustryId || '旧版行业授权'}
+                          <span className={`ml-2 inline-flex rounded-md border px-2 py-0.5 text-xs ${entitlement.status === 'active' && !entitlement.revokedAt ? 'border-neutral-400 bg-white text-neutral-800' : 'border-neutral-200 bg-neutral-100 text-neutral-600'}`}>
+                            {entitlement.status === 'active' && !entitlement.revokedAt ? '已授权' : '已撤销'}
+                          </span>
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-neutral-600">
+                          Studio {entitlement.studioCode} · 工作区 {entitlement.industryTemplate}
+                          {Object.entries(entitlement.capabilities).some(([, enabled]) => enabled)
+                            ? ` · 能力 ${Object.entries(entitlement.capabilities).filter(([, enabled]) => enabled).map(([id]) => id).join('、')}`
+                            : ''}
+                        </p>
+                      </div>
+                      {entitlement.formalIndustryId && entitlement.status === 'active' && !entitlement.revokedAt && (
+                        <button
+                          type="button"
+                          disabled={savingEntitlement}
+                          onClick={() => void revokeEntitlement(entitlement)}
+                          className="rounded-md border border-neutral-300 px-3 py-2 text-xs font-medium text-neutral-800 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        >撤销授权</button>
+                      )}
+                    </li>
+                  ))}
+              </ul>
+              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                <label className="grid gap-1.5 text-sm font-medium text-neutral-800">
+                  授予或更新行业
+                  <select
+                    value={grantIndustryId}
+                    onChange={event => changeGrantIndustry(event.target.value)}
+                    disabled={savingEntitlement}
+                    className="min-h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-900"
+                  >
+                    <option value="">选择正式行业</option>
+                    {merchantFormalIndustries.filter(industry => industry.registrationStatus === 'open').map(industry => (
+                      <option key={industry.id} value={industry.id}>{industry.zh}</option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  disabled={!grantIndustry || savingEntitlement}
+                  onClick={() => void saveEntitlement()}
+                  className="min-h-10 rounded-md bg-neutral-950 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+                >{savingEntitlement ? '正在保存…' : grantIndustryEntitlement ? '保存授权' : '授予授权'}</button>
+              </div>
+              {grantIndustry && grantIndustry.capabilityIds.length > 0 && (
+                <fieldset className="space-y-2">
+                  <legend className="text-xs font-medium text-neutral-700">行业能力</legend>
+                  <div className="flex flex-wrap gap-x-5 gap-y-2">
+                    {grantIndustry.capabilityIds.map(capabilityId => (
+                      <label key={capabilityId} className="inline-flex min-h-8 items-center gap-2 text-sm text-neutral-800">
+                        <input
+                          type="checkbox"
+                          checked={grantCapabilityIds.includes(capabilityId)}
+                          disabled={savingEntitlement}
+                          onChange={event => setGrantCapabilityIds(current =>
+                            event.target.checked
+                              ? [...new Set([...current, capabilityId])]
+                              : current.filter(item => item !== capabilityId)
+                          )}
+                          className="h-4 w-4 accent-neutral-900"
+                        />
+                        {capabilityId === 'APPAREL_OWN_PRODUCTION' ? '自有生产（含生产版型能力）' : capabilityId === 'LEATHER_OWN_PRODUCTION' ? '自有生产' : capabilityId}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              )}
             </section>
           </div>
         )}
